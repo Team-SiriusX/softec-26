@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm, Controller } from 'react-hook-form';
 import { z } from 'zod';
-import { authClient } from '@/lib/auth-client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
@@ -72,22 +71,36 @@ export default function WorkerProfileSetupPage() {
     setError(null);
 
     try {
-      // Update user profile
-      const response = await authClient.updateUser({
-        name: data.fullName,
-        data: {
-          phone: data.phone,
+      const response = await fetch('/api/me', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          fullName: data.fullName,
+          phone: data.phone?.trim() ? data.phone.trim() : null,
           cityZone: data.cityZone,
           category: data.category,
-        },
+        }),
       });
 
-      if (response.error) {
-        setError(response.error.message || 'Failed to save profile. Please try again.');
-      } else {
-        // Redirect to worker dashboard
-        router.push('/worker/dashboard');
+      if (!response.ok) {
+        let message = 'Failed to save profile. Please try again.';
+        try {
+          const payload = (await response.json()) as {
+            error?: string;
+            message?: string;
+          };
+          message = payload.error ?? payload.message ?? message;
+        } catch {
+          // Fallback to default message if response isn't JSON.
+        }
+        setError(message);
+        return;
       }
+
+      router.push('/worker/dashboard');
     } catch (err) {
       setError('An unexpected error occurred. Please try again.');
       console.error('Profile update error:', err);

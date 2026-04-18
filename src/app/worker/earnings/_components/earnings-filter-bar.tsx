@@ -1,6 +1,5 @@
 'use client';
 
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -61,7 +60,7 @@ export function EarningsFilterBar({ filters, onChange }: EarningsFilterBarProps)
         {/* Status filter */}
         <Select
           value={filters.status}
-          onValueChange={(v) => update({ status: v })}
+          onValueChange={(v) => update({ status: v ?? 'ALL' })}
         >
           <SelectTrigger className='w-48 h-9' aria-label='Filter by verification status'>
             <SelectValue placeholder='All statuses' />

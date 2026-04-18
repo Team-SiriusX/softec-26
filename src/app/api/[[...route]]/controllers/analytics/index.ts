@@ -30,15 +30,7 @@ import {
   toNumber,
 } from './utils';
 
-const analytics = new Hono<AnalyticsEnv>();
-
-analytics.use('*', analyticsAuthMiddleware);
-analytics.use('/worker/*', requireWorkerAnalyticsRoleMiddleware);
-analytics.use('/worker/:workerId/*', workerTargetMiddleware);
-analytics.use('/advocate/*', requireAdvocateAnalyticsRoleMiddleware);
-analytics.use('/insights/*', requireAdvocateAnalyticsRoleMiddleware);
-
-analytics.get(
+const analytics = new Hono<AnalyticsEnv>().use('*', analyticsAuthMiddleware).use('/worker/*', requireWorkerAnalyticsRoleMiddleware).use('/worker/:workerId/*', workerTargetMiddleware).use('/advocate/*', requireAdvocateAnalyticsRoleMiddleware).use('/insights/*', requireAdvocateAnalyticsRoleMiddleware).get(
   '/worker/:workerId/earnings-trend',
   zValidator('param', workerParamSchema),
   zValidator('query', rollingWindowQuerySchema),
@@ -138,9 +130,7 @@ analytics.get(
       points,
     });
   },
-);
-
-analytics.get(
+).get(
   '/worker/:workerId/hourly-rate-river',
   zValidator('param', workerParamSchema),
   zValidator('query', rollingWindowQuerySchema),
@@ -257,9 +247,7 @@ analytics.get(
       points,
     });
   },
-);
-
-analytics.get(
+).get(
   '/worker/:workerId/commission-rate-tracker',
   zValidator('param', workerParamSchema),
   zValidator('query', rollingWindowQuerySchema),
@@ -348,9 +336,7 @@ analytics.get(
       seriesByPlatform: [...byPlatformMap.values()],
     });
   },
-);
-
-analytics.get(
+).get(
   '/worker/:workerId/platform-earnings-breakdown',
   zValidator('param', workerParamSchema),
   zValidator('query', rollingWindowQuerySchema),
@@ -408,9 +394,7 @@ analytics.get(
       points,
     });
   },
-);
-
-analytics.get(
+).get(
   '/worker/:workerId/earnings-distribution-dot-plot',
   zValidator('param', workerParamSchema),
   zValidator('query', distributionQuerySchema),
@@ -507,9 +491,7 @@ analytics.get(
       cityPoints,
     });
   },
-);
-
-analytics.get(
+).get(
   '/worker/:workerId/verification-status-donut',
   zValidator('param', workerParamSchema),
   zValidator('query', rollingWindowQuerySchema),
@@ -566,9 +548,7 @@ analytics.get(
       points,
     });
   },
-);
-
-analytics.get(
+).get(
   '/advocate/commission-rate-heatmap',
   zValidator('query', rollingWindowQuerySchema),
   async (c) => {
@@ -619,9 +599,7 @@ analytics.get(
       cells,
     });
   },
-);
-
-analytics.get(
+).get(
   '/advocate/income-distribution-histogram',
   zValidator('query', histogramQuerySchema),
   async (c) => {
@@ -679,9 +657,7 @@ analytics.get(
       buckets,
     });
   },
-);
-
-analytics.get(
+).get(
   '/advocate/grievance-bump-chart',
   zValidator('query', rollingWindowQuerySchema),
   async (c) => {
@@ -736,9 +712,7 @@ analytics.get(
       points,
     });
   },
-);
-
-analytics.get(
+).get(
   '/advocate/vulnerability-flag-timeline',
   zValidator('query', rollingWindowQuerySchema),
   async (c) => {
@@ -780,9 +754,7 @@ analytics.get(
       bars,
     });
   },
-);
-
-analytics.get(
+).get(
   '/advocate/platform-comparison-radar',
   zValidator('query', rollingWindowQuerySchema),
   async (c) => {
@@ -879,9 +851,7 @@ analytics.get(
       platforms,
     });
   },
-);
-
-analytics.get(
+).get(
   '/advocate/city-zone-treemap',
   zValidator('query', rollingWindowQuerySchema),
   async (c) => {
@@ -923,9 +893,7 @@ analytics.get(
       nodes,
     });
   },
-);
-
-analytics.get(
+).get(
   '/advocate/complaint-cluster-stream',
   zValidator('query', rollingWindowQuerySchema),
   async (c) => {
@@ -967,9 +935,7 @@ analytics.get(
       layers,
     });
   },
-);
-
-analytics.get(
+).get(
   '/insights/platform-exploitation-score',
   zValidator('query', exploitationQuerySchema),
   async (c) => {
@@ -1128,9 +1094,7 @@ analytics.get(
       ranking,
     });
   },
-);
-
-analytics.get(
+).get(
   '/insights/income-volatility-index',
   zValidator('query', rollingWindowQuerySchema),
   async (c) => {
@@ -1197,9 +1161,7 @@ analytics.get(
       points,
     });
   },
-);
-
-analytics.get(
+).get(
   '/insights/early-warning',
   zValidator('query', earlyWarningQuerySchema),
   async (c) => {
@@ -1291,6 +1253,7 @@ analytics.get(
       meta: {
         baselineWindowStart: toIsoDate(baselineWindowStart),
         currentWindowStart: toIsoDate(currentWindowStart),
+        
         to: toIsoDate(to),
         cityZone: query.cityZone ?? null,
         thresholdPct: query.alertThresholdPct,
@@ -1298,9 +1261,7 @@ analytics.get(
       alerts,
     });
   },
-);
-
-analytics.get(
+).get(
   '/insights/worker-risk-scores',
   zValidator('query', workerRiskQuerySchema),
   async (c) => {
@@ -1457,9 +1418,7 @@ analytics.get(
       workers: ranked,
     });
   },
-);
-
-analytics.get(
+).get(
   '/insights/zone-intelligence',
   zValidator('query', rollingWindowQuerySchema),
   async (c) => {
@@ -1558,9 +1517,7 @@ analytics.get(
       segments,
     });
   },
-);
-
-analytics.get(
+).get(
   '/insights/complaint-intelligence',
   zValidator('query', complaintIntelligenceQuerySchema),
   async (c) => {
@@ -1694,9 +1651,7 @@ analytics.get(
       platformIssueHotspots,
     });
   },
-);
-
-analytics.get(
+).get(
   '/insights/cohort-analysis',
   zValidator('query', rollingWindowQuerySchema),
   async (c) => {

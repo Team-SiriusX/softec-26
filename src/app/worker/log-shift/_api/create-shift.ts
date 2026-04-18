@@ -9,7 +9,7 @@ import { InferRequestType, InferResponseType } from 'hono';
 type ResponseType = InferResponseType<typeof client.api.shifts.$post>;
 type RequestType = InferRequestType<
   typeof client.api.shifts.$post
-> extends { json: infer J }
+> extends { json?: infer J }
   ? J
   : never;
 

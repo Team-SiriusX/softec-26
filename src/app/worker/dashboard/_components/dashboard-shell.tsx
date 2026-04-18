@@ -6,7 +6,6 @@ import { CityMedianCard } from './city-median-card';
 import { EarningsChart } from './earnings-chart';
 import { EffectiveRateCard } from './effective-rate-card';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { CheckCircle, Clock, AlertTriangle, XCircle } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
@@ -44,7 +43,7 @@ interface DashboardShellProps {
 }
 
 export function DashboardShell({ category, zone }: DashboardShellProps) {
-  const { data: user } = useCurrentUser();
+  const { user } = useCurrentUser();
   const { data: shiftsData, isLoading: shiftsLoading } = useGetShifts();
   const shifts = shiftsData?.data ?? [];
 
@@ -53,7 +52,9 @@ export function DashboardShell({ category, zone }: DashboardShellProps) {
     queryKey: [QUERY_KEYS.ANOMALY, user?.id],
     queryFn: async () => {
       if (!user?.id) return { anomalies: [] };
-      const res = await client.api.anomaly.$post({ json: { workerId: user.id } });
+      const res = await client.api.anomaly.analyze.$post({
+        json: { workerId: user.id },
+      });
       if (!res.ok) return { anomalies: [] };
       return res.json();
     },

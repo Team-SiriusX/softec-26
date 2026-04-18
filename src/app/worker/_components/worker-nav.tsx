@@ -22,7 +22,13 @@ const navItems = [
   { href: '/worker/profile', label: 'Profile', icon: User },
 ] as const;
 
-export default function WorkerNav({ user }: { user: { name: string; email: string } }) {
+type WorkerNavUser = {
+  email: string;
+  fullName?: string | null;
+  name?: string | null;
+};
+
+export default function WorkerNav({ user }: { user: WorkerNavUser }) {
   const pathname = usePathname();
   const router = useRouter();
 

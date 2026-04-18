@@ -52,7 +52,7 @@ export function AnomalyAlertCard({ anomalies }: AnomalyAlertCardProps) {
           </p>
         )}
         <div className='mt-2'>
-          <Button asChild size='sm' variant='outline' className='h-8 text-xs'>
+          <Button size='sm' variant='outline' className='h-8 text-xs'>
             <a href='/community/board?source=anomaly'>Report as grievance →</a>
           </Button>
         </div>

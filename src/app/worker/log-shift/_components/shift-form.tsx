@@ -25,16 +25,16 @@ const shiftSchema = z
         message: 'Date cannot be in the future',
       }),
     hoursWorked: z
-      .number({ invalid_type_error: 'Enter a valid number' })
+      .number({ message: 'Enter a valid number' })
       .min(0.5, 'Minimum 0.5 hours')
       .max(24, 'Maximum 24 hours'),
     grossEarned: z
-      .number({ invalid_type_error: 'Enter a valid amount' })
+      .number({ message: 'Enter a valid amount' })
       .positive('Total earned must be greater than zero'),
     platformDeductions: z
-      .number({ invalid_type_error: 'Enter a valid amount' })
+      .number({ message: 'Enter a valid amount' })
       .min(0, 'Platform cut cannot be negative'),
-    netReceived: z.number({ invalid_type_error: 'Enter a valid amount' }),
+    netReceived: z.number({ message: 'Enter a valid amount' }),
     notes: z.string().optional(),
   })
   .refine((d) => d.platformDeductions <= d.grossEarned, {
@@ -46,7 +46,7 @@ type ShiftFormValues = z.infer<typeof shiftSchema>;
 
 export function ShiftForm() {
   const router = useRouter();
-  const { data: user } = useCurrentUser();
+  const { user } = useCurrentUser();
   const createShift = useCreateShift();
   const detectAnomaly = useAnomalyDetect();
 
