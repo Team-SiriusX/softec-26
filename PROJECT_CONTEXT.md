@@ -12,7 +12,10 @@ FairGig is a role-based web platform for gig-economy fairness workflows:
 - advocates investigate grievance patterns,
 - community users post and browse complaints.
 
-The project is built as a modern web app plus a dedicated anomaly microservice.
+The project is built as a modern web app with two intelligence microservices:
+
+- anomaly detection service (statistical, deterministic),
+- grievance clustering ML service (unsupervised NLP).
 
 ## 2) Tech Stack and Runtime Components
 
@@ -32,6 +35,15 @@ The project is built as a modern web app plus a dedicated anomaly microservice.
 - Numerical stack: NumPy + SciPy
 - Date parsing: python-dateutil
 - Validation: Pydantic v2
+
+### 2.3 ML Grievance Microservice
+
+- Framework: FastAPI
+- Python: 3.12 (venv in project)
+- NLP: scikit-learn TF-IDF + TruncatedSVD + KMeans
+- Numerical utilities: NumPy
+- Validation: Pydantic v2
+- Runtime mode: offline/stateless per-request clustering (no model download, no remote inference)
 
 ## 3) Repository State Snapshot
 
@@ -76,6 +88,17 @@ Known non-blocking warning during build:
 7. Demo seed implementation added for anomaly showcase
   - prisma/seed.ts now inserts realistic worker/platform/shift/grievance/stat snapshots.
   - Seed data includes a baseline 20% deduction period followed by ~31% deduction period to trigger anomaly detection demonstrations.
+
+8. AI-agent context hardening in service docs
+  - anomaly-service/README.md updated with explicit model invariants and safe-change checklist.
+  - ml-service/README.md updated with explicit pipeline invariants, parameter impact guidance, and cross-service correlation contract.
+
+9. Dedicated architecture document created
+  - SYSTEM_ARCHITECTURE_PIPELINE.md now acts as the canonical architecture/pipeline document.
+  - Includes component map, flow-level design, contracts, failure behavior, and integration priorities.
+
+10. Diagram portability update
+  - Architecture diagrams were converted from Mermaid to plain text editor block diagrams for maximum compatibility in basic editors and judge environments.
 
 ## 4) High-Level Architecture
 
@@ -122,6 +145,20 @@ Generated client target:
 Primary runtime client wrapper:
 
 - src/lib/db.ts
+
+### 4.4 Canonical Architecture Artifact
+
+Authoritative architecture and flow document:
+
+- SYSTEM_ARCHITECTURE_PIPELINE.md
+
+This file currently contains:
+
+- high-level component map,
+- request/sequence style pipeline diagrams in text blocks,
+- anomaly and ML integration model,
+- resilience/failure behavior,
+- implementation-focused hardening priorities.
 
 ## 5) Domain Data Models Relevant to Anomaly Flow
 
@@ -471,7 +508,94 @@ Most recent validated service outputs:
 4. AnomalyFlag inserts are append-only right now (no dedupe/versioning strategy yet).
 5. AI enrichment quality depends on model output format and key availability; fallback is robust but enrichment is nondeterministic textually.
 
-## 8) Environment Configuration
+### 7.12 Implemented End-to-End Path (Current Reality)
+
+The anomaly path is implemented end-to-end today:
+
+1. Web app receives `workerId` at `/api/anomaly/analyze`.
+2. Hono bridge fetches recent worker shifts from Postgres.
+3. Bridge maps shifts into FastAPI analyze contract.
+4. FastAPI runs 4 statistical detectors and computes risk.
+5. Optional LLM enrichment rewrites explanation language only.
+6. Hono persists anomaly rows in `AnomalyFlag` (non-blocking).
+7. Response is returned to client even if persistence fails.
+
+This is currently the most complete cross-service production path in the repository.
+
+## 8) ML GRIEVANCE SYSTEM (Super Detailed)
+
+This section is the authoritative deep context for grievance clustering behavior.
+
+### 8.1 Components
+
+Service files:
+
+- ml-service/main.py
+- ml-service/models.py
+- ml-service/README.md
+
+Integration context:
+
+- anomaly contexts can be passed into `/cluster` for overlap insights.
+
+### 8.2 API Contracts (FastAPI)
+
+#### Health
+
+- Method: GET
+- Path: /health
+
+#### Cluster
+
+- Method: POST
+- Path: /cluster
+- Request: grievance records with text and worker IDs
+- Optional: `anomaly_contexts` keyed by worker_id
+- Response: cluster labels, keywords, sample text, severity, trend context, and optional cross-service insight
+
+#### Trends
+
+- Method: POST
+- Path: /trends
+- Purpose: trend analysis over complaint timeline slices
+
+### 8.3 Model Pipeline
+
+Per-request sequence:
+
+1. TF-IDF vectorization (`max_features=500`, ngram `(1,2)`, `sublinear_tf=true`).
+2. TruncatedSVD dimensionality reduction (adaptive component clamp for small datasets).
+3. L2 normalization.
+4. K search via silhouette scoring (bounded candidate range).
+5. KMeans clustering (`n_init=10`, `random_state=42`).
+
+### 8.4 Invariants and Behavior Guarantees
+
+1. Fully offline operation; no external model API required.
+2. `optimal_k` remains data-driven and silhouette-based.
+3. Output remains interpretable (label + keywords + examples + severity).
+4. Anomaly correlation stays optional overlay, never hard dependency.
+
+### 8.5 How ML Knows Multiple Workers Face Same Issue
+
+It does not infer this from user IDs alone. It uses text similarity in vector space:
+
+- each complaint text is vectorized,
+- semantically similar complaints cluster together,
+- worker IDs attached to those complaints reveal multi-worker overlap,
+- optional anomaly contexts add a second evidence dimension for the same cluster members.
+
+### 8.6 Where ML Text Comes From
+
+The service does not crawl or pull text from DB by itself. Text is passed by caller as request payload (`grievances[].text`).
+
+### 8.7 Current Integration Maturity
+
+- ML service endpoints and algorithm pipeline are implemented.
+- Cross-service anomaly correlation fields are implemented in ML contract.
+- Direct Hono-to-ML orchestration in app routes is still partial/feature-dependent and should be hardened in upcoming phases.
+
+## 9) Environment Configuration
 
 Expected env keys (see .env.local.example):
 
@@ -489,43 +613,50 @@ Recommended local anomaly URL:
 
 - ANOMALY_SERVICE_URL=http://localhost:8001
 
-## 9) Implementation Maturity by Domain
+## 10) Implementation Maturity by Domain
 
-### 9.1 Worker
+### 10.1 Worker
 
 - dashboard, log-shift, certificate, profile pages scaffolded
 - API hooks present
 - business logic partially scaffolded
 
-### 9.2 Verifier
+### 10.2 Verifier
 
 - queue page and related hooks/components scaffolded
 - verification patch flow wired
 - typing hardening still pending in one hook
 
-### 9.3 Advocate
+### 10.3 Advocate
 
 - dashboard and grievances pages scaffolded
 - analytics-oriented hooks/components present
 
-### 9.4 Community
+### 10.4 Community
 
 - board page and create/list grievance hooks scaffolded
 
-### 9.5 API Controllers
+### 10.5 API Controllers
 
 - all domain controllers mounted
 - anomaly controller has real integration logic
 - many non-anomaly handlers still placeholder-level
 
-## 10) Open Risks and Active Technical Debt
+### 10.6 Intelligence Services
+
+- anomaly-service: production-ready statistical pipeline with optional enrichment fallback.
+- ml-service: production-ready unsupervised clustering pipeline with optional anomaly-context correlation overlays.
+- system-level architecture documentation: complete and captured in SYSTEM_ARCHITECTURE_PIPELINE.md.
+
+## 11) Open Risks and Active Technical Debt
 
 1. Placeholder handlers in several domains need full validation and DB workflows.
 2. Type-level ergonomics between Hono route validators and inferred client request types can still be improved.
 3. Integration tests are missing for critical cross-service scenarios.
 4. Social auth provider envs not always populated in all environments.
+5. Latest local seed execution (`pnpm exec ts-node --esm prisma/seed.ts`) exited with code 1 and needs root-cause follow-up.
 
-## 11) Recommended Next Steps (Priority)
+## 12) Recommended Next Steps (Priority)
 
 1. Add integration tests for anomaly:
   - FastAPI /analyze contract tests
@@ -539,12 +670,16 @@ Recommended local anomaly URL:
 5. Complete placeholder API handlers in shifts/screenshots/grievances/certificates/analytics.
 6. Upgrade UI states (loading, empty, error, retry) for worker/verifier/advocate/community pages.
 7. Write API_CONTRACTS.md with request/response examples per mounted route.
+8. Add full app-level ML orchestration route(s) and integration tests for anomaly+cluster combined evidence path.
+9. Resolve current seed failure and document deterministic demo bootstrapping steps.
 
-## 12) Quick Onboarding Mental Model
+## 13) Quick Onboarding Mental Model
 
 FairGig is currently in a strong "foundation-complete, product-completion-in-progress" stage:
 
 - architecture is stable,
-- build is passing,
+- web build is passing,
 - anomaly engine is operational and validated,
-- remaining effort is domain depth, UX polish, and automated quality gates.
+- ML clustering engine is operational and validated,
+- architecture documentation is now explicit and editor-friendly,
+- remaining effort is domain depth, route completion, UX polish, and automated quality gates.
