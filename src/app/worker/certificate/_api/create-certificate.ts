@@ -9,7 +9,9 @@ import { toast } from 'sonner';
 type ResponseType = InferResponseType<typeof client.api.certificates.$post>;
 type RequestType = InferRequestType<
   typeof client.api.certificates.$post
->['json'];
+> extends { json: infer J }
+  ? J
+  : never;
 
 export const useCreateCertificate = () => {
   const queryClient = useQueryClient();

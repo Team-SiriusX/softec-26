@@ -16,8 +16,8 @@ export const getScreenshotsHandler = async (c: Context) => {
 };
 
 export const updateVerificationHandler = async (c: Context) => {
-  const { id } = c.req.valid('param');
-  const body = c.req.valid('json');
+  const id = c.req.param('id');
+  const body = await c.req.json<unknown>();
 
   return c.json({ message: 'Verification scaffold endpoint', id, body });
 };

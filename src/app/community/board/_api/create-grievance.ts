@@ -7,7 +7,11 @@ import { client } from '@/lib/hono';
 import { toast } from 'sonner';
 
 type ResponseType = InferResponseType<typeof client.api.grievances.$post>;
-type RequestType = InferRequestType<typeof client.api.grievances.$post>['json'];
+type RequestType = InferRequestType<
+  typeof client.api.grievances.$post
+> extends { json: infer J }
+  ? J
+  : never;
 
 export const useCreateGrievance = () => {
   const queryClient = useQueryClient();

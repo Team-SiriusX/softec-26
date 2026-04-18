@@ -13,11 +13,11 @@ export const getShiftsHandler = async (c: Context) => {
 };
 
 export const createShiftHandler = async (c: Context) => {
-  const payload = c.req.valid('json');
+  const payload = await c.req.json<unknown>();
   return c.json({ message: 'Shift scaffold endpoint', payload }, 201);
 };
 
 export const importCsvHandler = async (c: Context) => {
-  const payload = c.req.valid('json');
+  const payload = await c.req.json<unknown>();
   return c.json({ message: 'CSV import scaffold endpoint', payload }, 201);
 };

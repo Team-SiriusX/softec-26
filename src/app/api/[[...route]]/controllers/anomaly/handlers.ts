@@ -16,7 +16,7 @@ type AnalyzeRequestPayload = {
 };
 
 export const analyzeWorkerAnomalyHandler = async (c: Context) => {
-  const { workerId } = c.req.valid('json');
+  const { workerId } = await c.req.json<{ workerId: string }>();
 
   const ninetyDaysAgo = new Date();
   ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
