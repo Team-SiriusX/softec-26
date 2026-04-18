@@ -1,5 +1,6 @@
-import { getCookieCache } from 'better-auth/cookies';
+import { auth } from '@/lib/auth';
 import { createMiddleware } from 'hono/factory';
+import { headers } from 'next/headers';
 
 type SessionUser = {
   id: string;
@@ -21,9 +22,8 @@ type AuthEnv = {
  */
 export const authMiddleware = createMiddleware<AuthEnv>(async (c, next) => {
   try {
-    const session = await getCookieCache(c.req.raw.headers, {
-      secret: process.env.BETTER_AUTH_SECRET,
-      strategy: 'jwt',
+    const session = await auth.api.getSession({
+      headers: await headers(),
     });
 
     if (!session || !session.user) {

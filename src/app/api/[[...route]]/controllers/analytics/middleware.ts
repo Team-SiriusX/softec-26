@@ -1,6 +1,7 @@
-import { getCookieCache } from 'better-auth/cookies';
+import { auth } from '@/lib/auth';
 import type { Context } from 'hono';
 import { createMiddleware } from 'hono/factory';
+import { headers } from 'next/headers';
 
 import type { Role } from '@/generated/prisma/client';
 
@@ -59,9 +60,8 @@ function shouldAllowWorkerAdvocateRead() {
 export const analyticsAuthMiddleware = createMiddleware<AnalyticsEnv>(
   async (c, next) => {
     try {
-      const session = await getCookieCache(c.req.raw.headers, {
-        secret: process.env.BETTER_AUTH_SECRET,
-        strategy: 'jwt',
+      const session = await auth.api.getSession({
+        headers: await headers(),
       });
 
       const user = parseSessionUser(session?.user);
