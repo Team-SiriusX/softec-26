@@ -8,18 +8,18 @@
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
     "build": "pnpm db:generate",
-    "db:generate": "pnpm exec prisma generate --schema=prisma/schema.prisma",
-    "db:push": "pnpm exec prisma db push --schema=prisma/schema.prisma"
+    "db:generate": "pnpm dlx prisma@5.22.0 generate --schema=prisma/schema.prisma",
+    "db:push": "pnpm dlx prisma@5.22.0 db push --schema=prisma/schema.prisma"
   },
   "dependencies": {
     "@hono/node-server": "^1.19.14",
-    "@prisma/client": "^7.7.0",
+    "@prisma/client": "^5.22.0",
     "dotenv": "^16.4.0",
     "hono": "^4.4.0",
     "uuid": "^10.0.0",
     "zod": "^3.23.0"
   },
   "devDependencies": {
-    "prisma": "^7.7.0"
+    "prisma": "^5.22.0"
   }
 }

@@ -30,6 +30,7 @@ Swagger UI: http://localhost:8004/docs
 | POST | /certificate | Generate certificate (JSON + HTML) |
 | GET | /certificate/preview | Preview in browser (HTML only) |
 | GET | /certificate/sample | Sample certificate (no auth needed) |
+| GET | /certificate/verify/{certificate_id} | Public verification of certificate authenticity |
 
 ## POST /certificate — Request Body
 ```json

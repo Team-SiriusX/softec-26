@@ -60,3 +60,24 @@ class CertificateResponse(BaseModel):
     worker_id: str
     html: str               # complete HTML document
     data: CertificateData   # structured data for frontend
+
+
+class VerifiedCertificate(BaseModel):
+    certificate_id: str
+    worker_id: str
+    worker_name: Optional[str]
+    from_date: str
+    to_date: str
+    total_verified: float
+    shift_count: int
+    platforms: list[str]
+    status: str
+    generated_at: str
+    expires_at: Optional[str] = None
+    is_expired: bool
+
+
+class CertificateVerificationResponse(BaseModel):
+    is_valid: bool
+    message: str
+    certificate: Optional[VerifiedCertificate] = None

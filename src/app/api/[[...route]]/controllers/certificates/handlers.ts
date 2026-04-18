@@ -107,3 +107,29 @@ export async function sampleCertificate(c: Context) {
     return new Response('certificate_service_unavailable', { status: 503 });
   }
 }
+
+export async function verifyCertificate(c: Context) {
+  const certificateId = c.req.param('certificateId');
+
+  if (!certificateId) {
+    return c.json({ error: 'certificate_id_required' }, 400);
+  }
+
+  try {
+    const res = await fetch(
+      `${CERT_SERVICE_URL}/certificate/verify/${encodeURIComponent(certificateId)}`,
+      {
+        method: 'GET',
+      },
+    );
+
+    if (!res.ok) {
+      return c.json({ error: 'certificate_service_unavailable' }, 503);
+    }
+
+    return c.json(await res.json(), 200);
+  } catch (error) {
+    console.error('verifyCertificate error:', error);
+    return c.json({ error: 'certificate_service_unavailable' }, 503);
+  }
+}

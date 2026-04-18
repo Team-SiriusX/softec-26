@@ -3,10 +3,15 @@ HTML certificate renderer.
 Generates a complete, print-friendly HTML document.
 """
 
+import os
+
 from models import CertificateData
 
 def render_certificate_html(data: CertificateData) -> str:
     from datetime import datetime
+
+    app_base_url = os.getenv("APP_BASE_URL", "http://localhost:3000").rstrip("/")
+    verify_url = f"{app_base_url}/certificate/verify?id={data.certificate_id}"
 
     platform_rows = ""
     for p in data.platforms:
@@ -213,6 +218,15 @@ def render_certificate_html(data: CertificateData) -> str:
             border-top: 1px solid #e2e8f0;
             padding-top: 16px;
         }}
+        .verify-link {{
+            margin-top: 8px;
+            font-size: 12px;
+        }}
+        .verify-link a {{
+            color: #2563eb;
+            text-decoration: none;
+            word-break: break-all;
+        }}
         .print-btn {{
             position: fixed;
             bottom: 24px;
@@ -316,6 +330,9 @@ def render_certificate_html(data: CertificateData) -> str:
 
         <div class="footer">
             FairGig | fairgig.pk
+            <div class="verify-link">
+                Public verification: <a href="{verify_url}">{verify_url}</a>
+            </div>
         </div>
     </div>
 
