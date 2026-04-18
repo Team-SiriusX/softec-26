@@ -159,7 +159,8 @@ async def preview_certificate(
     worker_id: str = Query(...),
     from_date: str = Query(...),
     to_date: str = Query(...),
-    include_unverified: bool = Query(False)
+    include_unverified: bool = Query(False),
+    auto_print: bool = Query(False)
 ):
     """Returns raw HTML directly — opens in browser."""
     conn = await get_connection()
@@ -185,7 +186,7 @@ async def preview_certificate(
             include_unverified
         )
         
-        html = render_certificate_html(data)
+        html = render_certificate_html(data, auto_print=auto_print)
         return HTMLResponse(content=html)
     except HTTPException:
         raise

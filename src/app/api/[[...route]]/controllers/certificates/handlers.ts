@@ -2,7 +2,41 @@ import { Context } from 'hono';
 import { auth } from '@/lib/auth';
 import { headers } from 'next/headers';
 
-const CERT_SERVICE_URL = process.env.CERTIFICATE_SERVICE_URL || 'http://127.0.0.1:8004';
+const CERT_SERVICE_URLS = [
+  process.env.CERTIFICATE_SERVICE_URL,
+  'http://127.0.0.1:8004',
+  'http://127.0.0.1:8002',
+]
+  .filter((value): value is string => Boolean(value && value.trim()))
+  .map((value) => value.trim().replace(/\/$/, ''))
+  .filter((value, index, array) => array.indexOf(value) === index);
+
+function shouldRetry(status: number): boolean {
+  return status >= 500;
+}
+
+async function fetchFromCertificateService(
+  path: string,
+  init?: RequestInit,
+): Promise<Response | null> {
+  let lastResponse: Response | null = null;
+
+  for (const baseUrl of CERT_SERVICE_URLS) {
+    try {
+      const response = await fetch(`${baseUrl}${path}`, init);
+
+      if (!shouldRetry(response.status)) {
+        return response;
+      }
+
+      lastResponse = response;
+    } catch {
+      // Try next URL when current endpoint is unavailable.
+    }
+  }
+
+  return lastResponse;
+}
 
 export async function generateCertificate(c: Context) {
   const session = await auth.api.getSession({
@@ -16,18 +50,24 @@ export async function generateCertificate(c: Context) {
   const body = await c.req.json();
 
   try {
-    const res = await fetch(`${CERT_SERVICE_URL}/certificate`, {
+    const payload = JSON.stringify({
+      worker_id: session.user.id,
+      from_date: body.from_date,
+      to_date: body.to_date,
+      include_unverified: body.include_unverified ?? false,
+    });
+
+    const res = await fetchFromCertificateService('/certificate', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        worker_id: session.user.id,
-        from_date: body.from_date,
-        to_date: body.to_date,
-        include_unverified: body.include_unverified ?? false,
-      }),
+      body: payload,
     });
+
+    if (!res) {
+      return c.json({ error: 'certificate_service_unavailable' }, 503);
+    }
 
     if (res.status === 404) {
       return c.json({ error: 'Worker not found' }, 404);
@@ -72,9 +112,13 @@ export async function previewCertificate(c: Context) {
       auto_print: String(autoPrint),
     });
 
-    const res = await fetch(`${CERT_SERVICE_URL}/certificate/preview?${params}`, {
+    const res = await fetchFromCertificateService(`/certificate/preview?${params}`, {
       method: 'GET',
     });
+
+    if (!res) {
+      return new Response('certificate_service_unavailable', { status: 503 });
+    }
 
     if (!res.ok) {
       return new Response('certificate_service_unavailable', { status: 503 });
@@ -92,9 +136,13 @@ export async function previewCertificate(c: Context) {
 
 export async function sampleCertificate(c: Context) {
   try {
-    const res = await fetch(`${CERT_SERVICE_URL}/certificate/sample`, {
+    const res = await fetchFromCertificateService('/certificate/sample', {
       method: 'GET',
     });
+
+    if (!res) {
+      return new Response('certificate_service_unavailable', { status: 503 });
+    }
 
     if (!res.ok) {
       return new Response('certificate_service_unavailable', { status: 503 });
@@ -118,12 +166,16 @@ export async function verifyCertificate(c: Context) {
   }
 
   try {
-    const res = await fetch(
-      `${CERT_SERVICE_URL}/certificate/verify/${encodeURIComponent(certificateId)}`,
+    const res = await fetchFromCertificateService(
+      `/certificate/verify/${encodeURIComponent(certificateId)}`,
       {
         method: 'GET',
       },
     );
+
+    if (!res) {
+      return c.json({ error: 'certificate_service_unavailable' }, 503);
+    }
 
     if (!res.ok) {
       return c.json({ error: 'certificate_service_unavailable' }, 503);

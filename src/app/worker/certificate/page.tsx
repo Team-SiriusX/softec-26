@@ -2,12 +2,12 @@
 
 import React, { useState, useEffect } from 'react';
 import {
-  FileText,
   Calendar as CalendarIcon,
-  Building,
   CheckCircle,
   AlertCircle,
   FileDown,
+  Eye,
+  FileText,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,32 +23,12 @@ import {
 } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
-type CertificateVerificationResponse = {
-  is_valid: boolean;
-  message: string;
-  certificate?: {
-    certificate_id: string;
-    worker_id: string;
-    worker_name: string | null;
-    from_date: string;
-    to_date: string;
-    total_verified: number;
-    shift_count: number;
-    platforms: string[];
-    status: string;
-    generated_at: string;
-    expires_at: string | null;
-    is_expired: boolean;
-  } | null;
-};
-
 export default function CertificatePage() {
   const [fromDate, setFromDate] = useState<string>('');
   const [toDate, setToDate] = useState<string>('');
   const [includeUnverified, setIncludeUnverified] = useState<boolean>(false);
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [isExportingPdf, setIsExportingPdf] = useState<boolean>(false);
-  const [printedAt, setPrintedAt] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [lastGenerated, setLastGenerated] = useState<string | null>(null);
 
@@ -61,11 +41,14 @@ export default function CertificatePage() {
     // today as YYYY-MM-DD
     const dateToday = new Date();
     setToDate(dateToday.toISOString().split('T')[0]);
-
-    setPrintedAt(dateToday.toLocaleString());
   }, []);
 
   async function handleGenerate() {
+    if (!fromDate || !toDate || fromDate > toDate) {
+      setError('Please choose a valid date range.');
+      return;
+    }
+
     setIsGenerating(true);
     setError(null);
     setLastGenerated(null);
@@ -112,11 +95,21 @@ export default function CertificatePage() {
   }
 
   function handlePreview() {
+    if (!fromDate || !toDate || fromDate > toDate) {
+      setError('Please choose a valid date range.');
+      return;
+    }
+
     const params = buildPreviewParams();
     window.open(`/api/certificates/preview?${params}`, '_blank');
   }
 
   function handleExportPdf() {
+    if (!fromDate || !toDate || fromDate > toDate) {
+      setError('Please choose a valid date range.');
+      return;
+    }
+
     setError(null);
     setIsExportingPdf(true);
     try {
@@ -136,41 +129,22 @@ export default function CertificatePage() {
   }
 
   return (
-    <div className='container mx-auto max-w-4xl space-y-8 py-8 print:max-w-none print:space-y-4 print:py-0'>
-      {/* SECTION 1 — Page header */}
-      <div>
-        <div className='flex items-center space-x-3 border-b pb-4 text-slate-900 print:border-0 print:pb-0'>
-          <FileText className='h-8 w-8 text-blue-500' />
+    <div className='mx-auto max-w-5xl space-y-6 py-8'>
+      <div className='border-b border-border/70 pb-4'>
+        <div className='flex items-start gap-3'>
+          <FileText className='mt-1 h-6 w-6 text-primary' />
           <div>
-            <h1 className='text-3xl font-bold tracking-tight'>
-              Income Certificate
-            </h1>
-            <p className='mt-1 text-slate-500'>
-              Generate a verified earnings summary for landlords, banks, or
-              official use
+            <h1 className='text-2xl font-semibold tracking-tight'>Income Certificate</h1>
+            <p className='mt-1 text-sm text-muted-foreground'>
+              Generate a professional earnings certificate for landlords, banks,
+              and formal documentation.
             </p>
           </div>
         </div>
       </div>
 
-      <div className='hidden rounded-lg border border-slate-200 bg-white p-6 print:block'>
-        <h2 className='text-lg font-semibold text-slate-900'>Certificate Export Summary</h2>
-        <p className='mt-1 text-sm text-slate-600'>
-            Printed from FairGig on {printedAt || 'this session'}.
-        </p>
-        <dl className='mt-4 grid grid-cols-2 gap-x-6 gap-y-2 text-sm text-slate-700'>
-          <dt className='font-medium text-slate-900'>From Date</dt>
-          <dd>{fromDate || 'Not selected'}</dd>
-          <dt className='font-medium text-slate-900'>To Date</dt>
-          <dd>{toDate || 'Not selected'}</dd>
-          <dt className='font-medium text-slate-900'>Include Pending Shifts</dt>
-          <dd>{includeUnverified ? 'Yes' : 'No'}</dd>
-        </dl>
-      </div>
-
-      {/* Error & Success States */}
       {error && (
-        <Alert variant='destructive' className='print:hidden'>
+        <Alert variant='destructive'>
           <AlertCircle className='h-4 w-4' />
           <AlertTitle>Error</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
@@ -178,7 +152,7 @@ export default function CertificatePage() {
       )}
 
       {lastGenerated && (
-        <Alert className='border-green-200 bg-green-50 text-green-900 print:hidden'>
+        <Alert className='border-emerald-200 bg-emerald-50 text-emerald-900'>
           <CheckCircle className='h-4 w-4 text-green-600' />
           <AlertTitle>Success</AlertTitle>
           <AlertDescription>
@@ -188,21 +162,18 @@ export default function CertificatePage() {
         </Alert>
       )}
 
-      {/* SECTION 2 & 4 Container */}
-      <div className='grid gap-8 print:hidden md:grid-cols-3'>
-        {/* SECTION 2 — Certificate generator form card */}
-        <div className='md:col-span-2'>
-          <Card>
+      <div className='grid gap-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(280px,0.7fr)]'>
+        <Card>
             <CardHeader>
               <CardTitle>Certificate Options</CardTitle>
               <CardDescription>
-                Select the date range for your certificate.
+              Select the exact period to include in your certificate.
               </CardDescription>
             </CardHeader>
             <CardContent className='space-y-6'>
               <div className='grid grid-cols-2 gap-4'>
                 <div className='space-y-2'>
-                  <Label htmlFor='fromDate'>From Date</Label>
+                  <Label htmlFor='fromDate'>From date</Label>
                   <Input
                     id='fromDate'
                     type='date'
@@ -211,7 +182,7 @@ export default function CertificatePage() {
                   />
                 </div>
                 <div className='space-y-2'>
-                  <Label htmlFor='toDate'>To Date</Label>
+                  <Label htmlFor='toDate'>To date</Label>
                   <Input
                     id='toDate'
                     type='date'
@@ -221,12 +192,11 @@ export default function CertificatePage() {
                 </div>
               </div>
 
-              <div className='flex flex-row items-center justify-between rounded-lg border p-4 shadow-sm'>
+              <div className='flex flex-row items-center justify-between rounded-lg border border-border/70 bg-muted/20 p-4'>
                 <div className='space-y-0.5'>
                   <Label className='text-base'>Include pending shifts</Label>
-                  <p className='text-sm text-slate-500'>
-                    Pending shifts are clearly marked as unverified on the
-                    certificate
+                  <p className='text-sm text-muted-foreground'>
+                    If enabled, pending rows are shown as unverified in the final certificate.
                   </p>
                 </div>
                 <Switch
@@ -234,120 +204,80 @@ export default function CertificatePage() {
                   onCheckedChange={setIncludeUnverified}
                 />
               </div>
+
+              <div className='rounded-lg border border-border/70 bg-background p-4'>
+                <p className='text-sm font-medium'>What this document includes</p>
+                <ul className='mt-2 list-disc space-y-1 pl-4 text-sm text-muted-foreground'>
+                  <li>Worker and date-range details</li>
+                  <li>Total net earnings, hours, and rates</li>
+                  <li>Platform-by-platform financial breakdown</li>
+                  <li>Public verification URL and certificate ID</li>
+                </ul>
+              </div>
             </CardContent>
-            <CardFooter className='flex justify-end space-x-4'>
-              <Button variant='outline' onClick={handlePreview}>
+            <CardFooter className='flex flex-wrap justify-end gap-3'>
+              <Button variant='outline' onClick={handlePreview} className='gap-2'>
+                <Eye className='h-4 w-4' />
                 Preview Certificate
               </Button>
               <Button
                 variant='secondary'
                 onClick={handleExportPdf}
                 disabled={isExportingPdf}
+                className='gap-2'
               >
-                <FileDown className='mr-2 h-4 w-4' />
-                {isExportingPdf ? 'Opening Print Dialog...' : 'Export as PDF'}
+                <FileDown className='h-4 w-4' />
+                {isExportingPdf ? 'Opening Print Dialog...' : 'Download PDF'}
               </Button>
               <Button
                 onClick={handleGenerate}
                 disabled={isGenerating}
-                className='bg-blue-600 hover:bg-blue-700'
+                className='gap-2'
               >
-                {isGenerating ? 'Generating...' : 'Generate & Download'}
+                {isGenerating ? 'Generating...' : 'Open HTML Certificate'}
               </Button>
             </CardFooter>
-          </Card>
-        </div>
+        </Card>
 
-        {/* SECTION 4 — Sample preview card */}
-        <div className='md:col-span-1'>
-          <Card className='flex h-full flex-col'>
+        <Card className='flex h-full flex-col'>
             <CardHeader>
-              <CardTitle>Certificate Preview</CardTitle>
+              <CardTitle>Sample Preview</CardTitle>
               <CardDescription>
-                See what your certificate looks like
+              Review a sample of the professional template.
               </CardDescription>
             </CardHeader>
-            <CardContent className='flex grow items-center justify-center py-6'>
-              <FileText className='h-16 w-16 text-slate-200' />
+            <CardContent className='space-y-4 text-sm text-muted-foreground'>
+              <p>
+                Use this if you want to check layout and structure before generating
+                your own certificate.
+              </p>
+              <div className='rounded-lg border border-dashed border-border/80 p-4'>
+                <p className='font-medium text-foreground'>Professional format</p>
+                <p className='mt-1'>Letterhead, summary table, platform details, and verification block.</p>
+              </div>
             </CardContent>
             <CardFooter>
               <Button
-                variant='secondary'
+                variant='outline'
                 className='w-full'
                 onClick={handleSamplePreview}
               >
                 View Sample Certificate
               </Button>
             </CardFooter>
-          </Card>
-        </div>
+        </Card>
       </div>
 
-      {/* SECTION 5 — How to print callout */}
-      <div className='rounded-lg border border-blue-100 bg-blue-50 p-5 print:hidden'>
-        <div className='flex'>
-          <div className='shrink-0'>
-            <FileText className='h-5 w-5 text-blue-400' />
-          </div>
-          <div className='ml-3'>
-            <h3 className='text-sm font-medium text-blue-800'>How to print:</h3>
-            <div className='mt-2 text-sm text-blue-700'>
-              <p>
-                Click 'Export as PDF' to open your print-ready certificate and
-                trigger the browser print dialog. Choose 'Save as PDF' as the
-                destination. You can also use 'Preview Certificate' and press
-                Ctrl+P (Cmd+P on Mac).
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* SECTION 3 — Info cards row */}
-      <div className='grid gap-6 print:hidden md:grid-cols-3'>
-        <Card className='border-slate-100 bg-slate-50'>
-          <CardHeader className='pb-3 text-center'>
-            <div className='mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 p-2'>
-              <CheckCircle className='h-5 w-5 text-blue-600' />
-            </div>
-            <CardTitle className='text-sm font-semibold'>
-              Verified Earnings
-            </CardTitle>
-          </CardHeader>
-          <CardContent className='text-center text-xs text-slate-500'>
+      <Card className='border-border/70 bg-muted/15'>
+        <CardContent className='pt-6 text-sm text-muted-foreground'>
+          <div className='flex items-start gap-2'>
+            <CalendarIcon className='mt-0.5 h-4 w-4' />
             <p>
-              Only shifts confirmed by a FairGig verifier are included by
-              default
+              PDF export opens the print dialog in a new tab. Choose <span className='font-medium text-foreground'>Save as PDF</span> as destination.
             </p>
-          </CardContent>
-        </Card>
-
-        <Card className='border-slate-100 bg-slate-50'>
-          <CardHeader className='pb-3 text-center'>
-            <div className='mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 p-2'>
-              <CalendarIcon className='h-5 w-5 text-blue-600' />
-            </div>
-            <CardTitle className='text-sm font-semibold'>Date Range</CardTitle>
-          </CardHeader>
-          <CardContent className='text-center text-xs text-slate-500'>
-            <p>Cover any period from your first logged shift</p>
-          </CardContent>
-        </Card>
-
-        <Card className='border-slate-100 bg-slate-50'>
-          <CardHeader className='pb-3 text-center'>
-            <div className='mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 p-2'>
-              <Building className='h-5 w-5 text-blue-600' />
-            </div>
-            <CardTitle className='text-sm font-semibold'>
-              Bank & Landlord Ready
-            </CardTitle>
-          </CardHeader>
-          <CardContent className='text-center text-xs text-slate-500'>
-            <p>Print directly from your browser — no PDF software needed</p>
-          </CardContent>
-        </Card>
-      </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
