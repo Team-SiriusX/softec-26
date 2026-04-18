@@ -67,6 +67,13 @@ type UploadedMediaItem = {
   mediaType?: 'IMAGE' | 'VIDEO' | 'DOCUMENT';
 };
 
+type UploadFeedbackTone = 'info' | 'success' | 'error';
+
+type UploadFeedback = {
+  tone: UploadFeedbackTone;
+  message: string;
+};
+
 type BoardView = 'feed' | 'mine';
 
 type EditablePostDraft = {
@@ -176,6 +183,18 @@ function renderCommunityMediaPreview(media: Pick<CommunityMedia, 'url' | 'mediaT
   );
 }
 
+function uploadFeedbackClassName(tone: UploadFeedbackTone): string {
+  if (tone === 'error') {
+    return 'text-destructive';
+  }
+
+  if (tone === 'success') {
+    return 'text-emerald-700';
+  }
+
+  return 'text-muted-foreground';
+}
+
 export default function CommunityBoardPage() {
   const { user } = useCurrentUser();
   const isSignedIn = Boolean(user?.id);
@@ -200,6 +219,8 @@ export default function CommunityBoardPage() {
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
   const [uploadedMedia, setUploadedMedia] = useState<UploadedMediaItem[]>([]);
+  const [isCreateMediaUploading, setIsCreateMediaUploading] = useState(false);
+  const [createUploadFeedback, setCreateUploadFeedback] = useState<UploadFeedback | null>(null);
   const [manualMediaUrl, setManualMediaUrl] = useState('');
   const [postPlatformId, setPostPlatformId] = useState('none');
   const [postAnonymously, setPostAnonymously] = useState(false);
@@ -207,6 +228,18 @@ export default function CommunityBoardPage() {
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
   const [editingPostId, setEditingPostId] = useState<string | null>(null);
   const [editDrafts, setEditDrafts] = useState<Record<string, EditablePostDraft>>({});
+  const [editMediaDrafts, setEditMediaDrafts] = useState<
+    Record<string, UploadedMediaItem[]>
+  >({});
+  const [editManualMediaUrls, setEditManualMediaUrls] = useState<
+    Record<string, string>
+  >({});
+  const [editUploadingByPost, setEditUploadingByPost] = useState<
+    Record<string, boolean>
+  >({});
+  const [editUploadFeedbackByPost, setEditUploadFeedbackByPost] = useState<
+    Record<string, UploadFeedback>
+  >({});
 
   const platformsQuery = useCommunityPlatforms();
   const feedQuery = useCommunityFeed({
@@ -259,12 +292,184 @@ export default function CommunityBoardPage() {
     return platformNameById.get(platformId) ?? 'Select a valid platform';
   };
 
+  const normalizeUploadedMedia = (
+    media: Pick<CommunityMedia, 'url' | 'fileKey' | 'mediaType'>,
+  ): UploadedMediaItem => {
+    return {
+      url: media.url,
+      fileKey: media.fileKey ?? undefined,
+      mediaType: normalizeMediaType(media.mediaType),
+    };
+  };
+
+  const mergeUploadedMediaItems = (
+    current: UploadedMediaItem[],
+    incoming: UploadedMediaItem[],
+  ) => {
+    const merged = [...current, ...incoming];
+    const deduped = merged.filter((item, index, self) => {
+      return (
+        self.findIndex((entry) => {
+          if (entry.fileKey && item.fileKey) {
+            return entry.fileKey === item.fileKey;
+          }
+
+          return entry.url === item.url;
+        }) === index
+      );
+    });
+
+    return deduped.slice(0, MAX_MEDIA_ITEMS);
+  };
+
+  const removeUploadedMediaItem = (
+    current: UploadedMediaItem[],
+    target: UploadedMediaItem,
+  ) => {
+    return current.filter((item) => {
+      if (target.fileKey) {
+        return item.fileKey !== target.fileKey;
+      }
+
+      return item.url !== target.url;
+    });
+  };
+
+  const areUploadedMediaItemsEqual = (
+    left: UploadedMediaItem[],
+    right: UploadedMediaItem[],
+  ) => {
+    if (left.length !== right.length) {
+      return false;
+    }
+
+    return left.every((item, index) => {
+      const other = right[index];
+
+      return (
+        item.url === other.url &&
+        (item.fileKey ?? null) === (other.fileKey ?? null) &&
+        normalizeMediaType(item.mediaType) === normalizeMediaType(other.mediaType)
+      );
+    });
+  };
+
+  const extractUploadedMediaItems = (
+    files: Array<{
+      serverData?: { fileUrl?: string; fileKey?: string; mediaType?: unknown };
+      ufsUrl?: string;
+      url?: string;
+      key?: string;
+      type?: string;
+    }>,
+  ): UploadedMediaItem[] => {
+    const next: UploadedMediaItem[] = [];
+
+    for (const file of files) {
+      const inferredType = normalizeMediaType(
+        file.serverData?.mediaType ??
+          (file.type?.startsWith('video/') ? 'VIDEO' : 'IMAGE'),
+      );
+      const resolvedUrl = file.serverData?.fileUrl ?? file.ufsUrl ?? file.url;
+
+      if (!resolvedUrl) {
+        continue;
+      }
+
+      next.push({
+        url: resolvedUrl,
+        fileKey: file.serverData?.fileKey ?? file.key ?? undefined,
+        mediaType: inferredType,
+      });
+    }
+
+    return next;
+  };
+
+  const clearEditMediaState = (postId: string) => {
+    setEditMediaDrafts((prev) => {
+      if (!(postId in prev)) {
+        return prev;
+      }
+
+      const next = { ...prev };
+      delete next[postId];
+      return next;
+    });
+
+    setEditManualMediaUrls((prev) => {
+      if (!(postId in prev)) {
+        return prev;
+      }
+
+      const next = { ...prev };
+      delete next[postId];
+      return next;
+    });
+
+    setEditUploadingByPost((prev) => {
+      if (!(postId in prev)) {
+        return prev;
+      }
+
+      const next = { ...prev };
+      delete next[postId];
+      return next;
+    });
+
+    setEditUploadFeedbackByPost((prev) => {
+      if (!(postId in prev)) {
+        return prev;
+      }
+
+      const next = { ...prev };
+      delete next[postId];
+      return next;
+    });
+  };
+
+  const setEditUploadFeedback = (
+    postId: string,
+    feedback: UploadFeedback | null,
+  ) => {
+    setEditUploadFeedbackByPost((prev) => {
+      if (!feedback) {
+        if (!(postId in prev)) {
+          return prev;
+        }
+
+        const next = { ...prev };
+        delete next[postId];
+        return next;
+      }
+
+      return {
+        ...prev,
+        [postId]: feedback,
+      };
+    });
+  };
+
+  const handleCancelEdit = (postId: string) => {
+    clearEditMediaState(postId);
+    setEditingPostId((current) => (current === postId ? null : current));
+  };
+
   const handleEditStart = (post: CommunityPost) => {
     setEditingPostId(post.id);
     setEditDrafts((prev) => ({
       ...prev,
       [post.id]: createEditDraft(post),
     }));
+    setEditMediaDrafts((prev) => ({
+      ...prev,
+      [post.id]: post.media.map(normalizeUploadedMedia),
+    }));
+    setEditManualMediaUrls((prev) => ({
+      ...prev,
+      [post.id]: '',
+    }));
+    setEditUploadFeedback(post.id, null);
   };
 
   const handleToggleAnonymous = async (post: CommunityPost) => {
@@ -305,7 +510,60 @@ export default function CommunityBoardPage() {
       return next;
     });
 
+    clearEditMediaState(post.id);
+
     setEditingPostId((current) => (current === post.id ? null : current));
+  };
+
+  const handleAddManualMediaUrlToEdit = (postId: string) => {
+    const candidate = (editManualMediaUrls[postId] ?? '').trim();
+
+    if (!candidate) {
+      return;
+    }
+
+    try {
+      const parsed = new URL(candidate);
+      if (!parsed.protocol.startsWith('http')) {
+        throw new Error('invalid protocol');
+      }
+    } catch {
+      toast.error('Please enter a valid media URL');
+      return;
+    }
+
+    setEditMediaDrafts((prev) => {
+      const current = prev[postId] ?? [];
+
+      if (current.some((item) => item.url === candidate)) {
+        return prev;
+      }
+
+      if (current.length >= MAX_MEDIA_ITEMS) {
+        toast.error(`You can attach up to ${MAX_MEDIA_ITEMS} media items`);
+        return prev;
+      }
+
+      return {
+        ...prev,
+        [postId]: mergeUploadedMediaItems(current, [
+          {
+            url: candidate,
+            mediaType: inferMediaTypeFromUrl(candidate),
+          },
+        ]),
+      };
+    });
+
+    setEditManualMediaUrls((prev) => ({
+      ...prev,
+      [postId]: '',
+    }));
+    setEditUploadFeedback(postId, {
+      tone: 'success',
+      message: 'Added media URL to this post.',
+    });
+    toast.success('Media URL added');
   };
 
   const handleAddManualMediaUrl = () => {
@@ -341,12 +599,21 @@ export default function CommunityBoardPage() {
     });
 
     setManualMediaUrl('');
+    setCreateUploadFeedback({
+      tone: 'success',
+      message: 'Added media URL to your draft.',
+    });
     toast.success('Media URL added');
   };
 
   const handleSaveEdit = async (postId: string) => {
     if (!canParticipate) {
       toast.error('Only workers can edit their posts');
+      return;
+    }
+
+    if (editUploadingByPost[postId]) {
+      toast.error('Please wait for media upload to finish before saving');
       return;
     }
 
@@ -382,14 +649,25 @@ export default function CommunityBoardPage() {
       return;
     }
 
+    const sourcePost = myPosts.find((item) => item.id === postId);
+    const originalMedia = sourcePost
+      ? sourcePost.media.map(normalizeUploadedMedia)
+      : [];
+    const draftMedia = editMediaDrafts[postId] ?? originalMedia;
+    const shouldSendMedia = sourcePost
+      ? !areUploadedMediaItemsEqual(draftMedia, originalMedia)
+      : Boolean(editMediaDrafts[postId]);
+
     await updatePost.mutateAsync({
       postId,
       title: nextTitle,
       body: nextBody,
       platformId: resolvedPlatformId,
       isAnonymous: draft.isAnonymous,
+      media: shouldSendMedia ? draftMedia : undefined,
     });
 
+    clearEditMediaState(postId);
     setEditingPostId((current) => (current === postId ? null : current));
   };
 
@@ -427,6 +705,7 @@ export default function CommunityBoardPage() {
           setTitle('');
           setBody('');
           setUploadedMedia([]);
+          setCreateUploadFeedback(null);
           setManualMediaUrl('');
           setPostPlatformId('none');
           setPostAnonymously(false);
@@ -611,29 +890,23 @@ export default function CommunityBoardPage() {
                     </p>
                     <UploadDropzone
                       endpoint='communityPostMediaUploader'
+                      onUploadBegin={() => {
+                        setIsCreateMediaUploading(true);
+                        setCreateUploadFeedback({
+                          tone: 'info',
+                          message: 'Uploading media to UploadThing...',
+                        });
+                      }}
                       onClientUploadComplete={(files) => {
-                        const next: UploadedMediaItem[] = [];
-
-                        for (const file of files) {
-                          const inferredType = normalizeMediaType(
-                            file.serverData?.mediaType ??
-                              (file.type?.startsWith('video/') ? 'VIDEO' : 'IMAGE'),
-                          );
-                          const resolvedUrl =
-                            file.serverData?.fileUrl ?? file.ufsUrl ?? file.url;
-
-                          if (!resolvedUrl) {
-                            continue;
-                          }
-
-                          next.push({
-                            url: resolvedUrl,
-                            fileKey: file.serverData?.fileKey ?? file.key ?? undefined,
-                            mediaType: inferredType,
-                          });
-                        }
+                        setIsCreateMediaUploading(false);
+                        const next = extractUploadedMediaItems(files);
 
                         if (next.length === 0) {
+                          setCreateUploadFeedback({
+                            tone: 'error',
+                            message:
+                              'Upload finished but no media URL was returned from UploadThing.',
+                          });
                           toast.error(
                             'Upload finished but no media URL was returned. Try uploading again.',
                           );
@@ -641,30 +914,38 @@ export default function CommunityBoardPage() {
                         }
 
                         setUploadedMedia((prev) => {
-                          const merged = [...prev, ...next];
-                          const deduped = merged.filter((item, index, self) => {
-                            return (
-                              self.findIndex((entry) => {
-                                if (entry.fileKey && item.fileKey) {
-                                  return entry.fileKey === item.fileKey;
-                                }
+                          return mergeUploadedMediaItems(prev, next);
+                        });
 
-                                return entry.url === item.url;
-                              }) === index
-                            );
-                          });
-                          return deduped.slice(0, MAX_MEDIA_ITEMS);
+                        setCreateUploadFeedback({
+                          tone: 'success',
+                          message: `Uploaded ${next.length} media file${next.length > 1 ? 's' : ''}.`,
                         });
 
                         toast.success('Evidence uploaded');
                       }}
                       onUploadError={(error) => {
+                        setIsCreateMediaUploading(false);
+                        setCreateUploadFeedback({
+                          tone: 'error',
+                          message:
+                            error.message ||
+                            'Upload failed. You can add a media URL manually below.',
+                        });
                         toast.error(
                           error.message ||
                             'Upload failed. You can add a media URL manually below.',
                         );
                       }}
                     />
+
+                    {createUploadFeedback ? (
+                      <p
+                        className={`text-xs ${uploadFeedbackClassName(createUploadFeedback.tone)}`}
+                      >
+                        {createUploadFeedback.message}
+                      </p>
+                    ) : null}
 
                     <div className='flex flex-col gap-2 sm:flex-row'>
                       <Input
@@ -703,13 +984,7 @@ export default function CommunityBoardPage() {
                               className='absolute right-1 top-1 size-7'
                               onClick={() => {
                                 setUploadedMedia((prev) => {
-                                  return prev.filter((item) => {
-                                    if (media.fileKey) {
-                                      return item.fileKey !== media.fileKey;
-                                    }
-
-                                    return item.url !== media.url;
-                                  });
+                                  return removeUploadedMediaItem(prev, media);
                                 });
                               }}
                             >
@@ -732,8 +1007,16 @@ export default function CommunityBoardPage() {
                   </label>
 
                   <div className='flex flex-col gap-2 sm:flex-row'>
-                    <Button type='submit' className='min-h-11 w-full' disabled={createPost.isPending}>
-                      {createPost.isPending ? 'Publishing...' : 'Publish Post'}
+                    <Button
+                      type='submit'
+                      className='min-h-11 w-full'
+                      disabled={createPost.isPending || isCreateMediaUploading}
+                    >
+                      {isCreateMediaUploading
+                        ? 'Uploading media...'
+                        : createPost.isPending
+                          ? 'Publishing...'
+                          : 'Publish Post'}
                     </Button>
                     <Button
                       type='button'
@@ -1111,7 +1394,11 @@ export default function CommunityBoardPage() {
           ) : (
             filteredMyPosts.map((post) => {
               const draft = editDrafts[post.id] ?? createEditDraft(post);
+              const draftMedia = editMediaDrafts[post.id] ?? post.media.map(normalizeUploadedMedia);
+              const editManualMediaUrl = editManualMediaUrls[post.id] ?? '';
+              const editUploadFeedback = editUploadFeedbackByPost[post.id];
               const isEditing = editingPostId === post.id;
+              const isEditMediaUploading = Boolean(editUploadingByPost[post.id]);
               const canRequestVerification =
                 post.verificationStatus === 'UNVERIFIED' ||
                 post.verificationStatus === 'HUMAN_UNVERIFIED';
@@ -1201,6 +1488,143 @@ export default function CommunityBoardPage() {
                           </SelectContent>
                         </Select>
 
+                        <div className='space-y-2'>
+                          <p className='inline-flex flex-wrap items-center gap-2 text-xs text-muted-foreground'>
+                            <ImageIcon className='size-3.5' />
+                            <Video className='size-3.5' />
+                            Add, remove, or replace up to {MAX_MEDIA_ITEMS} media items.
+                          </p>
+
+                          <UploadDropzone
+                            endpoint='communityPostMediaUploader'
+                            onUploadBegin={() => {
+                              setEditUploadingByPost((prev) => ({
+                                ...prev,
+                                [post.id]: true,
+                              }));
+                              setEditUploadFeedback(post.id, {
+                                tone: 'info',
+                                message: 'Uploading media to UploadThing...',
+                              });
+                            }}
+                            onClientUploadComplete={(files) => {
+                              setEditUploadingByPost((prev) => ({
+                                ...prev,
+                                [post.id]: false,
+                              }));
+
+                              const next = extractUploadedMediaItems(files);
+
+                              if (next.length === 0) {
+                                setEditUploadFeedback(post.id, {
+                                  tone: 'error',
+                                  message:
+                                    'Upload finished but no media URL was returned from UploadThing.',
+                                });
+                                toast.error(
+                                  'Upload finished but no media URL was returned. Try uploading again.',
+                                );
+                                return;
+                              }
+
+                              setEditMediaDrafts((prev) => ({
+                                ...prev,
+                                [post.id]: mergeUploadedMediaItems(prev[post.id] ?? draftMedia, next),
+                              }));
+
+                              setEditUploadFeedback(post.id, {
+                                tone: 'success',
+                                message: `Uploaded ${next.length} media file${next.length > 1 ? 's' : ''}.`,
+                              });
+
+                              toast.success('Evidence uploaded');
+                            }}
+                            onUploadError={(error) => {
+                              setEditUploadingByPost((prev) => ({
+                                ...prev,
+                                [post.id]: false,
+                              }));
+
+                              setEditUploadFeedback(post.id, {
+                                tone: 'error',
+                                message:
+                                  error.message ||
+                                  'Upload failed. You can add a media URL manually below.',
+                              });
+
+                              toast.error(
+                                error.message ||
+                                  'Upload failed. You can add a media URL manually below.',
+                              );
+                            }}
+                          />
+
+                          {editUploadFeedback ? (
+                            <p
+                              className={`text-xs ${uploadFeedbackClassName(editUploadFeedback.tone)}`}
+                            >
+                              {editUploadFeedback.message}
+                            </p>
+                          ) : null}
+
+                          <div className='flex flex-col gap-2 sm:flex-row'>
+                            <Input
+                              value={editManualMediaUrl}
+                              onChange={(event) =>
+                                setEditManualMediaUrls((prev) => ({
+                                  ...prev,
+                                  [post.id]: event.target.value,
+                                }))
+                              }
+                              placeholder='Or paste a public media URL'
+                            />
+                            <Button
+                              type='button'
+                              variant='outline'
+                              className='min-h-10 sm:min-w-32'
+                              onClick={() => handleAddManualMediaUrlToEdit(post.id)}
+                            >
+                              Add URL
+                            </Button>
+                          </div>
+
+                          {draftMedia.length > 0 ? (
+                            <div className='grid grid-cols-1 gap-2 sm:grid-cols-2'>
+                              {draftMedia.map((media) => (
+                                <div
+                                  key={`${post.id}-${media.fileKey ?? media.url}`}
+                                  className='relative overflow-hidden rounded-xl border border-border/60'
+                                >
+                                  {renderCommunityMediaPreview({
+                                    url: media.url,
+                                    mediaType: media.mediaType ?? 'IMAGE',
+                                  })}
+                                  <span className='absolute bottom-1 left-1 rounded bg-black/70 px-1.5 py-0.5 text-[10px] text-white'>
+                                    {normalizeMediaType(media.mediaType)}
+                                  </span>
+                                  <Button
+                                    type='button'
+                                    size='icon'
+                                    variant='secondary'
+                                    className='absolute right-1 top-1 size-7'
+                                    onClick={() => {
+                                      setEditMediaDrafts((prev) => ({
+                                        ...prev,
+                                        [post.id]: removeUploadedMediaItem(
+                                          prev[post.id] ?? draftMedia,
+                                          media,
+                                        ),
+                                      }));
+                                    }}
+                                  >
+                                    <X className='size-4' />
+                                  </Button>
+                                </div>
+                              ))}
+                            </div>
+                          ) : null}
+                        </div>
+
                         <label className='inline-flex items-center gap-2 text-sm text-muted-foreground'>
                           <input
                             type='checkbox'
@@ -1227,16 +1651,16 @@ export default function CommunityBoardPage() {
                           <Button
                             type='button'
                             className='min-h-10 w-full sm:w-auto'
-                            disabled={updatePost.isPending}
+                            disabled={updatePost.isPending || isEditMediaUploading}
                             onClick={() => void handleSaveEdit(post.id)}
                           >
-                            Save Updates
+                            {isEditMediaUploading ? 'Uploading media...' : 'Save Updates'}
                           </Button>
                           <Button
                             type='button'
                             variant='outline'
                             className='min-h-10 w-full sm:w-auto'
-                            onClick={() => setEditingPostId(null)}
+                            onClick={() => handleCancelEdit(post.id)}
                           >
                             Cancel
                           </Button>

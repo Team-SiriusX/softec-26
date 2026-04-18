@@ -334,6 +334,35 @@ function normalizeMediaInput(media: PostMediaInput[] | undefined): Array<{
   return normalized;
 }
 
+function mapCommunityMediaSchemaError(error: unknown): string | null {
+  const topLevelMessage = error instanceof Error ? error.message : '';
+  const cause =
+    error && typeof error === 'object' && 'cause' in error
+      ? (error as { cause?: unknown }).cause
+      : undefined;
+
+  const causeCode =
+    cause && typeof cause === 'object' && 'code' in cause
+      ? (cause as { code?: unknown }).code
+      : undefined;
+  const causeMessage =
+    cause && typeof cause === 'object' && 'message' in cause
+      ? (cause as { message?: unknown }).message
+      : undefined;
+
+  const combined = `${topLevelMessage} ${
+    typeof causeMessage === 'string' ? causeMessage : ''
+  }`.toLowerCase();
+
+  const isMissingTypeError = causeCode === '42704' || combined.includes('does not exist');
+
+  if (isMissingTypeError && combined.includes('communitymediatype')) {
+    return 'Database schema for community media is out of sync. Run "pnpm prisma db push --accept-data-loss" and restart the server.';
+  }
+
+  return null;
+}
+
 async function ensurePendingQueueItem(params: {
   postId: string;
   reason: 'USER_REQUEST' | 'MULTIPLE_REPORTS' | 'TRUST_SCORE_LOW';
@@ -563,25 +592,42 @@ export const createPost = async (c: Context) => {
     }
   }
 
-  const created = await db.communityPost.create({
-    data: {
-      authorId: user.id,
-      platformId: body.platformId ?? null,
-      title: body.title.trim(),
-      body: body.body.trim(),
-      isAnonymous: Boolean(body.isAnonymous),
-      media: normalizedMedia.length
-        ? {
-            create: normalizedMedia.map((item) => ({
-              url: item.url,
-              fileKey: item.fileKey,
-              mediaType: item.mediaType,
-            })),
-          }
-        : undefined,
-    },
-    include: detailInclude,
-  });
+  let created: DetailPost;
+
+  try {
+    created = await db.communityPost.create({
+      data: {
+        authorId: user.id,
+        platformId: body.platformId ?? null,
+        title: body.title.trim(),
+        body: body.body.trim(),
+        isAnonymous: Boolean(body.isAnonymous),
+        media: normalizedMedia.length
+          ? {
+              create: normalizedMedia.map((item) => ({
+                url: item.url,
+                fileKey: item.fileKey,
+                mediaType: item.mediaType,
+              })),
+            }
+          : undefined,
+      },
+      include: detailInclude,
+    });
+  } catch (error) {
+    const schemaError = mapCommunityMediaSchemaError(error);
+
+    if (schemaError) {
+      return c.json({ error: schemaError }, 500);
+    }
+
+    console.error('Community post create failed', {
+      userId: user.id,
+      error,
+    });
+
+    return c.json({ error: 'Failed to create post' }, 500);
+  }
 
   return c.json({ data: serializeDetailPost(created) }, 201);
 };
@@ -684,77 +730,95 @@ export const updatePost = async (c: Context) => {
     didPlatformChange ||
     didMediaChange;
 
-  const updated = await db.$transaction(async (tx) => {
-    if (mediaProvided) {
-      await tx.communityPostMedia.deleteMany({
-        where: { postId },
+  let updated: DetailPost;
+
+  try {
+    updated = await db.$transaction(async (tx) => {
+      if (mediaProvided) {
+        await tx.communityPostMedia.deleteMany({
+          where: { postId },
+        });
+      }
+
+      const updateData: Prisma.CommunityPostUpdateInput = {};
+
+      if (nextTitle !== undefined) {
+        updateData.title = nextTitle;
+      }
+
+      if (nextBody !== undefined) {
+        updateData.body = nextBody;
+      }
+
+      if (platformIdProvided) {
+        updateData.platform = nextPlatformId
+          ? {
+              connect: {
+                id: nextPlatformId,
+              },
+            }
+          : {
+              disconnect: true,
+            };
+      }
+
+      if (anonymityProvided) {
+        updateData.isAnonymous = nextAnonymous;
+      }
+
+      if (mediaProvided && normalizedMedia && normalizedMedia.length > 0) {
+        updateData.media = {
+          create: normalizedMedia.map((item) => ({
+            url: item.url,
+            fileKey: item.fileKey,
+            mediaType: item.mediaType,
+          })),
+        };
+      }
+
+      if (contentChanged) {
+        updateData.verificationStatus = 'UNVERIFIED';
+        updateData.trustScore = null;
+        updateData.verificationRequestedAt = null;
+      }
+
+      const nextPost = await tx.communityPost.update({
+        where: { id: postId },
+        data: updateData,
+        include: detailInclude,
       });
+
+      if (contentChanged) {
+        await tx.communityPostReviewQueue.updateMany({
+          where: {
+            postId,
+            status: 'PENDING',
+          },
+          data: {
+            status: 'RESOLVED',
+            resolvedAt: new Date(),
+            note: 'Auto-closed because the post content was edited by the author',
+          },
+        });
+      }
+
+      return nextPost;
+    });
+  } catch (error) {
+    const schemaError = mapCommunityMediaSchemaError(error);
+
+    if (schemaError) {
+      return c.json({ error: schemaError }, 500);
     }
 
-    const updateData: Prisma.CommunityPostUpdateInput = {};
-
-    if (nextTitle !== undefined) {
-      updateData.title = nextTitle;
-    }
-
-    if (nextBody !== undefined) {
-      updateData.body = nextBody;
-    }
-
-    if (platformIdProvided) {
-      updateData.platform = nextPlatformId
-        ? {
-            connect: {
-              id: nextPlatformId,
-            },
-          }
-        : {
-            disconnect: true,
-          };
-    }
-
-    if (anonymityProvided) {
-      updateData.isAnonymous = nextAnonymous;
-    }
-
-    if (mediaProvided && normalizedMedia && normalizedMedia.length > 0) {
-      updateData.media = {
-        create: normalizedMedia.map((item) => ({
-          url: item.url,
-          fileKey: item.fileKey,
-          mediaType: item.mediaType,
-        })),
-      };
-    }
-
-    if (contentChanged) {
-      updateData.verificationStatus = 'UNVERIFIED';
-      updateData.trustScore = null;
-      updateData.verificationRequestedAt = null;
-    }
-
-    const nextPost = await tx.communityPost.update({
-      where: { id: postId },
-      data: updateData,
-      include: detailInclude,
+    console.error('Community post update failed', {
+      postId,
+      userId: user.id,
+      error,
     });
 
-    if (contentChanged) {
-      await tx.communityPostReviewQueue.updateMany({
-        where: {
-          postId,
-          status: 'PENDING',
-        },
-        data: {
-          status: 'RESOLVED',
-          resolvedAt: new Date(),
-          note: 'Auto-closed because the post content was edited by the author',
-        },
-      });
-    }
-
-    return nextPost;
-  });
+    return c.json({ error: 'Failed to update post' }, 500);
+  }
 
   return c.json({ data: serializeDetailPost(updated) });
 };

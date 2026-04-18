@@ -1,5 +1,6 @@
 import { createUploadthing, type FileRouter } from "uploadthing/next";
 import { UploadThingError } from "uploadthing/server";
+import { getCookieCache, getSessionCookie } from "better-auth/cookies";
 import { auth } from "@/lib/auth";
 import db from "@/lib/db";
 
@@ -11,6 +12,77 @@ function isWorkerRole(role: unknown): boolean {
   }
 
   return role.trim().toUpperCase() === "WORKER";
+}
+
+type UploadSessionUser = {
+  id: string;
+  role?: unknown;
+};
+
+type CachedSessionPayload = {
+  session?: {
+    id?: string;
+  };
+  user?: {
+    id?: string;
+    role?: string;
+  };
+};
+
+async function resolveUploadSessionUser(req: Request): Promise<UploadSessionUser | null> {
+  const primarySession = await auth.api.getSession({
+    headers: req.headers,
+  });
+
+  if (primarySession?.user?.id) {
+    return {
+      id: primarySession.user.id,
+      role: primarySession.user.role,
+    };
+  }
+
+  // Better Auth cookie-cache decoding can drift in dev during rapid restarts.
+  // Retry by disabling cookie cache to force a fresh session decode.
+  const freshSession = await auth.api.getSession({
+    headers: req.headers,
+    query: {
+      disableCookieCache: "true",
+      disableRefresh: "true",
+    },
+  } as {
+    headers: Headers;
+    query: {
+      disableCookieCache: string;
+      disableRefresh: string;
+    };
+  });
+
+  if (freshSession?.user?.id) {
+    return {
+      id: freshSession.user.id,
+      role: freshSession.user.role,
+    };
+  }
+
+  const hasSessionToken = Boolean(getSessionCookie(req));
+
+  if (!hasSessionToken) {
+    return null;
+  }
+
+  const cached = (await getCookieCache(req, {
+    secret: process.env.BETTER_AUTH_SECRET,
+    strategy: "jwt",
+  }).catch(() => null)) as CachedSessionPayload | null;
+
+  if (!cached?.session?.id || !cached?.user?.id) {
+    return null;
+  }
+
+  return {
+    id: cached.user.id,
+    role: cached.user.role,
+  };
 }
 
 async function resolveSessionRole(user: { id: string; role?: unknown }) {
@@ -42,13 +114,14 @@ export const ourFileRouter = {
     // Set permissions and file types for this FileRoute
     .middleware(async ({ req }) => {
       // This code runs on your server before upload
-      const session = await auth.api.getSession({
-        headers: req.headers,
-      });
-      const user = session?.user;
+      const user = await resolveUploadSessionUser(req);
 
       // If you throw, the user will not be able to upload
-      if (!user) throw new UploadThingError("Unauthorized");
+      if (!user) {
+        throw new UploadThingError(
+          "Unauthorized: session not found. Please sign out, sign in again, and retry upload.",
+        );
+      }
 
       // Whatever is returned here is accessible in onUploadComplete as `metadata`
       return {
@@ -85,12 +158,13 @@ export const ourFileRouter = {
     },
   })
     .middleware(async ({ req }) => {
-      const session = await auth.api.getSession({
-        headers: req.headers,
-      });
-      const user = session?.user;
+      const user = await resolveUploadSessionUser(req);
 
-      if (!user) throw new UploadThingError("Unauthorized");
+      if (!user) {
+        throw new UploadThingError(
+          "Unauthorized: worker session not found. Please sign out, sign in again, and retry upload.",
+        );
+      }
 
       const resolvedRole = await resolveSessionRole(user as { id: string; role?: unknown });
 
