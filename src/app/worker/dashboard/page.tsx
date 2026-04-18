@@ -293,7 +293,7 @@ export default function WorkerAnalyticsPage() {
         'earnings-trend'
       ].$get({
         param: { workerId: 'me' },
-        query: { weeks: String(windowWeeks) },
+        query: { weeks: windowWeeks },
       });
 
       return parseResponseOrThrow<EarningsTrendResponse>(response);
@@ -313,7 +313,7 @@ export default function WorkerAnalyticsPage() {
         'hourly-rate-river'
       ].$get({
         param: { workerId: 'me' },
-        query: { weeks: String(windowWeeks) },
+        query: { weeks: windowWeeks },
       });
 
       return parseResponseOrThrow<HourlyRateRiverResponse>(response);
@@ -333,7 +333,7 @@ export default function WorkerAnalyticsPage() {
         'commission-rate-tracker'
       ].$get({
         param: { workerId: 'me' },
-        query: { weeks: String(windowWeeks) },
+        query: { weeks: windowWeeks },
       });
 
       return parseResponseOrThrow<CommissionTrackerResponse>(response);
@@ -353,7 +353,7 @@ export default function WorkerAnalyticsPage() {
         'platform-earnings-breakdown'
       ].$get({
         param: { workerId: 'me' },
-        query: { months: String(breakdownMonths) },
+        query: { months: breakdownMonths },
       });
 
       return parseResponseOrThrow<PlatformBreakdownResponse>(response);
@@ -373,7 +373,7 @@ export default function WorkerAnalyticsPage() {
         'earnings-distribution-dot-plot'
       ].$get({
         param: { workerId: 'me' },
-        query: { weeks: String(distributionWeeks) },
+        query: { weeks: distributionWeeks },
       });
 
       return parseResponseOrThrow<DotPlotResponse>(response);
@@ -388,7 +388,7 @@ export default function WorkerAnalyticsPage() {
         'verification-status-donut'
       ].$get({
         param: { workerId: 'me' },
-        query: { weeks: String(windowWeeks) },
+        query: { weeks: windowWeeks },
       });
 
       return parseResponseOrThrow<VerificationDonutResponse>(response);
