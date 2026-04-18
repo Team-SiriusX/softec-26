@@ -67,6 +67,13 @@ type UploadedMediaItem = {
   mediaType?: 'IMAGE' | 'VIDEO' | 'DOCUMENT';
 };
 
+type UploadFeedbackTone = 'info' | 'success' | 'error';
+
+type UploadFeedback = {
+  tone: UploadFeedbackTone;
+  message: string;
+};
+
 type BoardView = 'feed' | 'mine';
 
 type EditablePostDraft = {
@@ -176,6 +183,18 @@ function renderCommunityMediaPreview(media: Pick<CommunityMedia, 'url' | 'mediaT
   );
 }
 
+function uploadFeedbackClassName(tone: UploadFeedbackTone): string {
+  if (tone === 'error') {
+    return 'text-destructive';
+  }
+
+  if (tone === 'success') {
+    return 'text-emerald-700';
+  }
+
+  return 'text-muted-foreground';
+}
+
 export default function CommunityBoardPage() {
   const { user } = useCurrentUser();
   const isSignedIn = Boolean(user?.id);
@@ -201,6 +220,7 @@ export default function CommunityBoardPage() {
   const [body, setBody] = useState('');
   const [uploadedMedia, setUploadedMedia] = useState<UploadedMediaItem[]>([]);
   const [isCreateMediaUploading, setIsCreateMediaUploading] = useState(false);
+  const [createUploadFeedback, setCreateUploadFeedback] = useState<UploadFeedback | null>(null);
   const [manualMediaUrl, setManualMediaUrl] = useState('');
   const [postPlatformId, setPostPlatformId] = useState('none');
   const [postAnonymously, setPostAnonymously] = useState(false);
@@ -216,6 +236,9 @@ export default function CommunityBoardPage() {
   >({});
   const [editUploadingByPost, setEditUploadingByPost] = useState<
     Record<string, boolean>
+  >({});
+  const [editUploadFeedbackByPost, setEditUploadFeedbackByPost] = useState<
+    Record<string, UploadFeedback>
   >({});
 
   const platformsQuery = useCommunityPlatforms();
@@ -393,6 +416,38 @@ export default function CommunityBoardPage() {
       delete next[postId];
       return next;
     });
+
+    setEditUploadFeedbackByPost((prev) => {
+      if (!(postId in prev)) {
+        return prev;
+      }
+
+      const next = { ...prev };
+      delete next[postId];
+      return next;
+    });
+  };
+
+  const setEditUploadFeedback = (
+    postId: string,
+    feedback: UploadFeedback | null,
+  ) => {
+    setEditUploadFeedbackByPost((prev) => {
+      if (!feedback) {
+        if (!(postId in prev)) {
+          return prev;
+        }
+
+        const next = { ...prev };
+        delete next[postId];
+        return next;
+      }
+
+      return {
+        ...prev,
+        [postId]: feedback,
+      };
+    });
   };
 
   const handleCancelEdit = (postId: string) => {
@@ -414,6 +469,7 @@ export default function CommunityBoardPage() {
       ...prev,
       [post.id]: '',
     }));
+    setEditUploadFeedback(post.id, null);
   };
 
   const handleToggleAnonymous = async (post: CommunityPost) => {
@@ -503,6 +559,10 @@ export default function CommunityBoardPage() {
       ...prev,
       [postId]: '',
     }));
+    setEditUploadFeedback(postId, {
+      tone: 'success',
+      message: 'Added media URL to this post.',
+    });
     toast.success('Media URL added');
   };
 
@@ -539,6 +599,10 @@ export default function CommunityBoardPage() {
     });
 
     setManualMediaUrl('');
+    setCreateUploadFeedback({
+      tone: 'success',
+      message: 'Added media URL to your draft.',
+    });
     toast.success('Media URL added');
   };
 
@@ -641,6 +705,7 @@ export default function CommunityBoardPage() {
           setTitle('');
           setBody('');
           setUploadedMedia([]);
+          setCreateUploadFeedback(null);
           setManualMediaUrl('');
           setPostPlatformId('none');
           setPostAnonymously(false);
@@ -825,12 +890,23 @@ export default function CommunityBoardPage() {
                     </p>
                     <UploadDropzone
                       endpoint='communityPostMediaUploader'
-                      onUploadBegin={() => setIsCreateMediaUploading(true)}
+                      onUploadBegin={() => {
+                        setIsCreateMediaUploading(true);
+                        setCreateUploadFeedback({
+                          tone: 'info',
+                          message: 'Uploading media to UploadThing...',
+                        });
+                      }}
                       onClientUploadComplete={(files) => {
                         setIsCreateMediaUploading(false);
                         const next = extractUploadedMediaItems(files);
 
                         if (next.length === 0) {
+                          setCreateUploadFeedback({
+                            tone: 'error',
+                            message:
+                              'Upload finished but no media URL was returned from UploadThing.',
+                          });
                           toast.error(
                             'Upload finished but no media URL was returned. Try uploading again.',
                           );
@@ -841,16 +917,35 @@ export default function CommunityBoardPage() {
                           return mergeUploadedMediaItems(prev, next);
                         });
 
+                        setCreateUploadFeedback({
+                          tone: 'success',
+                          message: `Uploaded ${next.length} media file${next.length > 1 ? 's' : ''}.`,
+                        });
+
                         toast.success('Evidence uploaded');
                       }}
                       onUploadError={(error) => {
                         setIsCreateMediaUploading(false);
+                        setCreateUploadFeedback({
+                          tone: 'error',
+                          message:
+                            error.message ||
+                            'Upload failed. You can add a media URL manually below.',
+                        });
                         toast.error(
                           error.message ||
                             'Upload failed. You can add a media URL manually below.',
                         );
                       }}
                     />
+
+                    {createUploadFeedback ? (
+                      <p
+                        className={`text-xs ${uploadFeedbackClassName(createUploadFeedback.tone)}`}
+                      >
+                        {createUploadFeedback.message}
+                      </p>
+                    ) : null}
 
                     <div className='flex flex-col gap-2 sm:flex-row'>
                       <Input
@@ -1301,6 +1396,7 @@ export default function CommunityBoardPage() {
               const draft = editDrafts[post.id] ?? createEditDraft(post);
               const draftMedia = editMediaDrafts[post.id] ?? post.media.map(normalizeUploadedMedia);
               const editManualMediaUrl = editManualMediaUrls[post.id] ?? '';
+              const editUploadFeedback = editUploadFeedbackByPost[post.id];
               const isEditing = editingPostId === post.id;
               const isEditMediaUploading = Boolean(editUploadingByPost[post.id]);
               const canRequestVerification =
@@ -1406,6 +1502,10 @@ export default function CommunityBoardPage() {
                                 ...prev,
                                 [post.id]: true,
                               }));
+                              setEditUploadFeedback(post.id, {
+                                tone: 'info',
+                                message: 'Uploading media to UploadThing...',
+                              });
                             }}
                             onClientUploadComplete={(files) => {
                               setEditUploadingByPost((prev) => ({
@@ -1416,6 +1516,11 @@ export default function CommunityBoardPage() {
                               const next = extractUploadedMediaItems(files);
 
                               if (next.length === 0) {
+                                setEditUploadFeedback(post.id, {
+                                  tone: 'error',
+                                  message:
+                                    'Upload finished but no media URL was returned from UploadThing.',
+                                });
                                 toast.error(
                                   'Upload finished but no media URL was returned. Try uploading again.',
                                 );
@@ -1427,6 +1532,11 @@ export default function CommunityBoardPage() {
                                 [post.id]: mergeUploadedMediaItems(prev[post.id] ?? draftMedia, next),
                               }));
 
+                              setEditUploadFeedback(post.id, {
+                                tone: 'success',
+                                message: `Uploaded ${next.length} media file${next.length > 1 ? 's' : ''}.`,
+                              });
+
                               toast.success('Evidence uploaded');
                             }}
                             onUploadError={(error) => {
@@ -1435,12 +1545,27 @@ export default function CommunityBoardPage() {
                                 [post.id]: false,
                               }));
 
+                              setEditUploadFeedback(post.id, {
+                                tone: 'error',
+                                message:
+                                  error.message ||
+                                  'Upload failed. You can add a media URL manually below.',
+                              });
+
                               toast.error(
                                 error.message ||
                                   'Upload failed. You can add a media URL manually below.',
                               );
                             }}
                           />
+
+                          {editUploadFeedback ? (
+                            <p
+                              className={`text-xs ${uploadFeedbackClassName(editUploadFeedback.tone)}`}
+                            >
+                              {editUploadFeedback.message}
+                            </p>
+                          ) : null}
 
                           <div className='flex flex-col gap-2 sm:flex-row'>
                             <Input
