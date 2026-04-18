@@ -4,7 +4,6 @@ import { Button } from '@/components/ui/button';
 import { ArrowRight, LayoutDashboard } from 'lucide-react';
 import { HeroSection } from '@/components/ui/glass-video-hero';
 import DemoOne from '@/components/ui/demo';
-import MotionFooterDemo from '@/components/ui/motion-footer-demo';
 
 export default async function Home() {
   const user = await currentUser();
@@ -15,7 +14,6 @@ export default async function Home() {
     <main className='from-background to-accent/20 min-h-screen bg-linear-to-b'>
       <HeroSection />
       <DemoOne />
-      <MotionFooterDemo />
 
       <section className='mx-auto w-full max-w-2xl space-y-8 p-6 pb-14 text-center'>
         <div className='space-y-4'>
