@@ -17,6 +17,12 @@ enum Role {
   ADVOCATE
 }
 
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 enum WorkerCategory {
   RIDE_HAILING
   FOOD_DELIVERY
@@ -65,17 +71,20 @@ enum CertificateStatus {
 // ─────────────────────────────────────────────
 
 model User {
-  id        String          @id @default(uuid())
-  email     String          @unique
-  password  String?         @map("password_hash")
-  role      Role            @default(WORKER)
-  fullName  String          @map("full_name")
-  phone     String?
-  cityZone  String?         @map("city_zone") // e.g. "Gulberg", "DHA", "Johar Town"
-  category  WorkerCategory? // only relevant for WORKER role
-  isActive  Boolean         @default(true) @map("is_active")
-  createdAt DateTime        @default(now()) @map("created_at")
-  updatedAt DateTime        @updatedAt @map("updated_at")
+  id             String          @id @default(uuid())
+  email          String          @unique
+  emailVerified  Boolean         @default(false) @map("email_verified")
+  password       String?         @map("password_hash")
+  role           Role            @default(WORKER)
+  approvalStatus ApprovalStatus  @default(PENDING) @map("approval_status")
+  fullName       String          @map("full_name")
+  name           String
+  phone          String?
+  cityZone       String?         @map("city_zone") // e.g. "Gulberg", "DHA", "Johar Town"
+  category       WorkerCategory? // only relevant for WORKER role
+  isActive       Boolean         @default(true) @map("is_active")
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
 
   // Relations
   shiftLogs     ShiftLog[]
