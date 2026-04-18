@@ -1,63 +1,50 @@
-import { getCookieCache } from 'better-auth/cookies';
+import { auth } from '@/lib/auth';
+import type { User } from '@/generated/prisma/client';
 import { headers } from 'next/headers';
+import db from './db';
 
-import type { Role } from '@/generated/prisma/client';
+export type CurrentUser = Omit<User, 'password'>;
 
-type CurrentUser = {
-  id: string;
-  email: string;
-  name: string | null;
-  role: Role;
-};
-
-const ROLE_VALUES = ['WORKER', 'VERIFIER', 'ADVOCATE'] as const;
-
-function parseRole(value: unknown): Role {
-  if (
-    typeof value === 'string' &&
-    (ROLE_VALUES as readonly string[]).includes(value)
-  ) {
-    return value as Role;
-  }
-
-  return 'WORKER' as Role;
-}
+const currentUserSelect = {
+  id: true,
+  email: true,
+  role: true,
+  fullName: true,
+  phone: true,
+  cityZone: true,
+  category: true,
+  isActive: true,
+  createdAt: true,
+  updatedAt: true,
+  image: true,
+} as const;
 
 /**
- * Retrieves the current authenticated user from the session
- * @returns The user object if authenticated, null otherwise
+ * Retrieves the current authenticated user from the DB.
+ *
+ * @returns The full user object from the DB if authenticated, null otherwise
  */
-
 export async function currentUser(): Promise<CurrentUser | null> {
   try {
-    const data = await getCookieCache(await headers(), {
-      secret: process.env.BETTER_AUTH_SECRET,
-      strategy: 'jwt',
+    const session = await auth.api.getSession({
+      headers: await headers(),
     });
 
-    const raw = data?.user;
-
-    if (!raw || typeof raw !== 'object') {
+    const userId = session?.user?.id;
+    if (!userId) {
       return null;
     }
 
-    const user = raw as Record<string, unknown>;
+    const user = await db.user.findUnique({
+      where: { id: userId },
+      select: currentUserSelect,
+    });
 
-    if (typeof user.id !== 'string' || typeof user.email !== 'string') {
+    if (!user) {
       return null;
     }
 
-    return {
-      id: user.id,
-      email: user.email,
-      name:
-        typeof user.name === 'string'
-          ? user.name
-          : typeof user.fullName === 'string'
-            ? user.fullName
-            : null,
-      role: parseRole(user.role),
-    };
+    return user;
   } catch (error) {
     console.error('Failed to get current user:', error);
     return null;

@@ -34,6 +34,17 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - **Client**: [src/lib/auth-client.ts](src/lib/auth-client.ts).
 - **Server**: [src/lib/auth.ts](src/lib/auth.ts).
 - **Routes**: Protected and public routes are listed in [src/routes.ts](src/routes.ts).
+- **User Acquisition**:
+    - **Server-side**: Use `currentUser()` from [src/lib/current-user.ts](src/lib/current-user.ts) for Server Components and Server Actions.
+    - **Client-side**: Use `useCurrentUser()` from [src/hooks/use-current-user.ts](src/hooks/use-current-user.ts) for Client Components.
+
+### Anomaly Service (Python)
+
+- **Framework**: FastAPI.
+- **Location**: [anomaly-service/](anomaly-service/).
+- **Core Logic**: Located in [anomaly-service/detection/](anomaly-service/detection/).
+- **Models**: Pydantic models in [anomaly-service/models.py](anomaly-service/models.py).
+- **Entrypoint**: [anomaly-service/main.py](anomaly-service/main.py).
 
 ### Frontend & Components
 
@@ -43,9 +54,27 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - **Feature Co-location**: Use underscored directories (e.g., `_components`, `_api`) within feature folders (e.g., [src/sample/](src/sample/)) for private logic.
 - **Icons**: Use `lucide-react`.
 
+### Form Implementation (React Hook Form + Zod)
+
+- **Library**: Use `react-hook-form` with `zod` for validation via `@hookform/resolvers/zod`.
+- **Components**:
+    - Use the modern `<Field />` orchestration from `shadcn/ui` (which uses Base UI/Radix primitives).
+    - Wrap inputs in `<Controller />` for precise state management.
+    - Ensure accessibility by linking `<FieldLabel htmlFor={field.name} />` and `<Input id={field.name} />`.
+- **Validation**:
+    - Define schemas using `zod`.
+    - Pass the resolver to `useForm`: `resolver: zodResolver(formSchema)`.
+    - Handle error states using `fieldState.invalid` on the `<Field />` (via `data-invalid`) and `<Input />` (via `aria-invalid`).
+    - Use `<FieldError errors={[fieldState.error]} />` to display specific messages.
+- **Dynamic Fields**: Use `useFieldArray` for managing arrays of inputs.
+- **Submission**: Use `form.handleSubmit(onSubmit)` to process validated data.
+
 ## Coding Standards
 
 - **Strict Typing**: Ensure all API responses and component props are strictly typed.
 - **Data Fetching**: Use `@tanstack/react-query` for client-side fetching.
 - **Hooks**: Use custom hooks in [src/hooks/](src/hooks/) for shared logic.
 - **File Naming**: Use kebab-case for filenames.
+- **Python Code**: Follow PEP 8 and use type hints for all parameters and return types.
+- **Schema Management**: Always use `pnpm run prisma migrate dev` instead of raw SQL or `npx prisma`.
+- **UI Components**: Use `@base-ui/react` alongside `shadcn/ui` for high-quality accessible components.
