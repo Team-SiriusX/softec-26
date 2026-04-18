@@ -1,0 +1,98 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  WORKER
+  VERIFIER
+  ADVOCATE
+}
+
+enum GrievanceStatus {
+  OPEN
+  TAGGED
+  ESCALATED
+  RESOLVED
+}
+
+enum GrievanceCategory {
+  COMMISSION_CHANGE
+  ACCOUNT_DEACTIVATION
+  PAYMENT_DISPUTE
+  UNFAIR_RATING
+  SAFETY_CONCERN
+  OTHER
+}
+
+model Grievance {
+  id          String            @id @default(uuid())
+  workerId    String?           @map("worker_id") // nullable for anonymous posts
+  platformId  String?           @map("platform_id")
+  category    GrievanceCategory
+  title       String
+  description String
+  status      GrievanceStatus   @default(OPEN)
+  isAnonymous Boolean           @default(false) @map("is_anonymous")
+  clusterId   String?           @map("cluster_id") // groups similar complaints
+  createdAt   DateTime          @default(now()) @map("created_at")
+  updatedAt   DateTime          @updatedAt @map("updated_at")
+
+  worker      User?                 @relation(fields: [workerId], references: [id], onDelete: SetNull)
+  tags        GrievanceTag[]
+  escalations GrievanceEscalation[]
+
+  @@index([status])
+  @@index([category])
+  @@index([clusterId])
+  @@index([platformId])
+  @@map("grievances")
+}
+
+model GrievanceTag {
+  id          String   @id @default(uuid())
+  grievanceId String   @map("grievance_id")
+  advocateId  String   @map("advocate_id")
+  tag         String // free-form tag string e.g. "commission-spike", "wrongful-deactivation"
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  grievance Grievance @relation(fields: [grievanceId], references: [id], onDelete: Cascade)
+  advocate  User      @relation(fields: [advocateId], references: [id])
+
+  @@unique([grievanceId, tag])
+  @@map("grievance_tags")
+}
+
+model GrievanceEscalation {
+  id          String   @id @default(uuid())
+  grievanceId String   @map("grievance_id")
+  advocateId  String   @map("advocate_id")
+  note        String?
+  escalatedAt DateTime @default(now()) @map("escalated_at")
+
+  grievance Grievance @relation(fields: [grievanceId], references: [id], onDelete: Cascade)
+
+  @@map("grievance_escalations")
+}
+
+model Platform {
+  id   String @id @default(uuid())
+  name String @unique // "Bykea", "Foodpanda", "Careem", etc.
+  slug String @unique // "bykea", "foodpanda"
+
+  @@map("platforms")
+}
+
+model User {
+  id       String @id @default(uuid())
+  email    String @unique
+  role     Role   @default(WORKER)
+  fullName String @map("full_name")
+
+  @@map("users")
+}

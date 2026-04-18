@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+
 # Softec 26 - Worker Justice Analytics Platform
 
 This repository now includes a production-grade analytics API for:
