@@ -1,17 +1,185 @@
 {
-  "worker_id": "worker_test_001",
+  "worker_id": "worker_demo_ali",
   "earnings": [
-    { "shift_id": "s01", "date": "2026-01-06", "platform": "Careem", "hours_worked": 8.0, "gross_earned": 4000, "platform_deduction": 800, "net_received": 3200 },
-    { "shift_id": "s02", "date": "2026-01-13", "platform": "Careem", "hours_worked": 7.5, "gross_earned": 3800, "platform_deduction": 760, "net_received": 3040 },
-    { "shift_id": "s03", "date": "2026-01-20", "platform": "Careem", "hours_worked": 8.5, "gross_earned": 4200, "platform_deduction": 840, "net_received": 3360 },
-    { "shift_id": "s04", "date": "2026-01-27", "platform": "Careem", "hours_worked": 8.0, "gross_earned": 4100, "platform_deduction": 820, "net_received": 3280 },
-    { "shift_id": "s05", "date": "2026-02-03", "platform": "Careem", "hours_worked": 8.0, "gross_earned": 4000, "platform_deduction": 800, "net_received": 3200 },
-    { "shift_id": "s06", "date": "2026-02-10", "platform": "Careem", "hours_worked": 7.0, "gross_earned": 3600, "platform_deduction": 720, "net_received": 2880 },
-    { "shift_id": "s07", "date": "2026-02-17", "platform": "Careem", "hours_worked": 8.5, "gross_earned": 4300, "platform_deduction": 860, "net_received": 3440 },
-    { "shift_id": "s08", "date": "2026-02-24", "platform": "Careem", "hours_worked": 8.0, "gross_earned": 4000, "platform_deduction": 800, "net_received": 3200 },
-    { "shift_id": "s09", "date": "2026-03-03", "platform": "Careem", "hours_worked": 8.0, "gross_earned": 4100, "platform_deduction": 1271, "net_received": 2829 },
-    { "shift_id": "s10", "date": "2026-03-10", "platform": "Careem", "hours_worked": 8.0, "gross_earned": 4000, "platform_deduction": 1280, "net_received": 2720 },
-    { "shift_id": "s11", "date": "2026-03-17", "platform": "Careem", "hours_worked": 7.5, "gross_earned": 3900, "platform_deduction": 1209, "net_received": 2691 },
-    { "shift_id": "s12", "date": "2026-03-24", "platform": "Careem", "hours_worked": 8.5, "gross_earned": 4200, "platform_deduction": 1302, "net_received": 2898 }
+    {
+      "shift_id": "s01",
+      "date": "2025-09-29",
+      "platform": "Careem",
+      "hours_worked": 8.0,
+      "gross_earned": 4000,
+      "platform_deduction": 720,
+      "net_received": 3280
+    },
+    {
+      "shift_id": "s02",
+      "date": "2025-10-06",
+      "platform": "Careem",
+      "hours_worked": 7.5,
+      "gross_earned": 4100,
+      "platform_deduction": 779,
+      "net_received": 3321
+    },
+    {
+      "shift_id": "s03",
+      "date": "2025-10-13",
+      "platform": "Careem",
+      "hours_worked": 8.5,
+      "gross_earned": 4200,
+      "platform_deduction": 840,
+      "net_received": 3360
+    },
+    {
+      "shift_id": "s04",
+      "date": "2025-10-20",
+      "platform": "Careem",
+      "hours_worked": 8.0,
+      "gross_earned": 4000,
+      "platform_deduction": 800,
+      "net_received": 3200
+    },
+    {
+      "shift_id": "s05",
+      "date": "2025-10-27",
+      "platform": "Careem",
+      "hours_worked": 8.5,
+      "gross_earned": 4300,
+      "platform_deduction": 903,
+      "net_received": 3397
+    },
+    {
+      "shift_id": "s06",
+      "date": "2025-11-03",
+      "platform": "Careem",
+      "hours_worked": 7.5,
+      "gross_earned": 4100,
+      "platform_deduction": 820,
+      "net_received": 3280
+    },
+    {
+      "shift_id": "s07",
+      "date": "2025-11-10",
+      "platform": "Careem",
+      "hours_worked": 8.0,
+      "gross_earned": 4200,
+      "platform_deduction": 882,
+      "net_received": 3318
+    },
+    {
+      "shift_id": "s08",
+      "date": "2025-11-17",
+      "platform": "Careem",
+      "hours_worked": 8.0,
+      "gross_earned": 4000,
+      "platform_deduction": 760,
+      "net_received": 3240
+    },
+    {
+      "shift_id": "s09",
+      "date": "2025-11-24",
+      "platform": "Careem",
+      "hours_worked": 7.5,
+      "gross_earned": 4100,
+      "platform_deduction": 902,
+      "net_received": 3198
+    },
+    {
+      "shift_id": "s10",
+      "date": "2025-12-01",
+      "platform": "Careem",
+      "hours_worked": 8.5,
+      "gross_earned": 4300,
+      "platform_deduction": 860,
+      "net_received": 3440
+    },
+    {
+      "shift_id": "s11",
+      "date": "2025-12-08",
+      "platform": "Careem",
+      "hours_worked": 8.0,
+      "gross_earned": 4200,
+      "platform_deduction": 924,
+      "net_received": 3276
+    },
+    {
+      "shift_id": "s12",
+      "date": "2025-12-15",
+      "platform": "Careem",
+      "hours_worked": 7.5,
+      "gross_earned": 4000,
+      "platform_deduction": 920,
+      "net_received": 3080
+    },
+    {
+      "shift_id": "s13",
+      "date": "2025-12-22",
+      "platform": "Careem",
+      "hours_worked": 8.0,
+      "gross_earned": 4100,
+      "platform_deduction": 1230,
+      "net_received": 2870
+    },
+    {
+      "shift_id": "s14",
+      "date": "2025-12-29",
+      "platform": "Careem",
+      "hours_worked": 7.5,
+      "gross_earned": 4000,
+      "platform_deduction": 1400,
+      "net_received": 2600
+    },
+    {
+      "shift_id": "s15",
+      "date": "2026-01-05",
+      "platform": "Careem",
+      "hours_worked": 8.0,
+      "gross_earned": 4200,
+      "platform_deduction": 1680,
+      "net_received": 2520
+    },
+    {
+      "shift_id": "s16",
+      "date": "2026-01-12",
+      "platform": "Careem",
+      "hours_worked": 8.5,
+      "gross_earned": 4100,
+      "platform_deduction": 1845,
+      "net_received": 2255
+    },
+    {
+      "shift_id": "s17",
+      "date": "2026-01-19",
+      "platform": "Careem",
+      "hours_worked": 8.0,
+      "gross_earned": 3800,
+      "platform_deduction": 1976,
+      "net_received": 1824
+    },
+    {
+      "shift_id": "s18",
+      "date": "2026-01-26",
+      "platform": "Careem",
+      "hours_worked": 7.5,
+      "gross_earned": 3700,
+      "platform_deduction": 1998,
+      "net_received": 1702
+    },
+    {
+      "shift_id": "s19",
+      "date": "2026-02-02",
+      "platform": "Careem",
+      "hours_worked": 8.5,
+      "gross_earned": 3900,
+      "platform_deduction": 2184,
+      "net_received": 1716
+    },
+    {
+      "shift_id": "s20",
+      "date": "2026-02-09",
+      "platform": "Careem",
+      "hours_worked": 8.0,
+      "gross_earned": 3800,
+      "platform_deduction": 2204,
+      "net_received": 1596
+    }
   ]
 }

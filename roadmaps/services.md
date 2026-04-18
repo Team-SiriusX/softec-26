@@ -6,14 +6,14 @@ A plan for integrating intelligent agents into the FairGig platform. Each agent 
 
 ## Agent overview
 
-| Agent | Trigger | Service | Stack |
-|---|---|---|---|
-| Anomaly Detector | New shift logged | Anomaly service | FastAPI + Python stats |
-| Screenshot OCR | Screenshot uploaded | Earnings service | FastAPI + Vision API |
-| Grievance Clusterer | New complaint posted | Grievance service | Node.js + embeddings |
-| Vulnerability Scanner | Nightly cron | Analytics service | FastAPI + Prisma |
-| Certificate Generator | Worker requests cert | Certificate renderer | Node.js + HTML |
-| Commission Watcher | Nightly cron | Analytics service | FastAPI |
+| Agent                 | Trigger              | Service              | Stack                  |
+| --------------------- | -------------------- | -------------------- | ---------------------- |
+| Anomaly Detector      | New shift logged     | Anomaly service      | FastAPI + Python stats |
+| Screenshot OCR        | Screenshot uploaded  | Earnings service     | FastAPI + Vision API   |
+| Grievance Clusterer   | New complaint posted | Grievance service    | Node.js + embeddings   |
+| Vulnerability Scanner | Nightly cron         | Analytics service    | FastAPI + Prisma       |
+| Certificate Generator | Worker requests cert | Certificate renderer | Node.js + HTML         |
+| Commission Watcher    | Nightly cron         | Analytics service    | FastAPI                |
 
 ---
 
@@ -22,13 +22,16 @@ A plan for integrating intelligent agents into the FairGig platform. Each agent 
 **Priority: highest — judges call this endpoint directly.**
 
 ### What it does
+
 Given a worker's recent earnings history, it detects statistically unusual deductions or sudden income drops and returns a human-readable explanation.
 
 ### Trigger
+
 - Called by the Earnings service after every `ShiftLog` create or update
 - Also exposed as a standalone REST endpoint for direct judge testing
 
 ### Input
+
 ```json
 {
   "worker_id": "uuid",
@@ -45,6 +48,7 @@ Given a worker's recent earnings history, it detects statistically unusual deduc
 ```
 
 ### Detection logic
+
 1. Compute rolling 30-day median of `platform_deductions / gross_earned` (commission rate)
 2. Compute Z-score of current shift vs. rolling window
 3. Flag if `|z_score| > 2.0`
@@ -52,6 +56,7 @@ Given a worker's recent earnings history, it detects statistically unusual deduc
 5. Return explanation in plain Urdu-friendly English
 
 ### Output
+
 ```json
 {
   "worker_id": "uuid",
@@ -69,10 +74,12 @@ Given a worker's recent earnings history, it detects statistically unusual deduc
 ```
 
 ### Fallback
+
 - If fewer than 5 shifts exist, return `{ "flags": [], "reason": "insufficient_history" }`
 - Never throw 500 — always return a structured response
 
 ### Files
+
 ```
 services/anomaly/
   main.py          # FastAPI app
@@ -88,22 +95,27 @@ services/anomaly/
 **Reduces verifier workload by pre-filling amounts from uploaded screenshots.**
 
 ### What it does
+
 When a worker uploads an earnings screenshot, the agent extracts the gross amount, deductions, and net received using a vision model and pre-fills the verification form. The verifier still confirms — the agent just does the reading.
 
 ### Trigger
+
 - `POST /screenshots/upload` in the Earnings service
 - Runs asynchronously after file is stored (non-blocking)
 
 ### Input
+
 - Image file (JPEG/PNG) from storage URL
 
 ### Logic
+
 1. Fetch image from storage
 2. Send to vision API (Google Vision / Claude Vision / Tesseract fallback)
 3. Parse extracted text for known patterns: `Net Pay`, `Total Earnings`, `Commission`, `Deductions`
 4. Return structured suggestion — not a commit
 
 ### Output
+
 ```json
 {
   "screenshot_id": "uuid",
@@ -118,6 +130,7 @@ When a worker uploads an earnings screenshot, the agent extracts the gross amoun
 ```
 
 ### Fallback
+
 - If confidence is `low`, surface to verifier as-is with a note: `"OCR could not reliably extract amounts — please review manually"`
 - Never auto-commit OCR results to `ShiftLog`
 
@@ -128,13 +141,16 @@ When a worker uploads an earnings screenshot, the agent extracts the gross amoun
 **Groups similar complaints so advocates can spot systemic issues at scale.**
 
 ### What it does
+
 When a new grievance is posted, the agent generates a text embedding and finds the nearest existing cluster. If similarity exceeds threshold, it assigns the grievance to that cluster. Otherwise it seeds a new cluster.
 
 ### Trigger
+
 - `POST /grievances` in the Grievance service
 - Runs synchronously before the response returns (fast enough with local embeddings)
 
 ### Logic
+
 1. Embed `title + description` using a lightweight model (e.g. `all-MiniLM-L6-v2` via `sentence-transformers`)
 2. Compare cosine similarity against recent cluster centroids (last 90 days)
 3. If `similarity > 0.78` → assign existing `cluster_id`
@@ -142,6 +158,7 @@ When a new grievance is posted, the agent generates a text embedding and finds t
 5. Store embedding in `grievances.embedding` (pgvector column) for future comparisons
 
 ### Schema addition needed
+
 ```prisma
 model Grievance {
   // ... existing fields
@@ -150,9 +167,11 @@ model Grievance {
 ```
 
 ### Output
+
 Grievance is created with `cluster_id` populated. Advocates see cluster size on the dashboard.
 
 ### Fallback
+
 - If embedding service is down, create grievance with `cluster_id = null` and queue for re-clustering
 
 ---
@@ -162,12 +181,15 @@ Grievance is created with `cluster_id` populated. Advocates see cluster size on 
 **Nightly cron that flags workers whose income dropped 20%+ month-on-month.**
 
 ### What it does
+
 Runs every night at 00:30 PKT. Computes each active worker's current month net vs. previous month net. Inserts a `VulnerabilityFlag` row for any drop ≥ 20%.
 
 ### Trigger
+
 - Cron: `0 30 0 * * *` (APScheduler or system cron)
 
 ### Logic
+
 ```python
 SELECT
   worker_id,
@@ -183,10 +205,12 @@ HAVING prev_month > 0
 ```
 
 ### Output
+
 - Upserts into `vulnerability_flags` table
 - Advocate dashboard reads from this table — no live computation
 
 ### Privacy note
+
 Query runs server-side. Advocate dashboard sees counts and zone-level summaries, not individual worker names unless they click through with appropriate role access.
 
 ---
@@ -196,12 +220,15 @@ Query runs server-side. Advocate dashboard sees counts and zone-level summaries,
 **Detects platform-wide commission rate spikes — not just individual anomalies.**
 
 ### What it does
+
 After the nightly `DailyPlatformStat` computation runs, this agent compares today's median commission rate per platform against the 30-day rolling average. If the platform rate jumped ≥ 5 percentage points, it triggers an advocate alert.
 
 ### Trigger
+
 - Runs after `DailyPlatformStat` is populated (chained cron, 01:00 PKT)
 
 ### Logic
+
 1. For each `(platform, city_zone, category)` group:
    - Fetch last 30 days of `avg_commission_pct` from `DailyPlatformStat`
    - Compare today vs. rolling mean
@@ -210,6 +237,7 @@ After the nightly `DailyPlatformStat` computation runs, this agent compares toda
 3. Advocate dashboard shows these as banners
 
 ### New model
+
 ```prisma
 model PlatformAlert {
   id          String   @id @default(cuid())
@@ -234,12 +262,15 @@ model PlatformAlert {
 **Generates a printable income certificate from verified shifts on demand.**
 
 ### What it does
+
 Worker picks a date range, clicks "Generate Certificate". The agent fetches all `CONFIRMED` shifts in that range, renders an HTML certificate, stores the snapshot, and returns a print-ready URL.
 
 ### Trigger
+
 - `POST /certificates` — on-demand, synchronous
 
 ### Logic
+
 1. Query `ShiftLog` where `workerId = X`, `shiftDate BETWEEN from AND to`, `verificationStatus = CONFIRMED`
 2. Aggregate: total net, shift count, platforms used, date range
 3. Render HTML template with worker name, summary table, FairGig watermark
@@ -247,15 +278,26 @@ Worker picks a date range, clicks "Generate Certificate". The agent fetches all 
 5. Return certificate URL
 
 ### Print requirements
+
 ```css
 @media print {
-  nav, .sidebar, .actions { display: none; }
-  body { font-size: 12pt; color: #000; }
-  .certificate { page-break-inside: avoid; }
+  nav,
+  .sidebar,
+  .actions {
+    display: none;
+  }
+  body {
+    font-size: 12pt;
+    color: #000;
+  }
+  .certificate {
+    page-break-inside: avoid;
+  }
 }
 ```
 
 ### Fallback
+
 - If zero confirmed shifts in range: return `400` with `"No verified shifts found in this date range"`
 - Never include unverified shifts in a certificate
 
@@ -313,10 +355,10 @@ TZ=Asia/Karachi
 
 ## Key judge-facing endpoints
 
-| Method | Path | Service | Notes |
-|---|---|---|---|
-| `POST` | `/anomaly/detect` | Anomaly (FastAPI) | Judges call this directly with crafted payload |
-| `GET` | `/analytics/platform-stats` | Analytics (FastAPI) | Commission trends |
-| `GET` | `/analytics/vulnerability-flags` | Analytics (FastAPI) | At-risk workers |
-| `POST` | `/certificates` | Certificate renderer | Returns print-ready HTML |
-| `GET` | `/grievances/clusters` | Grievance (Node.js) | Clustered complaints |
+| Method | Path                             | Service              | Notes                                          |
+| ------ | -------------------------------- | -------------------- | ---------------------------------------------- |
+| `POST` | `/anomaly/detect`                | Anomaly (FastAPI)    | Judges call this directly with crafted payload |
+| `GET`  | `/analytics/platform-stats`      | Analytics (FastAPI)  | Commission trends                              |
+| `GET`  | `/analytics/vulnerability-flags` | Analytics (FastAPI)  | At-risk workers                                |
+| `POST` | `/certificates`                  | Certificate renderer | Returns print-ready HTML                       |
+| `GET`  | `/grievances/clusters`           | Grievance (Node.js)  | Clustered complaints                           |

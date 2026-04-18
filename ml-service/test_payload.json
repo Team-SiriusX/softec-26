@@ -1,0 +1,146 @@
+{
+  "grievances": [
+    {
+      "id": "g001",
+      "text": "Careem ne meri commission 20% se 31% kar di bina kisi notice ke",
+      "platform": "Careem",
+      "category": "commission_change",
+      "created_at": "2026-02-03T09:15:00",
+      "worker_id": "w001"
+    },
+    {
+      "id": "g002",
+      "text": "my deduction jumped from 20 to 31 percent overnight no warning",
+      "platform": "Careem",
+      "category": "commission_change",
+      "created_at": "2026-02-10T11:45:00",
+      "worker_id": "w002"
+    },
+    {
+      "id": "g003",
+      "text": "commission rate increased without any announcement careem",
+      "platform": "Careem",
+      "category": "commission_change",
+      "created_at": "2026-02-17T14:00:00",
+      "worker_id": "w003"
+    },
+    {
+      "id": "g004",
+      "text": "platform deduction badh gayi suddenly koi notification nahi",
+      "platform": "Careem",
+      "category": "commission_change",
+      "created_at": "2026-02-24T08:30:00",
+      "worker_id": "w004"
+    },
+    {
+      "id": "g005",
+      "text": "earning same hours but net pay dropped careem cut rates",
+      "platform": "Careem",
+      "category": "commission_change",
+      "created_at": "2026-03-10T16:20:00",
+      "worker_id": "w005"
+    },
+    {
+      "id": "g006",
+      "text": "careem commission creep every month quietly increasing",
+      "platform": "Careem",
+      "category": "commission_change",
+      "created_at": "2026-03-24T13:10:00",
+      "worker_id": "w006"
+    },
+    {
+      "id": "g007",
+      "text": "payment 5 din late aaya is hafte bhi",
+      "platform": "Foodpanda",
+      "category": "payment_delay",
+      "created_at": "2026-02-05T10:30:00",
+      "worker_id": "w007"
+    },
+    {
+      "id": "g008",
+      "text": "foodpanda payment delayed again third time this month",
+      "platform": "Foodpanda",
+      "category": "payment_delay",
+      "created_at": "2026-02-19T12:00:00",
+      "worker_id": "w008"
+    },
+    {
+      "id": "g009",
+      "text": "weekly payment not received on time processing issue",
+      "platform": "Foodpanda",
+      "category": "payment_delay",
+      "created_at": "2026-03-05T09:45:00",
+      "worker_id": "w009"
+    },
+    {
+      "id": "g010",
+      "text": "payment pending for 6 days foodpanda not responding",
+      "platform": "Foodpanda",
+      "category": "payment_delay",
+      "created_at": "2026-03-18T15:30:00",
+      "worker_id": "w010"
+    },
+    {
+      "id": "g011",
+      "text": "account deactivated suddenly no reason given careem",
+      "platform": "Careem",
+      "category": "deactivation",
+      "created_at": "2026-03-01T07:20:00",
+      "worker_id": "w011"
+    },
+    {
+      "id": "g012",
+      "text": "suspended without explanation reactivation request ignored",
+      "platform": "Careem",
+      "category": "deactivation",
+      "created_at": "2026-03-15T11:00:00",
+      "worker_id": "w012"
+    },
+    {
+      "id": "g013",
+      "text": "account blocked for 2 days careem support not helping",
+      "platform": "Careem",
+      "category": "deactivation",
+      "created_at": "2026-04-01T14:45:00",
+      "worker_id": "w013"
+    },
+    {
+      "id": "g014",
+      "text": "bykea bonus program hata diya no notice nothing",
+      "platform": "Bykea",
+      "category": "incentive_removal",
+      "created_at": "2026-04-07T10:00:00",
+      "worker_id": "w014"
+    },
+    {
+      "id": "g015",
+      "text": "incentive scheme cancelled suddenly weekly bonus gone",
+      "platform": "Bykea",
+      "category": "incentive_removal",
+      "created_at": "2026-04-18T09:30:00",
+      "worker_id": "w015"
+    }
+  ],
+  "anomaly_contexts": [
+    {
+      "worker_id": "w001",
+      "anomaly_types": ["deduction_spike", "commission_creep"],
+      "risk_level": "high"
+    },
+    {
+      "worker_id": "w002",
+      "anomaly_types": ["deduction_spike"],
+      "risk_level": "high"
+    },
+    {
+      "worker_id": "w003",
+      "anomaly_types": ["deduction_spike", "income_cliff"],
+      "risk_level": "critical"
+    },
+    {
+      "worker_id": "w005",
+      "anomaly_types": ["commission_creep"],
+      "risk_level": "medium"
+    }
+  ]
+}
