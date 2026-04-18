@@ -11,7 +11,7 @@ export const metadata = {
 
 export default function WorkerLogShiftPage() {
   return (
-    <div className='space-y-6 max-w-xl'>
+    <div className='space-y-6 w-full max-w-none'>
       <div>
         <h1 className='text-2xl font-bold tracking-tight'>Log a Shift</h1>
         <p className='text-sm text-muted-foreground mt-1'>
@@ -19,7 +19,7 @@ export default function WorkerLogShiftPage() {
         </p>
       </div>
 
-      <Card>
+      <Card className='max-w-xl'>
         <CardHeader>
           <CardTitle className='text-base'>Shift details</CardTitle>
           <CardDescription>
@@ -41,7 +41,7 @@ export default function WorkerLogShiftPage() {
           <span className='group-open:rotate-90 transition-transform inline-block'>▶</span>
           Import multiple shifts via CSV
         </summary>
-        <Card className='mt-3'>
+        <Card className='mt-3 w-full'>
           <CardHeader>
             <CardTitle className='text-base'>CSV Bulk Import</CardTitle>
             <CardDescription>

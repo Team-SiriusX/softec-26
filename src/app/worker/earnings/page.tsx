@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useMemo, useState } from 'react';
 
 import { useGetShifts } from '@/app/worker/log-shift/_api/get-shifts';
-import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button';
 import {
   Card,
   CardContent,
@@ -59,9 +59,9 @@ export default function WorkerEarningsPage() {
             View your shift history, status badges, and income trends over time.
           </p>
         </div>
-        <Button>
-          <Link href='/worker/log-shift'>Log a shift</Link>
-        </Button>
+        <Link href='/worker/log-shift' className={buttonVariants()}>
+          Log a shift
+        </Link>
       </div>
 
       <Card>
