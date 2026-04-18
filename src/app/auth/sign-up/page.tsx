@@ -79,15 +79,14 @@ export default function SignUpPage() {
     try {
       const approvalStatus = data.role === 'WORKER' ? 'APPROVED' : 'PENDING';
 
-      const emailData = {
+      const response = await authClient.signUp.email({
         email: data.email,
         password: data.password,
         name: data.fullName,
+        fullName: data.fullName,
         role: data.role,
         approvalStatus,
-      };
-
-      const response = await authClient.signUp.email(emailData);
+      });
 
       if (response.error) {
         setError(response.error.message || 'Sign-up failed. Please try again.');
