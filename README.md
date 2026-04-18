@@ -6,7 +6,7 @@ This repository now includes a production-grade analytics API for:
 - Advocate panel structural insights (7 charts)
 - Advanced injustice-detection intelligence layer (8 modules)
 
-The frontend chart implementation is intentionally deferred. This phase delivers clean, validated, extensible Hono endpoints to power the visual layer.
+The analytics frontend is now implemented for worker and advocate routes, backed directly by these Hono endpoints.
 
 ## Product Strategy
 
@@ -166,7 +166,7 @@ Invalid payloads are rejected before any query execution.
 
 ## Frontend Chart Plan (Implementation Later)
 
-Below is the implementation contract for frontend.
+Below is the implemented frontend contract and data mapping.
 
 ### Worker dashboard chart plan
 
@@ -245,9 +245,31 @@ Use `pnpm` for all commands.
 pnpm dev
 ```
 
-## Next backend enhancements
+To populate realistic data for all worker and advocate charts:
 
-- Add role-based authorization middleware for advocate-only insight endpoints.
+```bash
+pnpm seed
+```
+
+The seed is deterministic and creates:
+
+- Multi-platform, multi-zone workers
+- 56 weeks of shift logs
+- Grievances, tags, escalations, anomalies, vulnerability flags
+- Income certificates and daily platform stats snapshots
+
+This is required for meaningful 8-52 week chart windows.
+
+## Local Access Behavior
+
+In development mode, worker users can read advocate analytics endpoints to simplify local QA of both dashboards from a single account.
+
+- Production remains restricted to `ADVOCATE` and `VERIFIER` roles.
+- Development override can be disabled by setting:
+	- `ANALYTICS_ALLOW_WORKER_ADVOCATE_VIEW=false`
+
+## Next Improvements
+
 - Add caching for heavy analytics queries.
 - Add integration tests for all analytics contracts.
-- Add seed data scripts for deterministic dashboard demos.
+- Add dashboard filters (city zone, platform, window presets) in UI.

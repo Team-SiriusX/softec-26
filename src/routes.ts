@@ -11,11 +11,13 @@ export const publicRoutes = ['/', '/sample', '/chat'];
 
 export const protectedRoutes = [
   '/worker/dashboard',
+  '/worker/analytics',
   '/worker/log-shift',
   '/worker/certificate',
   '/worker/profile',
   '/verifier/queue',
   '/advocate/dashboard',
+  '/advocate/analytics',
   '/advocate/grievances',
   '/community/board',
 ];

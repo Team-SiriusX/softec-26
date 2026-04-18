@@ -48,6 +48,14 @@ function isOneOfRoles(role: Role, allowedRoles: readonly Role[]) {
   return allowedRoles.includes(role);
 }
 
+function shouldAllowWorkerAdvocateRead() {
+  if (process.env.NODE_ENV === 'production') {
+    return false;
+  }
+
+  return process.env.ANALYTICS_ALLOW_WORKER_ADVOCATE_VIEW !== 'false';
+}
+
 export const analyticsAuthMiddleware = createMiddleware<AnalyticsEnv>(
   async (c, next) => {
     try {
@@ -87,7 +95,9 @@ export const requireWorkerAnalyticsRoleMiddleware = createMiddleware<AnalyticsEn
 export const requireAdvocateAnalyticsRoleMiddleware =
   createMiddleware<AnalyticsEnv>(async (c, next) => {
     const user = c.get('user');
-    const allowed: Role[] = ['ADVOCATE', 'VERIFIER'];
+    const allowed: Role[] = shouldAllowWorkerAdvocateRead()
+      ? ['ADVOCATE', 'VERIFIER', 'WORKER']
+      : ['ADVOCATE', 'VERIFIER'];
 
     if (!isOneOfRoles(user.role, allowed)) {
       return deny(c, 403, 'Advocate role required');
