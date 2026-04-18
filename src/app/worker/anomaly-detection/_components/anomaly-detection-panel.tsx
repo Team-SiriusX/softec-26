@@ -9,11 +9,7 @@ import {
   BadgeAlert,
   CheckCircle2,
   Clock3,
-  Sparkles,
-  TrendingDown,
-  TrendingUp,
   TriangleAlert,
-  Waves,
 } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
@@ -25,7 +21,6 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { QUERY_KEYS } from '@/constants/query-keys';
 import { useCurrentUser } from '@/hooks/use-current-user';
@@ -334,7 +329,6 @@ export default function AnomalyDetectionPanel({ workerId }: { workerId: string }
   const [lastSuccessfulResult, setLastSuccessfulResult] =
     useState<AnomalyDetectResponse | null>(null);
   const [isStorageHydrated, setIsStorageHydrated] = useState(false);
-  const currentCityZone = user && 'cityZone' in user ? user.cityZone : null;
 
   useEffect(() => {
     try {
@@ -425,9 +419,6 @@ export default function AnomalyDetectionPanel({ workerId }: { workerId: string }
   );
 
   const anomalies = effectiveResult?.anomalies ?? effectiveResult?.flags ?? [];
-  const openrouterResponse =
-    effectiveResult?.openrouterResponse ??
-    effectiveResult?.openrouter_response;
   const narrativeSummary = effectiveResult?.summary ?? null;
   const narrativeSummaryUrdu = effectiveResult?.summary_urdu ?? null;
   const sortedAnomalies = useMemo(
@@ -442,27 +433,6 @@ export default function AnomalyDetectionPanel({ workerId }: { workerId: string }
     () => shifts.reduce((sum, shift) => sum + Number(shift.netReceived), 0),
     [shifts],
   );
-  const totalDeductions = useMemo(
-    () => shifts.reduce((sum, shift) => sum + Number(shift.platformDeductions), 0),
-    [shifts],
-  );
-  const averageRate = useMemo(() => {
-    if (shifts.length === 0) {
-      return 0;
-    }
-
-    return shifts.reduce((sum, shift) => sum + computeRate(shift), 0) / shifts.length;
-  }, [shifts]);
-  const averageDeductionRate = useMemo(() => {
-    const gross = shifts.reduce((sum, shift) => sum + Number(shift.grossEarned), 0);
-    if (gross <= 0) {
-      return 0;
-    }
-
-    return (totalDeductions / gross) * 100;
-  }, [shifts, totalDeductions]);
-
-  const highestAnomaly = sortedAnomalies[0];
   const hasAnomalies = sortedAnomalies.length > 0;
   const analyzedShifts =
     effectiveResult?.analyzedShifts ??
@@ -470,368 +440,226 @@ export default function AnomalyDetectionPanel({ workerId }: { workerId: string }
     shifts.length;
 
   return (
-    <div className='space-y-6'>
-      <section className='relative overflow-hidden rounded-3xl border border-border/70 bg-linear-to-br from-slate-950 via-slate-900 to-indigo-950 p-6 text-white shadow-xl shadow-slate-950/20 lg:p-8'>
-        <div className='absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(129,140,248,0.22),_transparent_32%),radial-gradient(circle_at_bottom_left,_rgba(45,212,191,0.18),_transparent_34%)]' />
-        <div className='relative flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between'>
-          <div className='space-y-4'>
-            <div className='flex flex-wrap items-center gap-2'>
-              <Badge className='border-0 bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-white'>
-                Pay Protection
-              </Badge>
-              <Badge className='border-0 bg-cyan-400/15 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-cyan-100'>
-                Last 90 Days Checked
-              </Badge>
+    <div className='mx-auto w-full max-w-5xl space-y-5'>
+      <Card className='border-border/70 shadow-sm shadow-slate-950/5'>
+        <CardHeader className='space-y-3'>
+          <div className='flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between'>
+            <div>
+              <CardTitle className='text-xl'>Start Checking</CardTitle>
+              <CardDescription>
+                We scan your last 90 days of shifts to detect unusual pay deductions.
+              </CardDescription>
             </div>
-            <div className='max-w-3xl space-y-3'>
-              <h1 className='text-3xl font-black tracking-tight text-white lg:text-4xl'>
-                Check My Pay
-              </h1>
-              <p className='max-w-2xl text-sm text-slate-300 sm:text-base'>
-                We check your recent trips to see if the app unfairly reduced your pay or took hidden fees. 
-                If we find anything wrong, we explain it simply so you know exactly what to do.
-              </p>
+            <Badge variant='outline' className='w-fit gap-1.5'>
+              <Clock3 className='size-3.5' aria-hidden='true' />
+              {submittedAt
+                ? `Last run: ${new Intl.DateTimeFormat('en-PK', {
+                    timeStyle: 'short',
+                    dateStyle: 'medium',
+                  }).format(new Date(submittedAt))}`
+                : 'Not run yet'}
+            </Badge>
+          </div>
+        </CardHeader>
+
+        <CardContent className='space-y-5'>
+          <div className='grid gap-3 sm:grid-cols-3'>
+            <div className='rounded-2xl border border-border/60 bg-muted/30 px-4 py-3'>
+              <p className='text-xs uppercase tracking-[0.18em] text-muted-foreground'>Window</p>
+              <p className='mt-1 text-sm font-medium'>Last 90 days</p>
             </div>
-            <div className='flex flex-wrap gap-2 text-xs text-slate-300'>
-              <span className='inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1.5'>
-                <Sparkles className='size-3.5' aria-hidden='true' />
-                Clear math
-              </span>
-              <span className='inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1.5'>
-                <Waves className='size-3.5' aria-hidden='true' />
-                Based on real trips
-              </span>
+            <div className='rounded-2xl border border-border/60 bg-muted/30 px-4 py-3'>
+              <p className='text-xs uppercase tracking-[0.18em] text-muted-foreground'>Analyzed</p>
+              <p className='mt-1 text-sm font-medium'>{analyzedShifts}</p>
+            </div>
+            <div className='rounded-2xl border border-border/60 bg-muted/30 px-4 py-3'>
+              <p className='text-xs uppercase tracking-[0.18em] text-muted-foreground'>Net</p>
+              <p className='mt-1 text-sm font-medium'>{formatMoney(totalNet)}</p>
             </div>
           </div>
 
-          <div className='grid gap-3 sm:grid-cols-3 lg:min-w-[380px] lg:grid-cols-1 xl:grid-cols-3'>
-            <div className='rounded-2xl border border-white/10 bg-white/8 px-4 py-3 backdrop-blur-sm'>
-              <p className='text-xs uppercase tracking-[0.22em] text-slate-300'>
-                Shifts
-              </p>
-              <p className='mt-1 text-2xl font-bold text-white'>{shifts.length}</p>
-            </div>
-            <div className='rounded-2xl border border-white/10 bg-white/8 px-4 py-3 backdrop-blur-sm'>
-              <p className='text-xs uppercase tracking-[0.22em] text-slate-300'>
-                Avg rate
-              </p>
-              <p className='mt-1 text-2xl font-bold text-white'>{formatMoney(averageRate)}</p>
-            </div>
-            <div className='rounded-2xl border border-white/10 bg-white/8 px-4 py-3 backdrop-blur-sm'>
-              <p className='text-xs uppercase tracking-[0.22em] text-slate-300'>
-                Deductions
-              </p>
-              <p className='mt-1 text-2xl font-bold text-white'>{averageDeductionRate.toFixed(1)}%</p>
-            </div>
+          <div className='flex flex-wrap items-center gap-3'>
+            <Button
+              onClick={() => detectionMutation.mutate()}
+              disabled={detectionMutation.isPending || shiftsLoading || shifts.length === 0}
+              className='gap-2'
+            >
+              {detectionMutation.isPending ? 'Checking...' : 'Check My Pay Now'}
+              <ArrowRight className='size-4' aria-hidden='true' />
+            </Button>
+            <p className='text-sm text-muted-foreground'>
+              We only flag results when something looks off.
+            </p>
           </div>
-        </div>
-      </section>
 
-      <div className='grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(340px,0.8fr)]'>
-        <Card className='border-border/70 shadow-sm shadow-slate-950/5'>
-          <CardHeader className='space-y-3'>
-            <div className='flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between'>
-              <div>
-                <CardTitle className='text-xl'>Start Checking</CardTitle>
-                <CardDescription>
-                  We will look at your last 90 days of work to find any pay issues.
-                </CardDescription>
-              </div>
-              <Badge variant='outline' className='w-fit gap-1.5'>
-                <Clock3 className='size-3.5' aria-hidden='true' />
-                {submittedAt ? `Last run: ${new Intl.DateTimeFormat('en-PK', { timeStyle: 'short', dateStyle: 'medium' }).format(new Date(submittedAt))}` : 'Not run yet'}
-              </Badge>
+          {detectionMutation.isPending && (
+            <div className='space-y-2'>
+              {Array.from({ length: 3 }).map((_, index) => (
+                <Skeleton key={index} className='h-20 w-full rounded-2xl' />
+              ))}
             </div>
-          </CardHeader>
-          <CardContent className='space-y-6'>
-            <div className='grid gap-3 sm:grid-cols-3'>
-              <div className='rounded-2xl border border-border/60 bg-muted/30 px-4 py-3'>
-                <p className='text-xs uppercase tracking-[0.18em] text-muted-foreground'>
-                  Window
-                </p>
-                <p className='mt-1 text-sm font-medium'>Last 90 days</p>
-              </div>
-              <div className='rounded-2xl border border-border/60 bg-muted/30 px-4 py-3'>
-                <p className='text-xs uppercase tracking-[0.18em] text-muted-foreground'>
-                  Analyzed
-                </p>
-                <p className='mt-1 text-sm font-medium'>{analyzedShifts}</p>
-              </div>
-              <div className='rounded-2xl border border-border/60 bg-muted/30 px-4 py-3'>
-                <p className='text-xs uppercase tracking-[0.18em] text-muted-foreground'>
-                  Net
-                </p>
-                <p className='mt-1 text-sm font-medium'>{formatMoney(totalNet)}</p>
-              </div>
+          )}
+
+          {!detectionMutation.isPending && detectionMutation.isError && (
+            <div className='rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-rose-950 dark:border-rose-900/40 dark:bg-rose-950/20 dark:text-rose-200'>
+              <p className='text-sm font-medium'>Unable to run anomaly detection right now.</p>
+              {lastSuccessfulResult && (
+                <p className='mt-1 text-xs opacity-80'>Showing your last successful check.</p>
+              )}
             </div>
+          )}
 
-            <div className='flex flex-wrap items-center gap-3'>
-              <Button
-                onClick={() => detectionMutation.mutate()}
-                disabled={detectionMutation.isPending || shiftsLoading || shifts.length === 0}
-                className='gap-2'
-              >
-                {detectionMutation.isPending ? 'Checking your pay...' : 'Check My Pay Now'}
-                <ArrowRight className='size-4' aria-hidden='true' />
-              </Button>
-              <p className='text-sm text-muted-foreground'>
-                We only flag things when money looks missing.
-              </p>
-            </div>
-
-            {detectionMutation.isPending && (
-              <div className='space-y-3'>
-                {Array.from({ length: 3 }).map((_, index) => (
-                  <Skeleton key={index} className='h-24 w-full rounded-2xl' />
-                ))}
-              </div>
-            )}
-
-            {!detectionMutation.isPending && detectionMutation.isError && (
-              <div className='rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-rose-950 dark:border-rose-900/40 dark:bg-rose-950/20 dark:text-rose-200'>
-                <p className='text-sm font-medium'>Unable to run anomaly detection right now.</p>
-                {lastSuccessfulResult && (
-                  <p className='mt-1 text-xs opacity-80'>
-                    Showing your last successful check below.
-                  </p>
-                )}
-              </div>
-            )}
-
-            {!detectionMutation.isPending && !hasAnomalies && effectiveResult && (
-              <div className='rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-emerald-950 dark:border-emerald-900/40 dark:bg-emerald-950/20 dark:text-emerald-200'>
-                <div className='flex items-start gap-3'>
-                  <CheckCircle2 className='mt-0.5 size-5 shrink-0' aria-hidden='true' />
-                  <div>
-                    <p className='font-semibold'>Everything looks good!</p>
-                    <BilingualText
-                      text={
-                        narrativeSummary ??
-                        'Your pay seems normal and we did not find any unfair deductions in your recent trips. Keep logging your shifts so we can protect your future earnings.'
-                      }
-                      urdu={narrativeSummaryUrdu}
-                      className='mt-1 text-sm leading-relaxed'
-                    />
-                  </div>
+          {!detectionMutation.isPending && !hasAnomalies && effectiveResult && (
+            <div className='rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-emerald-950 dark:border-emerald-900/40 dark:bg-emerald-950/20 dark:text-emerald-200'>
+              <div className='flex items-start gap-3'>
+                <CheckCircle2 className='mt-0.5 size-5 shrink-0' aria-hidden='true' />
+                <div>
+                  <p className='font-semibold'>Everything looks good</p>
+                  <BilingualText
+                    text={
+                      narrativeSummary ??
+                      'Your pay seems normal and we did not find unfair deductions in recent trips.'
+                    }
+                    urdu={narrativeSummaryUrdu}
+                    className='mt-1 text-sm leading-relaxed'
+                  />
                 </div>
               </div>
-            )}
+            </div>
+          )}
 
-            {!detectionMutation.isPending && hasAnomalies && (
-              <div className='space-y-4'>
-                {narrativeSummary && (
-                  <div className='rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-emerald-950 dark:border-emerald-900/40 dark:bg-emerald-950/20 dark:text-emerald-100'>
-                    <p className='text-xs font-semibold uppercase tracking-[0.18em] opacity-80'>
-                      Plain-language summary
-                    </p>
-                    <BilingualText
-                      text={narrativeSummary}
-                      urdu={narrativeSummaryUrdu}
-                      className='mt-2 text-sm leading-relaxed'
-                    />
-                  </div>
-                )}
+          {!detectionMutation.isPending && hasAnomalies && (
+            <div className='space-y-3'>
+              {narrativeSummary && (
+                <div className='rounded-2xl border border-border/60 bg-muted/20 px-4 py-4'>
+                  <p className='text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground'>
+                    Summary
+                  </p>
+                  <BilingualText
+                    text={narrativeSummary}
+                    urdu={narrativeSummaryUrdu}
+                    className='mt-2 text-sm leading-relaxed'
+                  />
+                </div>
+              )}
 
-                {sortedAnomalies.map((anomaly, index) => {
-                  const Icon = severityIcon[anomaly.severity];
-                  const analyticsEntries = Object.entries(anomaly.data ?? {}).filter(
-                    ([, value]) =>
-                      typeof value === 'number' ||
-                      typeof value === 'string' ||
-                      typeof value === 'boolean',
-                  );
+              {sortedAnomalies.map((anomaly, index) => {
+                const Icon = severityIcon[anomaly.severity];
+                const analyticsEntries = Object.entries(anomaly.data ?? {}).filter(
+                  ([, value]) =>
+                    typeof value === 'number' ||
+                    typeof value === 'string' ||
+                    typeof value === 'boolean',
+                );
 
-                  return (
-                    <div
-                      key={`${anomaly.type}-${index}`}
-                      className={cn('rounded-2xl border px-4 py-4', severityTone[anomaly.severity])}
-                    >
-                      <div className='flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between'>
-                        <div className='flex items-start gap-3'>
-                          <div className='flex size-10 shrink-0 items-center justify-center rounded-xl bg-background/70'>
-                            <Icon className='size-5' aria-hidden='true' />
-                          </div>
-                          <div>
-                            <div className='flex flex-wrap items-center gap-2'>
-                              <h3 className='text-sm font-semibold capitalize'>{anomaly.type.replace(/[_-]/g, ' ')}</h3>
-                              <Badge variant='outline' className='border-current/20 bg-background/70 text-[11px] uppercase tracking-[0.18em]'>
-                                {anomaly.severity}
-                              </Badge>
-                            </div>
-                            <BilingualText 
-                              text={anomaly.explanation}
-                              urdu={anomaly.explanation_urdu}
-                              className='mt-3 text-sm leading-relaxed opacity-95' 
-                            />
+                return (
+                  <div
+                    key={`${anomaly.type}-${index}`}
+                    className={cn('rounded-2xl border px-4 py-4', severityTone[anomaly.severity])}
+                  >
+                    <div className='flex items-start gap-3'>
+                      <div className='flex size-9 shrink-0 items-center justify-center rounded-xl bg-background/70'>
+                        <Icon className='size-4.5' aria-hidden='true' />
+                      </div>
 
-                            {analyticsEntries.length > 0 && (
-                              <div className='mt-3 grid gap-2 sm:grid-cols-2'>
-                                {analyticsEntries.slice(0, 6).map(([key, value]) => (
-                                  <div
-                                    key={key}
-                                    className='rounded-xl border border-current/15 bg-background/60 px-3 py-2'
-                                  >
-                                    <p className='text-[10px] uppercase tracking-[0.14em] opacity-75'>
-                                      {formatAnalyticsLabel(key)}
-                                    </p>
-                                    <p className='mt-1 text-xs font-semibold'>
-                                      {formatAnalyticsValue(value)}
-                                    </p>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
+                      <div className='flex-1 space-y-2'>
+                        <div className='flex flex-wrap items-center gap-2'>
+                          <h3 className='text-sm font-semibold capitalize'>
+                            {anomaly.type.replace(/[_-]/g, ' ')}
+                          </h3>
+                          <Badge
+                            variant='outline'
+                            className='border-current/20 bg-background/70 text-[10px] uppercase tracking-[0.16em]'
+                          >
+                            {anomaly.severity}
+                          </Badge>
                         </div>
 
-                        <Badge className='w-fit border-current/20 bg-background/60 text-current'>
-                          {index === 0 ? 'Top signal' : 'Additional signal'}
-                        </Badge>
+                        <BilingualText
+                          text={anomaly.explanation}
+                          urdu={anomaly.explanation_urdu}
+                          className='text-sm leading-relaxed opacity-95'
+                        />
+
+                        {analyticsEntries.length > 0 && (
+                          <div className='grid gap-2 sm:grid-cols-2'>
+                            {analyticsEntries.slice(0, 4).map(([key, value]) => (
+                              <div
+                                key={key}
+                                className='rounded-xl border border-current/15 bg-background/60 px-3 py-2'
+                              >
+                                <p className='text-[10px] uppercase tracking-[0.12em] opacity-70'>
+                                  {formatAnalyticsLabel(key)}
+                                </p>
+                                <p className='mt-1 text-xs font-semibold'>
+                                  {formatAnalyticsValue(value)}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
-                  );
-                })}
-              </div>
-            )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
-            {!detectionMutation.isPending && !effectiveResult && isStorageHydrated && shifts.length > 0 && (
-              <div className='rounded-2xl border border-border/60 bg-muted/20 px-4 py-4 text-sm text-muted-foreground'>
-                Run &quot;Check My Pay Now&quot; once to cache your latest bilingual result on this device.
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <div className='space-y-6'>
-          <Card className='border-border/70 shadow-sm shadow-slate-950/5'>
-            <CardHeader>
-              <CardTitle className='text-base'>What we look for</CardTitle>
-              <CardDescription>
-                We check for hidden fees and missing money in your pay.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className='space-y-4'>
-              <div className='flex gap-3 rounded-2xl bg-primary/5 px-4 py-3'>
-                <TrendingDown className='mt-0.5 size-4 shrink-0 text-primary' aria-hidden='true' />
-                <p className='text-sm text-muted-foreground'>
-                  Sudden drops in your pay compared to your past trips.
-                </p>
-              </div>
-              <div className='flex gap-3 rounded-2xl bg-primary/5 px-4 py-3'>
-                <TrendingUp className='mt-0.5 size-4 shrink-0 text-primary' aria-hidden='true' />
-                <p className='text-sm text-muted-foreground'>
-                  Hidden fees or extra deductions taken by the app without clear reason.
-                </p>
-              </div>
-              <div className='flex gap-3 rounded-2xl bg-primary/5 px-4 py-3'>
-                <Sparkles className='mt-0.5 size-4 shrink-0 text-primary' aria-hidden='true' />
-                <p className='text-sm text-muted-foreground'>
-                  We explain everything clearly so you know exactly what happened.
-                </p>
-              </div>
-
-              <Separator />
-
-              <div className='rounded-2xl border border-border/60 px-4 py-4'>
-                <p className='text-xs uppercase tracking-[0.18em] text-muted-foreground'>
-                  Current context
-                </p>
-                <p className='mt-2 text-sm leading-relaxed text-muted-foreground'>
-                  {currentCityZone
-                    ? `You are being compared against workers in ${currentCityZone}.`
-                    : 'Set your profile city zone to improve anomaly context and local comparisons.'}
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className='border-border/70 shadow-sm shadow-slate-950/5'>
-            <CardHeader>
-              <CardTitle className='text-base'>What to do next</CardTitle>
-              <CardDescription>
-                If we catch a pay issue, here is what you can do.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className='space-y-3'>
-              <div className='flex items-start gap-3 rounded-2xl border border-border/60 px-4 py-3'>
-                <div className='mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary'>
-                  1
-                </div>
-                <p className='text-sm text-muted-foreground'>
-                  Cross-check the flagged shifts in your earnings history.
-                </p>
-              </div>
-              <div className='flex items-start gap-3 rounded-2xl border border-border/60 px-4 py-3'>
-                <div className='mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary'>
-                  2
-                </div>
-                <p className='text-sm text-muted-foreground'>
-                  Upload a screenshot in the earnings flow if you want a verifier to review it.
-                </p>
-              </div>
-              <div className='flex items-start gap-3 rounded-2xl border border-border/60 px-4 py-3'>
-                <div className='mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary'>
-                  3
-                </div>
-                <p className='text-sm text-muted-foreground'>
-                  If the issue looks systemic, post it to the community feed for moderation review.
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+          {!detectionMutation.isPending && !effectiveResult && isStorageHydrated && shifts.length > 0 && (
+            <div className='rounded-2xl border border-border/60 bg-muted/20 px-4 py-4 text-sm text-muted-foreground'>
+              Run "Check My Pay Now" once to generate your first anomaly summary.
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <Card className='border-border/70 shadow-sm shadow-slate-950/5'>
         <CardHeader>
-          <CardTitle className='text-base'>Recent earnings context</CardTitle>
+          <CardTitle className='text-base'>Recent shifts used for analysis</CardTitle>
           <CardDescription>
-            These are the shifts the anomaly scan uses as input.
+            Latest records included in anomaly detection.
           </CardDescription>
         </CardHeader>
         <CardContent>
           {shiftsLoading ? (
             <div className='space-y-2'>
               {Array.from({ length: 4 }).map((_, index) => (
-                <Skeleton key={index} className='h-14 w-full rounded-2xl' />
+                <Skeleton key={index} className='h-12 w-full rounded-xl' />
               ))}
             </div>
           ) : shifts.length === 0 ? (
             <div className='rounded-2xl border border-dashed border-border/70 px-4 py-8 text-center text-sm text-muted-foreground'>
-              No shifts are available yet. Log earnings first so anomaly detection has data to analyze.
+              No shifts available yet. Log earnings first so anomaly detection can run.
             </div>
           ) : (
-            <div className='grid gap-3 md:grid-cols-2 xl:grid-cols-3'>
-              {shifts.slice(-6).reverse().map((shift) => {
-                const rate = computeRate(shift);
+            <div className='space-y-2'>
+              {shifts
+                .slice(-6)
+                .reverse()
+                .map((shift) => {
+                  const rate = computeRate(shift);
 
-                return (
-                  <div key={shift.id} className='rounded-2xl border border-border/60 px-4 py-3'>
-                    <div className='flex items-start justify-between gap-3'>
+                  return (
+                    <div
+                      key={shift.id}
+                      className='flex flex-col gap-2 rounded-xl border border-border/60 px-3 py-3 sm:flex-row sm:items-center sm:justify-between'
+                    >
                       <div>
                         <p className='text-sm font-medium'>{shift.platform.name}</p>
                         <p className='text-xs text-muted-foreground'>{formatDate(shift.shiftDate)}</p>
                       </div>
-                      <Badge variant='outline'>{shift.verificationStatus}</Badge>
-                    </div>
-                    <Separator className='my-3' />
-                    <div className='grid grid-cols-2 gap-3 text-sm'>
-                      <div>
-                        <p className='text-xs uppercase tracking-[0.18em] text-muted-foreground'>
-                          Net received
-                        </p>
-                        <p className='mt-1 font-medium'>{formatMoney(Number(shift.netReceived))}</p>
-                      </div>
-                      <div>
-                        <p className='text-xs uppercase tracking-[0.18em] text-muted-foreground'>
-                          Rate/hr
-                        </p>
-                        <p className='mt-1 font-medium'>{formatMoney(rate)}</p>
+
+                      <div className='flex items-center gap-2 text-xs sm:gap-3 sm:text-sm'>
+                        <Badge variant='outline'>{shift.verificationStatus}</Badge>
+                        <span className='text-muted-foreground'>Net</span>
+                        <span className='font-medium'>{formatMoney(Number(shift.netReceived))}</span>
+                        <span className='text-muted-foreground'>Rate</span>
+                        <span className='font-medium'>{formatMoney(rate)}</span>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
             </div>
           )}
         </CardContent>
