@@ -1,11 +1,12 @@
 "use client";
 
 import { motion, type Variants } from "motion/react";
-import { Area, AreaChart, ResponsiveContainer, Tooltip } from "recharts";
+import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis } from "recharts";
 
 interface ChartPoint {
   name: string;
   value: number;
+  trend: number;
   verifiedEarnings: number;
   certificatesChecked: number;
   grievancesAutoFlagged: number;
@@ -27,6 +28,7 @@ const chartData: ChartPoint[] = [
   {
     name: "Jan",
     value: 46,
+    trend: 42,
     verifiedEarnings: 18240,
     certificatesChecked: 10900,
     grievancesAutoFlagged: 112,
@@ -35,6 +37,7 @@ const chartData: ChartPoint[] = [
   {
     name: "Feb",
     value: 51,
+    trend: 48,
     verifiedEarnings: 19860,
     certificatesChecked: 11630,
     grievancesAutoFlagged: 124,
@@ -43,6 +46,7 @@ const chartData: ChartPoint[] = [
   {
     name: "Mar",
     value: 58,
+    trend: 54,
     verifiedEarnings: 21420,
     certificatesChecked: 12540,
     grievancesAutoFlagged: 131,
@@ -51,6 +55,7 @@ const chartData: ChartPoint[] = [
   {
     name: "Apr",
     value: 66,
+    trend: 61,
     verifiedEarnings: 23670,
     certificatesChecked: 13980,
     grievancesAutoFlagged: 145,
@@ -59,6 +64,7 @@ const chartData: ChartPoint[] = [
   {
     name: "May",
     value: 73,
+    trend: 68,
     verifiedEarnings: 25890,
     certificatesChecked: 15210,
     grievancesAutoFlagged: 151,
@@ -67,6 +73,7 @@ const chartData: ChartPoint[] = [
   {
     name: "Jun",
     value: 81,
+    trend: 76,
     verifiedEarnings: 27980,
     certificatesChecked: 16320,
     grievancesAutoFlagged: 166,
@@ -75,6 +82,7 @@ const chartData: ChartPoint[] = [
   {
     name: "Jul",
     value: 90,
+    trend: 84,
     verifiedEarnings: 30540,
     certificatesChecked: 17900,
     grievancesAutoFlagged: 173,
@@ -132,6 +140,7 @@ function StatsTooltip({ active, payload, label }: StatsTooltipProps) {
         Trust Signal Index: {point.value}/100
       </p>
       <div className="mt-3 space-y-2 text-sm text-muted-foreground">
+        <p>Momentum channel: {point.trend}/100</p>
         <p>
           Verified earnings records: {point.verifiedEarnings.toLocaleString()}
         </p>
@@ -281,14 +290,48 @@ export default function FeaturedSectionStats() {
             <AreaChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
               <defs>
                 <linearGradient id="fairgig-signal-gradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#2563eb" stopOpacity={0.35} />
+                  <stop offset="5%" stopColor="#2563eb" stopOpacity={0.35}>
+                    <animate
+                      attributeName="stop-opacity"
+                      values="0.28;0.42;0.28"
+                      dur="4.5s"
+                      repeatCount="indefinite"
+                    />
+                  </stop>
                   <stop offset="95%" stopColor="#2563eb" stopOpacity={0} />
                 </linearGradient>
+                <linearGradient id="fairgig-trend-gradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#14b8a6" stopOpacity={0.26} />
+                  <stop offset="100%" stopColor="#14b8a6" stopOpacity={0} />
+                </linearGradient>
               </defs>
+
+              <CartesianGrid stroke="#94a3b8" strokeDasharray="3 8" strokeOpacity={0.25} />
+              <XAxis
+                dataKey="name"
+                tick={{ fill: "#64748b", fontSize: 11 }}
+                tickLine={false}
+                axisLine={false}
+              />
 
               <Tooltip
                 cursor={{ stroke: "#94a3b8", strokeDasharray: "3 4" }}
                 content={<StatsTooltip />}
+              />
+
+              <Area
+                type="monotone"
+                dataKey="trend"
+                stroke="#14b8a6"
+                strokeWidth={2}
+                strokeDasharray="6 6"
+                fillOpacity={1}
+                fill="url(#fairgig-trend-gradient)"
+                isAnimationActive
+                animationDuration={1200}
+                animationBegin={120}
+                animationEasing="ease-out"
+                dot={false}
               />
 
               <Area
@@ -298,6 +341,10 @@ export default function FeaturedSectionStats() {
                 strokeWidth={2.5}
                 fillOpacity={1}
                 fill="url(#fairgig-signal-gradient)"
+                isAnimationActive
+                animationDuration={1400}
+                animationEasing="ease-out"
+                activeDot={{ r: 5, stroke: "#1e3a8a", strokeWidth: 2, fill: "#93c5fd" }}
               />
             </AreaChart>
           </ResponsiveContainer>

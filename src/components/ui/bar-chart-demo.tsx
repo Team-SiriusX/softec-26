@@ -1,5 +1,6 @@
 "use client";
 
+import { motion } from "motion/react";
 import { BarChart, Bar, BarXAxis, Grid, ChartTooltip } from "@/components/ui/bar-chart";
 
 const fairGigVisualizerData = [
@@ -75,6 +76,10 @@ const topStickers = [
     rotate: "-rotate-2",
   },
   {
+    text: "Model-Calibrated",
+    rotate: "rotate-1",
+  },
+  {
     text: "Live Trust Layer",
     rotate: "rotate-1",
   },
@@ -128,13 +133,17 @@ export default function BarChartDemo() {
           <div className="pointer-events-none absolute inset-0 rounded-[2rem] border border-foreground/5" />
 
           <div className="mb-5 flex flex-wrap items-center justify-center gap-3 md:mb-6 md:gap-4">
-            {topStickers.map((note) => (
-              <div
+            {topStickers.map((note, index) => (
+              <motion.div
+                initial={{ opacity: 0, y: 14, scale: 0.96 }}
+                whileInView={{ opacity: 1, y: 0, scale: 1 }}
+                viewport={{ once: true, amount: 0.7 }}
+                transition={{ duration: 0.45, delay: index * 0.07, ease: "easeOut" }}
                 className={`rounded-xl border-2 border-slate-300 bg-white px-4 py-2 font-black text-2xl text-slate-800 leading-none tracking-tight shadow-[0_10px_22px_-14px_rgba(15,23,42,0.45)] md:px-5 md:py-2.5 md:text-[2rem] ${note.rotate}`}
                 key={note.text}
               >
                 {note.text}
-              </div>
+              </motion.div>
             ))}
           </div>
 
@@ -229,13 +238,17 @@ export default function BarChartDemo() {
           </BarChart>
 
           <div className="mt-5 flex flex-wrap items-center justify-center gap-3 md:mt-6 md:gap-4">
-            {bottomStickers.map((note) => (
-              <div
+            {bottomStickers.map((note, index) => (
+              <motion.div
+                initial={{ opacity: 0, y: 14, scale: 0.96 }}
+                whileInView={{ opacity: 1, y: 0, scale: 1 }}
+                viewport={{ once: true, amount: 0.7 }}
+                transition={{ duration: 0.45, delay: 0.12 + index * 0.07, ease: "easeOut" }}
                 className={`rounded-xl border-2 border-slate-300 bg-white px-4 py-2 font-black text-2xl text-slate-800 leading-none tracking-tight shadow-[0_10px_22px_-14px_rgba(15,23,42,0.45)] md:px-5 md:py-2.5 md:text-[2rem] ${note.rotate}`}
                 key={note.text}
               >
                 {note.text}
-              </div>
+              </motion.div>
             ))}
           </div>
         </div>
