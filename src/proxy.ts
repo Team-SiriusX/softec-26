@@ -1,4 +1,4 @@
-import { getCookieCache } from 'better-auth/cookies';
+import { getCookieCache, getSessionCookie } from 'better-auth/cookies';
 import { NextRequest, NextResponse } from 'next/server';
 import {
   advocateRoutes,
@@ -72,20 +72,27 @@ const requiresAdvocateApproval = (role: UserRole | null): role is 'VERIFIER' | '
   return role === 'VERIFIER' || role === 'ADVOCATE';
 };
 
-const getFreshApprovalGateUser = async (
+const getFreshSessionUser = async (
   request: NextRequest,
+  options?: {
+    disableRefresh?: boolean;
+  },
 ): Promise<{ role: UserRole | null; approvalStatus: ApprovalStatus | null } | null> => {
   try {
-    const response = await fetch(
-      new URL('/api/auth/get-session?disableCookieCache=true&disableRefresh=true', request.url),
-      {
-        method: 'GET',
-        headers: {
-          cookie: request.headers.get('cookie') ?? '',
-        },
-        cache: 'no-store',
+    const sessionUrl = new URL('/api/auth/get-session', request.url);
+    sessionUrl.searchParams.set('disableCookieCache', 'true');
+
+    if (options?.disableRefresh) {
+      sessionUrl.searchParams.set('disableRefresh', 'true');
+    }
+
+    const response = await fetch(sessionUrl, {
+      method: 'GET',
+      headers: {
+        cookie: request.headers.get('cookie') ?? '',
       },
-    );
+      cache: 'no-store',
+    });
 
     if (!response.ok) {
       return null;
@@ -109,6 +116,7 @@ const getFreshApprovalGateUser = async (
 export async function proxy(request: NextRequest) {
   const { nextUrl } = request;
   const pathname = nextUrl.pathname;
+  const hasSessionToken = Boolean(getSessionCookie(request));
 
   const rawCookieCache = await getCookieCache(request, {
     secret: process.env.BETTER_AUTH_SECRET,
@@ -117,13 +125,23 @@ export async function proxy(request: NextRequest) {
 
   const cachedSession = rawCookieCache as SessionCookieCache | null;
 
-  const isAuthenticated = Boolean(
+  let isAuthenticated = Boolean(
     cachedSession?.session?.id && cachedSession?.user?.id,
   );
   let userRole = normalizeRole(cachedSession?.user?.role);
   let userApprovalStatus = normalizeApprovalStatus(
     cachedSession?.user?.approvalStatus,
   );
+
+  if (!isAuthenticated && hasSessionToken) {
+    const freshSessionUser = await getFreshSessionUser(request);
+
+    if (freshSessionUser) {
+      isAuthenticated = true;
+      userRole = freshSessionUser.role;
+      userApprovalStatus = freshSessionUser.approvalStatus;
+    }
+  }
 
   const isAuthRoute = authRoutes.includes(pathname);
   const isPublicRoute = publicRoutes.includes(pathname);
@@ -153,7 +171,9 @@ export async function proxy(request: NextRequest) {
     requiresAdvocateApproval(userRole) &&
     userApprovalStatus !== 'APPROVED'
   ) {
-    const freshApprovalGateUser = await getFreshApprovalGateUser(request);
+    const freshApprovalGateUser = await getFreshSessionUser(request, {
+      disableRefresh: true,
+    });
 
     if (freshApprovalGateUser) {
       userRole = freshApprovalGateUser.role;
