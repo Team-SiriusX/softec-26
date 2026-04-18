@@ -46,6 +46,34 @@ export const ourFileRouter = {
         fileKey: file.key,
       };
     }),
+  communityPostMediaUploader: f({
+    image: {
+      maxFileSize: "8MB",
+      maxFileCount: 4,
+    },
+  })
+    .middleware(async ({ req }) => {
+      const session = await auth.api.getSession({
+        headers: req.headers,
+      });
+      const user = session?.user;
+
+      if (!user) throw new UploadThingError("Unauthorized");
+      if (user.role !== "WORKER") {
+        throw new UploadThingError("Only workers can upload community media");
+      }
+
+      return {
+        userId: user.id,
+      };
+    })
+    .onUploadComplete(async ({ metadata, file }) => {
+      return {
+        uploadedBy: metadata.userId,
+        fileUrl: file.ufsUrl,
+        fileKey: file.key,
+      };
+    }),
 } satisfies FileRouter;
 
 export type OurFileRouter = typeof ourFileRouter;

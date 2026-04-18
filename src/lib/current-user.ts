@@ -7,8 +7,11 @@ export type CurrentUser = Omit<User, 'password'>;
 
 const currentUserSelect = {
   id: true,
+  name: true,
   email: true,
+  emailVerified: true,
   role: true,
+  approvalStatus: true,
   fullName: true,
   phone: true,
   cityZone: true,

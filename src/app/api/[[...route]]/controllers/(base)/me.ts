@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { authMiddleware } from '@/app/api/[[...route]]/middleware/auth-middleware';
 import { zValidator } from '@hono/zod-validator';
 import { WorkerCategory } from '@/generated/prisma/client';
-import * as z from 'zod';
+import { z } from 'zod';
 import db from '@/lib/db';
 import type { CurrentUser } from '@/lib/current-user';
 
@@ -19,8 +19,11 @@ type AuthEnv = {
 
 const currentUserSelect = {
   id: true,
+  name: true,
   email: true,
+  emailVerified: true,
   role: true,
+  approvalStatus: true,
   fullName: true,
   phone: true,
   cityZone: true,

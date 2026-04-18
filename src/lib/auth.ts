@@ -29,6 +29,12 @@ export const auth = betterAuth({
         defaultValue: 'WORKER',
         input: true,
       },
+      approvalStatus: {
+        type: 'string',
+        required: false,
+        defaultValue: 'APPROVED',
+        input: true,
+      },
       fullName: {
         type: 'string',
         required: true,

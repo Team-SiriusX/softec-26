@@ -85,7 +85,7 @@ function extractCertificateId(rawValue: string): string {
   return embeddedUuid?.[0] ?? trimmedValue;
 }
 
-function VerifyCertificatePageContent() {
+export default function VerifyCertificatePage() {
   const searchParams = useSearchParams();
   const initialId = useMemo(() => searchParams.get('id') ?? '', [searchParams]);
 
@@ -134,7 +134,7 @@ function VerifyCertificatePageContent() {
   };
 
   return (
-    <div className='min-h-screen bg-gradient-to-b from-slate-50 via-white to-slate-50 px-4 py-12 text-slate-900'>
+    <div className='min-h-screen bg-linear-to-b from-slate-50 via-white to-slate-50 px-4 py-12 text-slate-900'>
       <div className='mx-auto max-w-6xl space-y-8'>
         {/* Header */}
         <div className='space-y-3 text-center'>
@@ -247,13 +247,13 @@ function VerifyCertificatePageContent() {
         {/* Results Card */}
         {result && (
           <Card className='overflow-hidden border-slate-200 shadow-lg shadow-slate-200/50 p-0'>
-            <CardHeader
-              className={
-                result.is_valid
-                  ? 'border-b border-emerald-200 bg-gradient-to-r from-emerald-50 to-emerald-100'
-                  : 'border-b border-red-200 bg-gradient-to-r from-red-50 to-red-100'
-              }
-            >
+          <CardHeader
+            className={
+              result.is_valid
+                ? 'border-b border-emerald-200 bg-linear-to-r from-emerald-50 to-emerald-100'
+                : 'border-b border-red-200 bg-linear-to-r from-red-50 to-red-100'
+            }
+          >
               <div className='flex items-center gap-4 mt-4'>
                 {result.is_valid ? (
                   <ShieldCheck className='h-8 w-8 shrink-0 text-emerald-600' />
@@ -384,29 +384,6 @@ function VerifyCertificatePageContent() {
         )}
       </div>
     </div>
-  );
-}
-
-export default function VerifyCertificatePage() {
-  return (
-    <Suspense
-      fallback={
-        <div className='min-h-screen bg-gradient-to-b from-slate-50 via-white to-slate-50 px-4 py-12 text-slate-900'>
-          <div className='mx-auto max-w-6xl'>
-            <Card className='overflow-hidden border-slate-200 shadow-lg shadow-slate-200/50 p-0'>
-              <CardHeader>
-                <CardTitle>Loading verifier...</CardTitle>
-                <CardDescription>
-                  Preparing certificate verification interface.
-                </CardDescription>
-              </CardHeader>
-            </Card>
-          </div>
-        </div>
-      }
-    >
-      <VerifyCertificatePageContent />
-    </Suspense>
   );
 }
 

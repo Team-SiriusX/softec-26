@@ -5,6 +5,7 @@ type DbCurrentUser = {
   id: string;
   email: string;
   role: 'WORKER' | 'VERIFIER' | 'ADVOCATE';
+  approvalStatus: 'PENDING' | 'APPROVED' | 'REJECTED';
   fullName: string;
   phone: string | null;
   cityZone: string | null;

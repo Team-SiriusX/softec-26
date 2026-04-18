@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { ArrowRight, BarChart3, ShieldAlert, Siren, Speech } from 'lucide-react';
+import { ArrowRight, BarChart3, ShieldAlert, Siren, Speech, UserCheck } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { buttonVariants } from '@/components/ui/button';
@@ -29,6 +29,12 @@ const actions = [
     icon: Speech,
   },
   {
+    title: 'Moderate Community',
+    description: 'Run AI queue triage and complete human verification reviews.',
+    href: '/advocate/community-moderation',
+    icon: ShieldAlert,
+  },
+  {
     title: 'Track Early Warnings',
     description: 'Monitor ongoing platform-zone alerts and drop severity.',
     href: '/advocate/analytics#early-warning',
@@ -51,6 +57,12 @@ const actions = [
     description: 'Inspect platform commission distributions over time by zone.',
     href: '/advocate/commission-tracker',
     icon: BarChart3,
+  },
+  {
+    title: 'Account Approval Panel',
+    description: 'Approve or reject pending verifier and advocate sign-ups.',
+    href: '/advocate/approvals',
+    icon: UserCheck,
   },
 ];
 
