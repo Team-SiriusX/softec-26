@@ -160,8 +160,8 @@ importers:
         specifier: ^1.19.14
         version: 1.19.14(hono@4.12.14)
       '@prisma/client':
-        specifier: ^5.22.0
-        version: 5.22.0(prisma@5.22.0)
+        specifier: ^7.7.0
+        version: 7.7.0(prisma@7.7.0(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3)
       dotenv:
         specifier: ^16.4.0
         version: 16.6.1
@@ -176,8 +176,8 @@ importers:
         version: 3.25.76
     devDependencies:
       prisma:
-        specifier: ^5.22.0
-        version: 5.22.0
+        specifier: ^7.7.0
+        version: 7.7.0(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
 
 packages:
 
