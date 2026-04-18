@@ -6,7 +6,11 @@ import { client } from '@/lib/hono';
 import { toast } from 'sonner';
 
 type ResponseType = InferResponseType<typeof client.api.sample.$post>;
-type RequestType = InferRequestType<typeof client.api.sample.$post>['json'];
+type RequestType = InferRequestType<
+  typeof client.api.sample.$post
+> extends { json: infer J }
+  ? J
+  : never;
 
 export const useCreateSample = () => {
   const queryClient = useQueryClient();

@@ -9,16 +9,24 @@ import { toast } from 'sonner';
 type ResponseType = InferResponseType<
   (typeof client.api.screenshots)[':id']['verify']['$patch']
 >;
-type RequestType = InferRequestType<
-  (typeof client.api.screenshots)[':id']['verify']['$patch']
->;
+type RequestType = {
+  param: { id: string };
+  json: {
+    status: 'CONFIRMED' | 'FLAGGED' | 'UNVERIFIABLE';
+    verifierNotes?: string;
+  };
+};
 
 export const useUpdateVerification = () => {
   const queryClient = useQueryClient();
 
   return useMutation<ResponseType, Error, RequestType>({
     mutationFn: async ({ param, json }) => {
-      const response = await client.api.screenshots[':id'].verify.$patch({
+      const response = await (
+        client.api.screenshots[':id'].verify.$patch as unknown as (
+          args: RequestType,
+        ) => Promise<Response>
+      )({
         param,
         json,
       });

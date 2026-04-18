@@ -12,6 +12,6 @@ export const getGrievancesHandler = async (c: Context) => {
 };
 
 export const createGrievanceHandler = async (c: Context) => {
-  const payload = c.req.valid('json');
+  const payload = await c.req.json<unknown>();
   return c.json({ message: 'Grievance scaffold endpoint', payload }, 201);
 };

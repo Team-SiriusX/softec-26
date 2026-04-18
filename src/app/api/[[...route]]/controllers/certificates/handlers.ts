@@ -3,7 +3,7 @@ import db from '@/lib/db';
 import { Context } from 'hono';
 
 export const getCertificateHandler = async (c: Context) => {
-  const { id } = c.req.valid('param');
+  const id = c.req.param('id');
   const certificate = await db.incomeCertificate.findUnique({ where: { id } });
 
   if (!certificate) {
@@ -14,6 +14,6 @@ export const getCertificateHandler = async (c: Context) => {
 };
 
 export const createCertificateHandler = async (c: Context) => {
-  const payload = c.req.valid('json');
+  const payload = await c.req.json<unknown>();
   return c.json({ message: 'Certificate scaffold endpoint', payload }, 201);
 };
