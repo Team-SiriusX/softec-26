@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { type ReactNode, useMemo } from 'react';
+import { type ReactNode, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangle,
@@ -15,7 +15,9 @@ import {
   AreaChart,
   Bar,
   BarChart,
+  Brush,
   CartesianGrid,
+  LabelList,
   Line,
   LineChart,
   PolarAngleAxis,
@@ -23,6 +25,7 @@ import {
   PolarRadiusAxis,
   Radar,
   RadarChart,
+  ReferenceLine,
   XAxis,
   YAxis,
 } from 'recharts';
@@ -181,6 +184,11 @@ const SERIES_COLORS = [
   '#06b6d4',
 ];
 
+const ADVOCATE_WINDOW_OPTIONS = [8, 12, 24, 52] as const;
+const HISTOGRAM_BUCKET_OPTIONS = [2500, 5000, 10000] as const;
+type AdvocateWindowWeeks = (typeof ADVOCATE_WINDOW_OPTIONS)[number];
+type HistogramBucketSize = (typeof HISTOGRAM_BUCKET_OPTIONS)[number];
+
 async function fetchAnalytics<T>(path: string): Promise<T> {
   const response = await fetch(path, {
     cache: 'no-store',
@@ -312,93 +320,127 @@ function ChartCard({
 
 export default function AdvocateAnalyticsPage() {
   const queryClient = useQueryClient();
+  const [windowWeeks, setWindowWeeks] = useState<AdvocateWindowWeeks>(24);
+  const [histogramBucketSize, setHistogramBucketSize] =
+    useState<HistogramBucketSize>(5000);
+
+  const vulnerabilityWeeks = Math.max(windowWeeks, 24);
+  const streamWeeks = Math.min(windowWeeks, 24);
+  const earlyCurrentWeeks = windowWeeks >= 24 ? 2 : 1;
+  const earlyBaselineWeeks = windowWeeks >= 24 ? 8 : 6;
+  const complaintIntelligenceWeeks = Math.min(
+    12,
+    Math.max(4, Math.floor(windowWeeks / 2)),
+  );
 
   const commissionHeatmapQuery = useQuery({
-    queryKey: [QUERY_KEYS.ANALYTICS, 'advocate', 'commission-heatmap'],
+    queryKey: [QUERY_KEYS.ANALYTICS, 'advocate', 'commission-heatmap', windowWeeks],
     queryFn: () =>
       fetchAnalytics<CommissionHeatmapResponse>(
-        '/api/analytics/advocate/commission-rate-heatmap?weeks=12',
+        `/api/analytics/advocate/commission-rate-heatmap?weeks=${windowWeeks}`,
       ),
     staleTime: 60_000,
   });
 
   const incomeDistributionQuery = useQuery({
-    queryKey: [QUERY_KEYS.ANALYTICS, 'advocate', 'income-distribution'],
+    queryKey: [
+      QUERY_KEYS.ANALYTICS,
+      'advocate',
+      'income-distribution',
+      windowWeeks,
+      histogramBucketSize,
+    ],
     queryFn: () =>
       fetchAnalytics<IncomeDistributionResponse>(
-        '/api/analytics/advocate/income-distribution-histogram?weeks=12&bucketSize=5000',
+        `/api/analytics/advocate/income-distribution-histogram?weeks=${windowWeeks}&bucketSize=${histogramBucketSize}`,
       ),
     staleTime: 60_000,
   });
 
   const grievanceBumpQuery = useQuery({
-    queryKey: [QUERY_KEYS.ANALYTICS, 'advocate', 'grievance-bump'],
+    queryKey: [QUERY_KEYS.ANALYTICS, 'advocate', 'grievance-bump', windowWeeks],
     queryFn: () =>
       fetchAnalytics<GrievanceBumpResponse>(
-        '/api/analytics/advocate/grievance-bump-chart?weeks=8',
+        `/api/analytics/advocate/grievance-bump-chart?weeks=${windowWeeks}`,
       ),
     staleTime: 60_000,
   });
 
   const vulnerabilityTimelineQuery = useQuery({
-    queryKey: [QUERY_KEYS.ANALYTICS, 'advocate', 'vulnerability-timeline'],
+    queryKey: [
+      QUERY_KEYS.ANALYTICS,
+      'advocate',
+      'vulnerability-timeline',
+      vulnerabilityWeeks,
+    ],
     queryFn: () =>
       fetchAnalytics<VulnerabilityTimelineResponse>(
-        '/api/analytics/advocate/vulnerability-flag-timeline?weeks=52',
+        `/api/analytics/advocate/vulnerability-flag-timeline?weeks=${vulnerabilityWeeks}`,
       ),
     staleTime: 60_000,
   });
 
   const platformRadarQuery = useQuery({
-    queryKey: [QUERY_KEYS.ANALYTICS, 'advocate', 'platform-radar'],
+    queryKey: [QUERY_KEYS.ANALYTICS, 'advocate', 'platform-radar', windowWeeks],
     queryFn: () =>
       fetchAnalytics<PlatformRadarResponse>(
-        '/api/analytics/advocate/platform-comparison-radar?weeks=12',
+        `/api/analytics/advocate/platform-comparison-radar?weeks=${windowWeeks}`,
       ),
     staleTime: 60_000,
   });
 
   const zoneTreemapQuery = useQuery({
-    queryKey: [QUERY_KEYS.ANALYTICS, 'advocate', 'zone-treemap'],
+    queryKey: [QUERY_KEYS.ANALYTICS, 'advocate', 'zone-treemap', windowWeeks],
     queryFn: () =>
       fetchAnalytics<CityZoneTreemapResponse>(
-        '/api/analytics/advocate/city-zone-treemap?weeks=12',
+        `/api/analytics/advocate/city-zone-treemap?weeks=${windowWeeks}`,
       ),
     staleTime: 60_000,
   });
 
   const complaintStreamQuery = useQuery({
-    queryKey: [QUERY_KEYS.ANALYTICS, 'advocate', 'complaint-stream'],
+    queryKey: [QUERY_KEYS.ANALYTICS, 'advocate', 'complaint-stream', streamWeeks],
     queryFn: () =>
       fetchAnalytics<ComplaintStreamResponse>(
-        '/api/analytics/advocate/complaint-cluster-stream?weeks=8',
+        `/api/analytics/advocate/complaint-cluster-stream?weeks=${streamWeeks}`,
       ),
     staleTime: 60_000,
   });
 
   const exploitationScoreQuery = useQuery({
-    queryKey: [QUERY_KEYS.ANALYTICS, 'insights', 'exploitation-score'],
+    queryKey: [QUERY_KEYS.ANALYTICS, 'insights', 'exploitation-score', windowWeeks],
     queryFn: () =>
       fetchAnalytics<ExploitationScoreResponse>(
-        '/api/analytics/insights/platform-exploitation-score?weeks=12',
+        `/api/analytics/insights/platform-exploitation-score?weeks=${windowWeeks}`,
       ),
     staleTime: 60_000,
   });
 
   const earlyWarningQuery = useQuery({
-    queryKey: [QUERY_KEYS.ANALYTICS, 'insights', 'early-warning'],
+    queryKey: [
+      QUERY_KEYS.ANALYTICS,
+      'insights',
+      'early-warning',
+      earlyCurrentWeeks,
+      earlyBaselineWeeks,
+    ],
     queryFn: () =>
       fetchAnalytics<EarlyWarningResponse>(
-        '/api/analytics/insights/early-warning?currentWeeks=2&baselineWeeks=6&alertThresholdPct=15',
+        `/api/analytics/insights/early-warning?currentWeeks=${earlyCurrentWeeks}&baselineWeeks=${earlyBaselineWeeks}&alertThresholdPct=15`,
       ),
     staleTime: 60_000,
   });
 
   const complaintIntelligenceQuery = useQuery({
-    queryKey: [QUERY_KEYS.ANALYTICS, 'insights', 'complaint-intelligence'],
+    queryKey: [
+      QUERY_KEYS.ANALYTICS,
+      'insights',
+      'complaint-intelligence',
+      complaintIntelligenceWeeks,
+    ],
     queryFn: () =>
       fetchAnalytics<ComplaintIntelligenceResponse>(
-        '/api/analytics/insights/complaint-intelligence?weeks=4&topIssues=6&topKeywords=10',
+        `/api/analytics/insights/complaint-intelligence?weeks=${complaintIntelligenceWeeks}&topIssues=6&topKeywords=10`,
       ),
     staleTime: 60_000,
   });
@@ -723,6 +765,11 @@ export default function AdvocateAnalyticsPage() {
     return config;
   }, [complaintStreamSeries.categories]);
 
+  const hasSparseSeries =
+    (commissionHeatmapQuery.data?.cells.length ?? 0) < 20 ||
+    incomeHistogram.rows.length < 4 ||
+    grievanceBumpData.rows.length < 4;
+
   const exploitationTop = exploitationScoreQuery.data?.ranking.at(0);
   const earlyAlerts = earlyWarningQuery.data?.alerts ?? [];
 
@@ -790,6 +837,44 @@ export default function AdvocateAnalyticsPage() {
         </section>
 
         <section className='grid gap-4 md:grid-cols-3'>
+          <Card className='md:col-span-3 border-border/60 bg-card/90'>
+            <CardContent className='flex flex-wrap items-center gap-3 pt-6'>
+              <p className='text-xs font-semibold uppercase tracking-wide text-muted-foreground'>
+                Analytics window
+              </p>
+              {ADVOCATE_WINDOW_OPTIONS.map((option) => (
+                <Button
+                  key={option}
+                  type='button'
+                  size='sm'
+                  variant={option === windowWeeks ? 'default' : 'outline'}
+                  onClick={() => setWindowWeeks(option)}
+                >
+                  {option} weeks
+                </Button>
+              ))}
+              <p className='text-xs font-semibold uppercase tracking-wide text-muted-foreground sm:ml-3'>
+                Histogram bucket
+              </p>
+              {HISTOGRAM_BUCKET_OPTIONS.map((option) => (
+                <Button
+                  key={option}
+                  type='button'
+                  size='sm'
+                  variant={option === histogramBucketSize ? 'default' : 'outline'}
+                  onClick={() => setHistogramBucketSize(option)}
+                >
+                  PKR {option.toLocaleString()}
+                </Button>
+              ))}
+              {hasSparseSeries ? (
+                <Badge variant='secondary'>
+                  Sparse history detected in this window; widen range for denser patterns.
+                </Badge>
+              ) : null}
+            </CardContent>
+          </Card>
+
           {summaryTiles.map((tile, index) => {
             const Icon = tile.icon;
 
@@ -929,10 +1014,12 @@ export default function AdvocateAnalyticsPage() {
                     dataKey={platform.id}
                     name={platform.name}
                     fill={SERIES_COLORS[index % SERIES_COLORS.length]}
+                    radius={[6, 6, 0, 0]}
                     isAnimationActive
                     animationDuration={900}
                   />
                 ))}
+                <Brush dataKey='label' height={22} travellerWidth={10} />
               </BarChart>
             </ChartContainer>
           </ChartCard>
@@ -956,6 +1043,7 @@ export default function AdvocateAnalyticsPage() {
                 <YAxis reversed domain={[grievanceBumpData.maxRank + 0.5, 1]} allowDecimals={false} />
                 <ChartTooltip content={<ChartTooltipContent />} />
                 <ChartLegend content={<ChartLegendContent />} />
+                <ReferenceLine y={1} stroke='#ef4444' strokeOpacity={0.4} strokeDasharray='4 5' />
                 {grievanceBumpData.topCategories.map((category, index) => (
                   <Line
                     key={category}
@@ -969,6 +1057,12 @@ export default function AdvocateAnalyticsPage() {
                     animationDuration={900}
                   />
                 ))}
+                <Brush
+                  dataKey='period'
+                  height={22}
+                  travellerWidth={10}
+                  tickFormatter={formatWeekLabel}
+                />
               </LineChart>
             </ChartContainer>
           </ChartCard>
@@ -1003,6 +1097,12 @@ export default function AdvocateAnalyticsPage() {
                     animationDuration={900}
                   />
                 ))}
+                <Brush
+                  dataKey='period'
+                  height={22}
+                  travellerWidth={10}
+                  tickFormatter={formatMonthLabel}
+                />
               </BarChart>
             </ChartContainer>
           </ChartCard>
@@ -1102,6 +1202,12 @@ export default function AdvocateAnalyticsPage() {
                     animationDuration={900}
                   />
                 ))}
+                <Brush
+                  dataKey='period'
+                  height={22}
+                  travellerWidth={10}
+                  tickFormatter={formatWeekLabel}
+                />
               </AreaChart>
             </ChartContainer>
           </ChartCard>
@@ -1144,7 +1250,14 @@ export default function AdvocateAnalyticsPage() {
                   fill='var(--color-exploitationScore)'
                   isAnimationActive
                   animationDuration={900}
-                />
+                >
+                  <LabelList
+                    dataKey='exploitationScore'
+                    position='right'
+                    formatter={(value) => formatPct(Number(value ?? 0))}
+                    className='fill-foreground text-[11px]'
+                  />
+                </Bar>
               </BarChart>
             </ChartContainer>
           </ChartCard>

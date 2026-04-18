@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { type ReactNode, useMemo } from 'react';
+import { type ReactNode, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangle,
@@ -14,17 +14,20 @@ import {
   Area,
   AreaChart,
   Bar,
-  BarChart,
+  Brush,
   CartesianGrid,
   Cell,
+  ComposedChart,
   Line,
   LineChart,
   Pie,
   PieChart,
+  ReferenceLine,
   Scatter,
   ScatterChart,
   XAxis,
   YAxis,
+  ZAxis,
 } from 'recharts';
 
 import { Badge } from '@/components/ui/badge';
@@ -160,6 +163,9 @@ const DONUT_STATUS_COLORS: Record<
   UNVERIFIABLE: '#6b7280',
 };
 
+const WORKER_WINDOW_OPTIONS = [8, 16, 24, 52] as const;
+type WorkerWindowWeeks = (typeof WORKER_WINDOW_OPTIONS)[number];
+
 async function fetchAnalytics<T>(path: string): Promise<T> {
   const response = await fetch(path, {
     cache: 'no-store',
@@ -261,57 +267,60 @@ function ChartCard({
 
 export default function WorkerAnalyticsPage() {
   const queryClient = useQueryClient();
+  const [windowWeeks, setWindowWeeks] = useState<WorkerWindowWeeks>(24);
+  const breakdownMonths = Math.min(12, Math.max(3, Math.ceil(windowWeeks / 4)));
+  const distributionWeeks = Math.min(windowWeeks, 52);
 
   const earningsTrendQuery = useQuery({
-    queryKey: [QUERY_KEYS.ANALYTICS, 'worker', 'earnings-trend'],
+    queryKey: [QUERY_KEYS.ANALYTICS, 'worker', 'earnings-trend', windowWeeks],
     queryFn: () =>
       fetchAnalytics<EarningsTrendResponse>(
-        '/api/analytics/worker/me/earnings-trend?weeks=16',
+        `/api/analytics/worker/me/earnings-trend?weeks=${windowWeeks}`,
       ),
     staleTime: 60_000,
   });
 
   const hourlyRateRiverQuery = useQuery({
-    queryKey: [QUERY_KEYS.ANALYTICS, 'worker', 'hourly-rate-river'],
+    queryKey: [QUERY_KEYS.ANALYTICS, 'worker', 'hourly-rate-river', windowWeeks],
     queryFn: () =>
       fetchAnalytics<HourlyRateRiverResponse>(
-        '/api/analytics/worker/me/hourly-rate-river?weeks=16',
+        `/api/analytics/worker/me/hourly-rate-river?weeks=${windowWeeks}`,
       ),
     staleTime: 60_000,
   });
 
   const commissionTrackerQuery = useQuery({
-    queryKey: [QUERY_KEYS.ANALYTICS, 'worker', 'commission-rate-tracker'],
+    queryKey: [QUERY_KEYS.ANALYTICS, 'worker', 'commission-rate-tracker', windowWeeks],
     queryFn: () =>
       fetchAnalytics<CommissionTrackerResponse>(
-        '/api/analytics/worker/me/commission-rate-tracker?weeks=16',
+        `/api/analytics/worker/me/commission-rate-tracker?weeks=${windowWeeks}`,
       ),
     staleTime: 60_000,
   });
 
   const platformBreakdownQuery = useQuery({
-    queryKey: [QUERY_KEYS.ANALYTICS, 'worker', 'platform-breakdown'],
+    queryKey: [QUERY_KEYS.ANALYTICS, 'worker', 'platform-breakdown', breakdownMonths],
     queryFn: () =>
       fetchAnalytics<PlatformBreakdownResponse>(
-        '/api/analytics/worker/me/platform-earnings-breakdown?months=6',
+        `/api/analytics/worker/me/platform-earnings-breakdown?months=${breakdownMonths}`,
       ),
     staleTime: 60_000,
   });
 
   const distributionQuery = useQuery({
-    queryKey: [QUERY_KEYS.ANALYTICS, 'worker', 'distribution'],
+    queryKey: [QUERY_KEYS.ANALYTICS, 'worker', 'distribution', distributionWeeks],
     queryFn: () =>
       fetchAnalytics<DotPlotResponse>(
-        '/api/analytics/worker/me/earnings-distribution-dot-plot?weeks=8',
+        `/api/analytics/worker/me/earnings-distribution-dot-plot?weeks=${distributionWeeks}`,
       ),
     staleTime: 60_000,
   });
 
   const verificationQuery = useQuery({
-    queryKey: [QUERY_KEYS.ANALYTICS, 'worker', 'verification'],
+    queryKey: [QUERY_KEYS.ANALYTICS, 'worker', 'verification', windowWeeks],
     queryFn: () =>
       fetchAnalytics<VerificationDonutResponse>(
-        '/api/analytics/worker/me/verification-status-donut?weeks=16',
+        `/api/analytics/worker/me/verification-status-donut?weeks=${windowWeeks}`,
       ),
     staleTime: 60_000,
   });
@@ -326,6 +335,23 @@ export default function WorkerAnalyticsPage() {
   ];
 
   const hasAnyError = queries.some((query) => query.isError);
+
+  const earningsTrendEnhanced = useMemo(() => {
+    const points = earningsTrendQuery.data?.points ?? [];
+
+    return points.map((point, index) => {
+      const lookback = points.slice(Math.max(0, index - 2), index + 1);
+      const rollingAverage =
+        lookback.length === 0
+          ? point.workerNet
+          : lookback.reduce((sum, item) => sum + item.workerNet, 0) / lookback.length;
+
+      return {
+        ...point,
+        rollingAverage,
+      };
+    });
+  }, [earningsTrendQuery.data?.points]);
 
   const hourlyRiverWithBand = useMemo(
     () =>
@@ -418,8 +444,51 @@ export default function WorkerAnalyticsPage() {
       };
     });
 
+    config.totalNet = {
+      label: 'Monthly Total',
+      color: '#0f172a',
+    };
+
     return config;
   }, [platformBreakdownSeries.platforms]);
+
+  const breakdownRowsWithTotal = useMemo(
+    () =>
+      platformBreakdownSeries.rows.map((row) => {
+        const totalNet = platformBreakdownSeries.platforms.reduce(
+          (sum, platform) => sum + Number(row[platform.id] ?? 0),
+          0,
+        );
+
+        return {
+          ...row,
+          totalNet,
+        };
+      }),
+    [platformBreakdownSeries.rows, platformBreakdownSeries.platforms],
+  );
+
+  const distributionWithSize = useMemo(() => {
+    const workerPoints = distributionQuery.data?.workerPoints ?? [];
+    const cityPoints = distributionQuery.data?.cityPoints ?? [];
+
+    const allValues = [...workerPoints, ...cityPoints].map((point) => point.netEarned);
+    const min = Math.min(...allValues, 0);
+    const max = Math.max(...allValues, 1);
+    const range = Math.max(1, max - min);
+
+    const withSize = <T extends DotPlotResponse['workerPoints'][number]>(points: T[]) => {
+      return points.map((point) => ({
+        ...point,
+        pointSize: 60 + ((point.netEarned - min) / range) * 180,
+      }));
+    };
+
+    return {
+      workerPoints: withSize(workerPoints),
+      cityPoints: withSize(cityPoints),
+    };
+  }, [distributionQuery.data?.cityPoints, distributionQuery.data?.workerPoints]);
 
   const verificationTotal = verificationQuery.data?.total ?? 0;
 
@@ -436,6 +505,11 @@ export default function WorkerAnalyticsPage() {
   }, [verificationQuery.data, verificationTotal]);
 
   const latestHourlyStatus = hourlyRateRiverQuery.data?.points.at(-1)?.status;
+  const latestHourlyPoint = hourlyRateRiverQuery.data?.points.at(-1);
+  const hasSparseSeries =
+    earningsTrendEnhanced.length < 4 ||
+    commissionSeries.rows.length < 4 ||
+    hourlyRiverWithBand.length < 4;
 
   const keyStats = [
     {
@@ -498,6 +572,30 @@ export default function WorkerAnalyticsPage() {
         </section>
 
         <section className='grid gap-4 md:grid-cols-3'>
+          <Card className='md:col-span-3 border-border/60 bg-card/90'>
+            <CardContent className='flex flex-wrap items-center gap-3 pt-6'>
+              <p className='text-xs font-semibold uppercase tracking-wide text-muted-foreground'>
+                Analytics window
+              </p>
+              {WORKER_WINDOW_OPTIONS.map((option) => (
+                <Button
+                  key={option}
+                  type='button'
+                  size='sm'
+                  variant={option === windowWeeks ? 'default' : 'outline'}
+                  onClick={() => setWindowWeeks(option)}
+                >
+                  {option} weeks
+                </Button>
+              ))}
+              {hasSparseSeries ? (
+                <Badge variant='secondary'>
+                  Sparse history detected: add more shift logs for smoother trend geometry.
+                </Badge>
+              ) : null}
+            </CardContent>
+          </Card>
+
           {keyStats.map((stat, index) => {
             const Icon = stat.icon;
 
@@ -567,9 +665,10 @@ export default function WorkerAnalyticsPage() {
               config={{
                 workerNet: { label: 'Your Net', color: '#0284c7' },
                 cityMedianNet: { label: 'City Median', color: '#475569' },
+                rollingAverage: { label: 'Rolling Average', color: '#16a34a' },
               }}
             >
-              <AreaChart data={earningsTrendQuery.data?.points ?? []} margin={{ left: 8 }}>
+              <AreaChart data={earningsTrendEnhanced} margin={{ left: 8 }}>
                 <defs>
                   <linearGradient id='workerNetFill' x1='0' y1='0' x2='0' y2='1'>
                     <stop offset='0%' stopColor='var(--color-workerNet)' stopOpacity={0.5} />
@@ -584,12 +683,21 @@ export default function WorkerAnalyticsPage() {
                 />
                 <YAxis tickFormatter={(value) => formatCompactMoney(Number(value))} />
                 <ChartTooltip content={<ChartTooltipContent />} />
+                {earningsTrendEnhanced.length > 0 ? (
+                  <ReferenceLine
+                    y={earningsTrendEnhanced[earningsTrendEnhanced.length - 1].cityMedianNet}
+                    stroke='var(--color-cityMedianNet)'
+                    strokeOpacity={0.45}
+                    strokeDasharray='3 5'
+                  />
+                ) : null}
                 <Area
                   dataKey='workerNet'
                   type='monotone'
                   fill='url(#workerNetFill)'
                   stroke='var(--color-workerNet)'
                   strokeWidth={2.5}
+                  activeDot={{ r: 5 }}
                   isAnimationActive
                   animationDuration={900}
                 />
@@ -602,6 +710,21 @@ export default function WorkerAnalyticsPage() {
                   dot={false}
                   isAnimationActive
                   animationDuration={900}
+                />
+                <Line
+                  dataKey='rollingAverage'
+                  type='monotone'
+                  stroke='var(--color-rollingAverage)'
+                  strokeWidth={2.2}
+                  dot={false}
+                  isAnimationActive
+                  animationDuration={900}
+                />
+                <Brush
+                  dataKey='weekStart'
+                  height={22}
+                  travellerWidth={10}
+                  tickFormatter={formatWeekLabel}
                 />
               </AreaChart>
             </ChartContainer>
@@ -641,6 +764,14 @@ export default function WorkerAnalyticsPage() {
                 />
                 <YAxis tickFormatter={(value) => formatCompactMoney(Number(value))} />
                 <ChartTooltip content={<ChartTooltipContent />} />
+                {latestHourlyPoint ? (
+                  <ReferenceLine
+                    y={latestHourlyPoint.workerHourly}
+                    stroke='var(--color-workerHourly)'
+                    strokeOpacity={0.35}
+                    strokeDasharray='4 5'
+                  />
+                ) : null}
                 <Area
                   dataKey='p25'
                   stackId='band'
@@ -677,6 +808,12 @@ export default function WorkerAnalyticsPage() {
                   isAnimationActive
                   animationDuration={900}
                 />
+                <Brush
+                  dataKey='weekStart'
+                  height={22}
+                  travellerWidth={10}
+                  tickFormatter={formatWeekLabel}
+                />
               </AreaChart>
             </ChartContainer>
           </ChartCard>
@@ -700,6 +837,12 @@ export default function WorkerAnalyticsPage() {
                 <YAxis tickFormatter={(value) => formatPct(Number(value))} />
                 <ChartTooltip content={<ChartTooltipContent />} />
                 <ChartLegend content={<ChartLegendContent />} />
+                <ReferenceLine
+                  y={30}
+                  stroke='#ef4444'
+                  strokeOpacity={0.35}
+                  strokeDasharray='4 5'
+                />
                 {commissionSeries.platforms.map((platform, index) => (
                   <Line
                     key={platform.platformId}
@@ -714,6 +857,12 @@ export default function WorkerAnalyticsPage() {
                     animationDuration={900}
                   />
                 ))}
+                <Brush
+                  dataKey='period'
+                  height={22}
+                  travellerWidth={10}
+                  tickFormatter={formatWeekLabel}
+                />
               </LineChart>
             </ChartContainer>
           </ChartCard>
@@ -731,15 +880,24 @@ export default function WorkerAnalyticsPage() {
             className='animate-in fade-in slide-in-from-bottom-4 duration-700 delay-300'
           >
             <ChartContainer className='h-[320px] w-full' config={breakdownChartConfig}>
-              <BarChart data={platformBreakdownSeries.rows} margin={{ left: 8 }}>
+              <ComposedChart data={breakdownRowsWithTotal} margin={{ left: 8, right: 8 }}>
                 <CartesianGrid vertical={false} strokeDasharray='4 4' />
                 <XAxis dataKey='period' tickFormatter={formatMonthLabel} />
-                <YAxis tickFormatter={(value) => formatCompactMoney(Number(value))} />
+                <YAxis
+                  yAxisId='left'
+                  tickFormatter={(value) => formatCompactMoney(Number(value))}
+                />
+                <YAxis
+                  yAxisId='right'
+                  orientation='right'
+                  tickFormatter={(value) => formatCompactMoney(Number(value))}
+                />
                 <ChartTooltip content={<ChartTooltipContent />} />
                 <ChartLegend content={<ChartLegendContent />} />
                 {platformBreakdownSeries.platforms.map((platform, index) => (
                   <Bar
                     key={platform.id}
+                    yAxisId='left'
                     dataKey={platform.id}
                     name={platform.name}
                     stackId='earnings'
@@ -749,7 +907,18 @@ export default function WorkerAnalyticsPage() {
                     animationDuration={900}
                   />
                 ))}
-              </BarChart>
+                <Line
+                  yAxisId='right'
+                  type='monotone'
+                  dataKey='totalNet'
+                  name='Monthly Total'
+                  stroke='var(--color-totalNet)'
+                  strokeWidth={2.3}
+                  dot={{ r: 3 }}
+                  isAnimationActive
+                  animationDuration={900}
+                />
+              </ComposedChart>
             </ChartContainer>
           </ChartCard>
 
@@ -787,10 +956,11 @@ export default function WorkerAnalyticsPage() {
                   name='Net Earned'
                   tickFormatter={(value) => formatCompactMoney(Number(value))}
                 />
+                <ZAxis type='number' dataKey='pointSize' range={[40, 260]} />
                 <ChartTooltip content={<ChartTooltipContent />} />
                 <Scatter
                   name='City'
-                  data={distributionQuery.data?.cityPoints ?? []}
+                  data={distributionWithSize.cityPoints}
                   fill='var(--color-city)'
                   fillOpacity={0.25}
                   isAnimationActive
@@ -798,7 +968,7 @@ export default function WorkerAnalyticsPage() {
                 />
                 <Scatter
                   name='You'
-                  data={distributionQuery.data?.workerPoints ?? []}
+                  data={distributionWithSize.workerPoints}
                   fill='var(--color-worker)'
                   isAnimationActive
                   animationDuration={900}
@@ -823,40 +993,50 @@ export default function WorkerAnalyticsPage() {
               <Badge variant='outline'>Confirmed: {formatPct(confirmationRate)}</Badge>
             </div>
 
-            <ChartContainer
-              className='h-[290px] w-full'
-              config={{
-                CONFIRMED: { label: 'Confirmed', color: DONUT_STATUS_COLORS.CONFIRMED },
-                PENDING: { label: 'Pending', color: DONUT_STATUS_COLORS.PENDING },
-                FLAGGED: { label: 'Flagged', color: DONUT_STATUS_COLORS.FLAGGED },
-                UNVERIFIABLE: {
-                  label: 'Unverifiable',
-                  color: DONUT_STATUS_COLORS.UNVERIFIABLE,
-                },
-              }}
-            >
-              <PieChart>
-                <ChartTooltip content={<ChartTooltipContent nameKey='status' />} />
-                <Pie
-                  data={verificationQuery.data?.points ?? []}
-                  dataKey='count'
-                  nameKey='status'
-                  innerRadius={64}
-                  outerRadius={104}
-                  paddingAngle={3}
-                  isAnimationActive
-                  animationDuration={900}
-                >
-                  {(verificationQuery.data?.points ?? []).map((point) => (
-                    <Cell
-                      key={point.status}
-                      fill={DONUT_STATUS_COLORS[point.status]}
-                    />
-                  ))}
-                </Pie>
-                <ChartLegend content={<ChartLegendContent />} />
-              </PieChart>
-            </ChartContainer>
+            <div className='relative'>
+              <ChartContainer
+                className='h-[290px] w-full'
+                config={{
+                  CONFIRMED: { label: 'Confirmed', color: DONUT_STATUS_COLORS.CONFIRMED },
+                  PENDING: { label: 'Pending', color: DONUT_STATUS_COLORS.PENDING },
+                  FLAGGED: { label: 'Flagged', color: DONUT_STATUS_COLORS.FLAGGED },
+                  UNVERIFIABLE: {
+                    label: 'Unverifiable',
+                    color: DONUT_STATUS_COLORS.UNVERIFIABLE,
+                  },
+                }}
+              >
+                <PieChart>
+                  <ChartTooltip content={<ChartTooltipContent nameKey='status' />} />
+                  <Pie
+                    data={verificationQuery.data?.points ?? []}
+                    dataKey='count'
+                    nameKey='status'
+                    innerRadius={64}
+                    outerRadius={104}
+                    paddingAngle={3}
+                    isAnimationActive
+                    animationDuration={900}
+                  >
+                    {(verificationQuery.data?.points ?? []).map((point) => (
+                      <Cell
+                        key={point.status}
+                        fill={DONUT_STATUS_COLORS[point.status]}
+                      />
+                    ))}
+                  </Pie>
+                  <ChartLegend content={<ChartLegendContent />} />
+                </PieChart>
+              </ChartContainer>
+              <div className='pointer-events-none absolute inset-0 flex flex-col items-center justify-center'>
+                <p className='text-2xl font-semibold tracking-tight'>
+                  {percentFormatter.format(confirmationRate)}%
+                </p>
+                <p className='text-xs uppercase tracking-wide text-muted-foreground'>
+                  trust score
+                </p>
+              </div>
+            </div>
           </ChartCard>
         </section>
       </div>

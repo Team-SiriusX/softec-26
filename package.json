@@ -11,7 +11,7 @@
     "format:check": "prettier --check .",
     "generate": "prisma generate",
     "prisma": "prisma",
-    "seed": "tsx --tsconfig tsconfig.json prisma/seed.ts",
+    "seed": "tsx seed/index.ts",
     "postinstall": "prisma generate"
   },
   "dependencies": {
