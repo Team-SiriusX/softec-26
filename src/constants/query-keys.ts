@@ -6,4 +6,6 @@ export const enum QUERY_KEYS {
   ANALYTICS = 'analytics',
   CERTIFICATES = 'certificates',
   ANOMALY = 'anomaly',
+  ANOMALY_BATCH = 'anomaly-batch',
+  CITY_MEDIAN = 'city-median',
 }

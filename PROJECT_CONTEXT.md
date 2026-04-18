@@ -100,6 +100,19 @@ Known non-blocking warning during build:
 10. Diagram portability update
   - Architecture diagrams were converted from Mermaid to plain text editor block diagrams for maximum compatibility in basic editors and judge environments.
 
+11. Anomaly flag deduplication hardening
+  - `POST /api/anomaly/analyze` now deduplicates by `flagType` for the same worker within the same day window before persistence.
+  - Persistence still remains non-blocking and does not break API response.
+
+12. Batch anomaly bridge endpoint added
+  - New `POST /api/anomaly/batch` route accepts up to 50 workers and forwards mapped data to anomaly service `/analyze/batch?enrich=false`.
+
+13. City median aggregation endpoint added
+  - New `GET /api/anomaly/city-median` route aggregates last-90-day `DailyPlatformStat` records and returns `median_hourly`, `median_income`, `avg_commission_rate`, and `sample_size`.
+
+14. Query key expansion for anomaly UX flows
+  - Added `ANOMALY_BATCH` and `CITY_MEDIAN` in `src/constants/query-keys.ts`.
+
 ## 4) High-Level Architecture
 
 ### 4.1 API Entry and Route Mounts
@@ -203,6 +216,8 @@ Defined in src/constants/query-keys.ts:
 - ANALYTICS
 - CERTIFICATES
 - ANOMALY
+- ANOMALY_BATCH
+- CITY_MEDIAN
 
 ## 7) ANOMALY SYSTEM (Super Detailed)
 
@@ -223,6 +238,12 @@ Web bridge files:
 
 - src/app/api/[[...route]]/controllers/anomaly/index.ts
 - src/app/api/[[...route]]/controllers/anomaly/handlers.ts
+
+Implemented web anomaly routes:
+
+- POST /api/anomaly/analyze
+- POST /api/anomaly/batch
+- GET /api/anomaly/city-median
 
 ### 7.2 API Contracts (FastAPI)
 
@@ -424,6 +445,19 @@ Bridge endpoint in web app:
 - POST /api/anomaly/analyze
 - request body expected by web endpoint: { workerId: string }
 
+Additional bridge endpoints:
+
+- POST /api/anomaly/batch
+  - request body: { workerIds: string[] }
+  - guardrail: max 50 worker IDs
+  - forwards to anomaly service `/analyze/batch?enrich=false`
+  - fail-open fallback: `{ error: "anomaly_service_unavailable", results: [] }`
+
+- GET /api/anomaly/city-median
+  - optional query params: `cityZone`, `category`
+  - aggregates `DailyPlatformStat` over last 90 days
+  - returns dashboard-friendly city/category comparison metrics
+
 Bridge handler behavior:
 
 1. Reads workerId.
@@ -453,6 +487,13 @@ Persistence mapping details:
 - explanation -> anomaly.explanation (possibly AI-enriched)
 - zScore -> anomaly.data.recent_mean_modified_z when present, else null
 - Persistence errors are logged and ignored for API availability.
+
+Daily deduplication behavior in `analyze` persistence:
+
+- Reads today's existing anomaly flags for the worker.
+- Builds a `flagType` set from existing rows.
+- Persists only anomaly types not already recorded today.
+- Keeps persistence inside try/catch to preserve fail-open behavior.
 
 ### 7.8 Runtime and Dependency Notes
 
@@ -505,7 +546,7 @@ Most recent validated service outputs:
 1. Bridge endpoint currently requires workerId with existing shift data; no synthetic fallback path for missing workers.
 2. CORS currently allows localhost:3000 only in FastAPI service.
 3. No automated contract test suite yet between Hono bridge and FastAPI response model.
-4. AnomalyFlag inserts are append-only right now (no dedupe/versioning strategy yet).
+4. Daily dedupe exists for `analyze` (`workerId + flagType + day-window`) but there is still no broader versioning/history strategy across days.
 5. AI enrichment quality depends on model output format and key availability; fallback is robust but enrichment is nondeterministic textually.
 
 ### 7.12 Implemented End-to-End Path (Current Reality)
