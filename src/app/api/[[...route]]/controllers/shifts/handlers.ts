@@ -19,7 +19,14 @@ export const getShiftsHandler = async (c: Context) => {
     where: {
       workerId,
       ...(status && { verificationStatus: status as 'PENDING' | 'CONFIRMED' | 'FLAGGED' | 'UNVERIFIABLE' }),
-      ...(platform && { platform: { name: platform } }),
+      ...(platform && {
+        platform: {
+          name: {
+            contains: platform,
+            mode: 'insensitive',
+          },
+        },
+      }),
       ...(from || to
         ? {
             shiftDate: {

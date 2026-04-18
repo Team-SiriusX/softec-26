@@ -65,18 +65,21 @@ export function ShiftForm() {
 
   const gross = form.watch('grossEarned');
   const deductions = form.watch('platformDeductions');
+  const netManuallyEdited = !!form.formState.dirtyFields.netReceived;
 
   // Auto-calculate net received
   useEffect(() => {
     if (gross !== undefined && deductions !== undefined && !isNaN(gross) && !isNaN(deductions)) {
       const auto = Math.max(0, gross - deductions);
-      const current = form.getValues('netReceived');
-      // Only auto-set if user hasn't overridden it
-      if (current === undefined || isNaN(current)) {
-        form.setValue('netReceived', auto, { shouldValidate: false });
+      // Only auto-set if user hasn't overridden the field.
+      if (!netManuallyEdited) {
+        form.setValue('netReceived', auto, {
+          shouldDirty: false,
+          shouldValidate: false,
+        });
       }
     }
-  }, [gross, deductions, form]);
+  }, [gross, deductions, form, netManuallyEdited]);
 
   const autoNet = gross !== undefined && deductions !== undefined
     ? Math.max(0, (gross ?? 0) - (deductions ?? 0))
@@ -84,6 +87,7 @@ export function ShiftForm() {
 
   const manualNet = form.watch('netReceived');
   const showOverrideWarning =
+    netManuallyEdited &&
     autoNet !== null &&
     manualNet !== undefined &&
     !isNaN(manualNet) &&
@@ -225,8 +229,11 @@ export function ShiftForm() {
           aria-invalid={!!form.formState.errors.netReceived}
           {...form.register('netReceived', { valueAsNumber: true })}
           onChange={(e) => {
-            form.setValue('netReceived', parseFloat(e.target.value) || 0, {
+            const value = e.target.value.trim();
+            const parsed = value === '' ? undefined : Number(value);
+            form.setValue('netReceived', parsed as number, {
               shouldValidate: true,
+              shouldDirty: true,
             });
           }}
         />
@@ -257,7 +264,7 @@ export function ShiftForm() {
       <Button
         type='submit'
         disabled={createShift.isPending}
-        className='w-full min-h-[44px]'
+        className='w-full min-h-11'
       >
         {createShift.isPending ? (
           <>

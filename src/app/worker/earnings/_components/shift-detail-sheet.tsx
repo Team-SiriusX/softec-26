@@ -19,7 +19,6 @@ import {
 } from 'lucide-react';
 import { useGetShift } from '../_api/get-shift';
 import { format } from 'date-fns';
-import Link from 'next/link';
 
 const STATUS_CONFIG = {
   PENDING: {
@@ -207,17 +206,18 @@ export function ShiftDetailSheet({ shiftId, onClose }: ShiftDetailSheetProps) {
 
               {/* Re-upload option for flagged/unverifiable */}
               {(status === 'FLAGGED' || status === 'UNVERIFIABLE' || status === 'PENDING') && (
-                <Button
-                
-                  size='sm'
-                  variant='outline'
-                  className='mt-3 gap-2'
-                >
-                  <Link href={`/worker/earnings/${shift.id as string}/upload`}>
+                <Button size='sm' variant='outline' className='mt-3 gap-2' asChild>
+                  <a href='/worker/log-shift'>
                     <Upload className='size-3.5' aria-hidden='true' />
-                    {shift.screenshot ? 'Re-upload screenshot' : 'Upload screenshot'}
-                  </Link>
+                    {shift.screenshot ? 'Update shift entry' : 'Upload screenshot in log flow'}
+                  </a>
                 </Button>
+              )}
+
+              {(status === 'FLAGGED' || status === 'UNVERIFIABLE' || status === 'PENDING') && (
+                <p className='mt-2 text-xs text-muted-foreground'>
+                  Dedicated screenshot upload and re-upload screens arrive in Phase 3.
+                </p>
               )}
             </div>
 
