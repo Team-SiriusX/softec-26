@@ -10,10 +10,18 @@ from collections import Counter
 from typing import Annotated
 
 from dateutil.parser import isoparse
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
-from models import AnalyzeRequest, AnalyzeResponse, AnomalyDetail
+from models import (
+    AnalyzeRequest,
+    AnalyzeResponse,
+    AnomalyDetail,
+    BatchAnalyzeRequest,
+    BatchAnalyzeResponse,
+    BatchWorkerResult,
+    PlatformSummary,
+)
 from enrichment.ai_enricher import enrich_anomalies
 from detection.rules import (
     check_below_minimum_wage,
@@ -116,6 +124,111 @@ async def analyze(
         risk_level=risk_level,
         anomalies=anomalies,
         summary=summary,
+    )
+
+
+@app.post('/analyze/batch', response_model=BatchAnalyzeResponse)
+async def analyze_batch(
+    request: BatchAnalyzeRequest,
+    enrich: bool = False,
+):
+    if len(request.workers) > 50:
+        raise HTTPException(400, 'Batch limit is 50 workers per request')
+
+    results: list[BatchWorkerResult] = []
+    risk_score_map = {'critical': 4, 'high': 3, 'medium': 2, 'low': 1, 'none': 0}
+
+    platform_risk_scores: dict[str, list[int]] = {}
+    platform_anomaly_types: dict[str, list[str]] = {}
+
+    for worker_input in request.workers:
+        try:
+            shifts = sorted(worker_input.earnings, key=lambda s: isoparse(s.date).date())
+
+            anomalies: list[AnomalyDetail] = []
+            for detector in (
+                check_deduction_spike,
+                check_income_cliff,
+                check_below_minimum_wage,
+                check_commission_creep,
+            ):
+                result = detector(shifts)
+                if result is not None:
+                    anomalies.append(result)
+
+            risk_level = compute_risk_level(anomalies)
+            summary = build_summary(anomalies, shifts)
+
+            if enrich and anomalies and _openrouter_api_key():
+                platform = _summarize_platforms(shifts)
+                date_range = _format_date_range(shifts)
+                enriched_anomalies, unified_summary = await enrich_anomalies(
+                    anomalies=anomalies,
+                    worker_id=worker_input.worker_id,
+                    platform=platform,
+                    shift_count=len(shifts),
+                    date_range=date_range,
+                )
+
+                anomalies = enriched_anomalies
+                if unified_summary:
+                    summary = unified_summary
+
+            worker_result = BatchWorkerResult(
+                worker_id=worker_input.worker_id,
+                anomalies_found=len(anomalies),
+                risk_level=risk_level,
+                anomalies=anomalies,
+                summary=summary,
+                error=None,
+            )
+        except Exception as exc:
+            worker_result = BatchWorkerResult(
+                worker_id=worker_input.worker_id,
+                anomalies_found=0,
+                risk_level='none',
+                anomalies=[],
+                summary='',
+                error=str(exc),
+            )
+
+        results.append(worker_result)
+
+        if worker_input.earnings:
+            platform = worker_input.earnings[0].platform
+            platform_risk_scores.setdefault(platform, []).append(
+                risk_score_map.get(worker_result.risk_level, 0)
+            )
+
+            types = platform_anomaly_types.setdefault(platform, [])
+            types.extend(anomaly.type for anomaly in worker_result.anomalies)
+
+    platform_summary: dict[str, PlatformSummary] = {}
+    for platform, scores in platform_risk_scores.items():
+        anomaly_types = platform_anomaly_types.get(platform, [])
+        most_common_anomaly = None
+        if anomaly_types:
+            most_common_anomaly = Counter(anomaly_types).most_common(1)[0][0]
+
+        avg_risk_score = float(sum(scores) / len(scores)) if scores else 0.0
+
+        platform_summary[platform] = PlatformSummary(
+            worker_count=len(scores),
+            avg_risk_score=avg_risk_score,
+            most_common_anomaly=most_common_anomaly,
+        )
+
+    workers_with_anomalies = sum(1 for result in results if result.anomalies_found > 0)
+    high_risk_workers = sum(
+        1 for result in results if result.risk_level in {'high', 'critical'}
+    )
+
+    return BatchAnalyzeResponse(
+        total_workers=len(request.workers),
+        workers_with_anomalies=workers_with_anomalies,
+        high_risk_workers=high_risk_workers,
+        results=results,
+        platform_summary=platform_summary,
     )
 
 

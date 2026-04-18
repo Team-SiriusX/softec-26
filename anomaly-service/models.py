@@ -38,3 +38,35 @@ class AnalyzeResponse(BaseModel):
     risk_level: str
     anomalies: list[AnomalyDetail]
     summary: str
+
+
+class BatchWorkerInput(BaseModel):
+    worker_id: str
+    earnings: list[ShiftRecord]
+
+
+class BatchWorkerResult(BaseModel):
+    worker_id: str
+    anomalies_found: int
+    risk_level: str
+    anomalies: list[AnomalyDetail]
+    summary: str
+    error: str | None = None
+
+
+class BatchAnalyzeRequest(BaseModel):
+    workers: list[BatchWorkerInput]
+
+
+class PlatformSummary(BaseModel):
+    worker_count: int
+    avg_risk_score: float
+    most_common_anomaly: str | None
+
+
+class BatchAnalyzeResponse(BaseModel):
+    total_workers: int
+    workers_with_anomalies: int
+    high_risk_workers: int
+    results: list[BatchWorkerResult]
+    platform_summary: dict[str, PlatformSummary]
