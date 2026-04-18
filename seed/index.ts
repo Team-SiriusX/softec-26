@@ -663,7 +663,7 @@ function buildShiftBlueprints(
         const netReceived = Math.max(0, grossEarned - platformDeductions);
 
         const verificationRoll = randomUnit(platformRandomSeed + 61);
-        let verificationStatus = VerificationStatus.CONFIRMED;
+        let verificationStatus: VerificationStatus = VerificationStatus.CONFIRMED;
 
         if (verificationRoll > 0.9) {
           verificationStatus = VerificationStatus.PENDING;
