@@ -69,7 +69,7 @@ export default function WorkerEarningsPage() {
     queryFn: async () => {
       const response = await client.api.analytics.worker[':workerId']['earnings-trend'].$get({
         param: { workerId: 'me' },
-        query: { weeks: '12' },
+        query: { weeks: 12 },
       });
 
       return parseResponseOrThrow<EarningsTrendResponse>(response);
