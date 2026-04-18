@@ -7,6 +7,7 @@ import analytics from './controllers/analytics';
 import type { AnalyticsEnv } from './controllers/analytics/types';
 import anomaly from './controllers/anomaly';
 import certificates from './controllers/certificates';
+import community from './controllers/community';
 import grievances from './controllers/grievances';
 import screenshots from './controllers/screenshots';
 import shifts from './controllers/shifts';
@@ -27,6 +28,7 @@ export const routes = app
   .route('/me', me)
   .route('/sample', sample)
   .route('/admin', admin)
+  .route('/community', community)
   .route('/shifts', shifts)
   .route('/screenshots', screenshots)
   .route('/grievances', grievances)

@@ -29,6 +29,12 @@ const actions = [
     icon: Speech,
   },
   {
+    title: 'Moderate Community',
+    description: 'Run AI queue triage and complete human verification reviews.',
+    href: '/advocate/community-moderation',
+    icon: ShieldAlert,
+  },
+  {
     title: 'Track Early Warnings',
     description: 'Monitor ongoing platform-zone alerts and drop severity.',
     href: '/advocate/analytics#early-warning',

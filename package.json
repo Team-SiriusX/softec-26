@@ -13,6 +13,7 @@
     "generate": "prisma generate",
     "prisma": "prisma",
     "seed": "tsx seed/index.ts",
+    "seed:community": "tsx seed/community.ts",
     "postinstall": "prisma generate"
   },
   "dependencies": {
