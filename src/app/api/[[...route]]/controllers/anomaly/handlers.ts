@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import db from '@/lib/db';
 import { Context } from 'hono';
+import { translate as googleTranslate } from '@vitalets/google-translate-api';
 import { WorkerCategory } from '@/generated/prisma/client';
 
 const OPENROUTER_DEFAULT_MODEL = 'google/gemma-2-9b-it:free';
@@ -20,13 +21,46 @@ Rules:
 - Provide both an English and a matching Urdu translation in the JSON response.
 - Return JSON only.`;
 
-const URDU_TRANSLATION_SYSTEM_PROMPT = `Translate the provided rider-pay explanations into natural, simple Urdu.
+const TRANSLATE_INTER_REQUEST_DELAY_MS = 300;
+const TRANSLATE_MAX_ATTEMPTS = 3;
 
-Rules:
-- Keep money values, numbers, and platform names exactly as-is.
-- Do not remove any important detail.
-- Use clear conversational Urdu.
-- Return JSON only using the requested schema.`;
+const translationCache = new Map<string, string>();
+
+const sleep = (ms: number) =>
+  new Promise<void>((resolve) => {
+    setTimeout(resolve, ms);
+  });
+
+const translateToUrdu = async (text: string): Promise<string | null> => {
+  const clean = text.trim();
+  if (!clean) {
+    return null;
+  }
+
+  const cached = translationCache.get(clean);
+  if (cached) {
+    return cached;
+  }
+
+  for (let attempt = 1; attempt <= TRANSLATE_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      const { text: urdu } = await googleTranslate(clean, { to: 'ur' });
+      const output = urdu?.trim();
+      if (output) {
+        translationCache.set(clean, output);
+        return output;
+      }
+    } catch (err) {
+      if (attempt < TRANSLATE_MAX_ATTEMPTS) {
+        await sleep(TRANSLATE_INTER_REQUEST_DELAY_MS * attempt);
+      } else {
+        console.error('[API] Urdu translation failed after retries:', err);
+      }
+    }
+  }
+
+  return null;
+};
 
 type AnalyzeRequestPayload = {
   worker_id: string;
@@ -70,7 +104,7 @@ type EnrichedNarrative = {
   openrouter_response: unknown;
 };
 
-const urduLabelPattern = /\n\nاردو:\s*\n?/;
+const urduLabelPattern = /(?:\r?\n){1,2}\s*(?:اردو|urdu)\s*:\s*/i;
 
 const splitBilingualText = (
   content: string,
@@ -113,6 +147,151 @@ const fallbackSummaryToUrdu = (summary: string): string | null => {
   return knownTranslations[normalized] ?? null;
 };
 
+const formatPkr = (value: unknown): string | null => {
+  const num = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN;
+  if (!Number.isFinite(num)) {
+    return null;
+  }
+  return `PKR ${num.toFixed(2)}`;
+};
+
+const formatPercent = (value: unknown): string | null => {
+  const num = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN;
+  if (!Number.isFinite(num)) {
+    return null;
+  }
+  return `${num.toFixed(1)}%`;
+};
+
+const anomalyTypeToUrduLabel = (type: string): string => {
+  const map: Record<string, string> = {
+    deduction_spike: 'کٹوتی میں اچانک اضافہ',
+    income_cliff: 'آمدنی میں اچانک کمی',
+    income_drop_mom: 'ماہانہ آمدنی میں کمی',
+    below_minimum_wage: 'کم از کم اجرت سے کم کمائی',
+    commission_creep: 'کمیشن میں مسلسل اضافہ',
+  };
+
+  return map[type] ?? 'ادائیگی میں غیر معمولی مسئلہ';
+};
+
+const deterministicUrduForAnomaly = (anomaly: AnalyzeServiceAnomaly): string => {
+  const data = anomaly.data ?? {};
+
+  switch (anomaly.type) {
+    case 'deduction_spike': {
+      const baseline = formatPercent(
+        typeof data.baseline_median_rate === 'number'
+          ? data.baseline_median_rate * 100
+          : data.baseline_median_rate,
+      );
+      const recent = formatPercent(
+        typeof data.recent_median_rate === 'number'
+          ? data.recent_median_rate * 100
+          : data.recent_median_rate,
+      );
+      const spike = formatPercent(data.spike_pct);
+      if (baseline && recent && spike) {
+        return `ہم نے دیکھا کہ آپ کی کٹوتی ${baseline} سے بڑھ کر ${recent} ہوگئی ہے۔ یہ تقریباً ${spike} اضافہ ہے، اس لیے ادائیگی میں کمی غیر معمولی لگتی ہے۔`;
+      }
+      break;
+    }
+    case 'income_cliff': {
+      const currentRate = formatPkr(data.current_week_median_effective_hourly);
+      const rollingRate = formatPkr(data.rolling_median_effective_hourly);
+      const drop = formatPercent(data.drop_pct);
+      if (currentRate && rollingRate && drop) {
+        return `آپ کی حالیہ فی گھنٹہ آمدنی ${rollingRate} سے کم ہو کر ${currentRate} رہ گئی ہے۔ یہ تقریباً ${drop} کمی ہے، اس لیے ادائیگی کا رجحان تشویش ناک ہے۔`;
+      }
+      break;
+    }
+    case 'income_drop_mom': {
+      const current = formatPkr(data.current_month_net);
+      const previous = formatPkr(data.previous_month_net);
+      const drop = formatPercent(data.drop_pct);
+      if (current && previous && drop) {
+        return `پچھلے مہینے کے مقابلے میں آپ کی نیٹ آمدنی ${previous} سے کم ہو کر ${current} ہوگئی ہے۔ یہ تقریباً ${drop} کمی ہے، جس کی مزید جانچ ضروری ہے۔`;
+      }
+      break;
+    }
+    case 'below_minimum_wage': {
+      const effective = formatPkr(data.effective_hourly);
+      const legal = formatPkr(data.legal_minimum_hourly);
+      if (effective && legal) {
+        return `آپ کی مؤثر فی گھنٹہ کمائی ${effective} ہے جو قانونی معیار ${legal} سے کم ہے۔ یہ مسلسل کم آمدنی کی نشاندہی کرتی ہے۔`;
+      }
+      break;
+    }
+    case 'commission_creep': {
+      const start = formatPercent(data.start_pct ?? data.baseline_median_rate);
+      const end = formatPercent(data.end_pct ?? data.recent_median_rate);
+      if (start && end) {
+        return `آپ کی کمیشن کٹوتی ${start} سے بڑھ کر ${end} ہوگئی ہے۔ اس مستقل اضافے کی وجہ سے آپ کی نیٹ ادائیگی متاثر ہورہی ہے۔`;
+      }
+      break;
+    }
+    default:
+      break;
+  }
+
+  return `ہم نے آپ کی ادائیگی میں ایک مسئلہ دیکھا ہے: ${anomalyTypeToUrduLabel(anomaly.type)}۔ براہِ کرم متعلقہ شفٹس دوبارہ چیک کریں۔`;
+};
+
+const applyDeterministicUrduFallback = (
+  anomaly: AnalyzeServiceAnomaly,
+): AnalyzeServiceAnomaly => {
+  const parsed = splitBilingualText(anomaly.explanation);
+  const english = parsed.english || anomaly.explanation;
+  const urdu =
+    anomaly.explanation_urdu ??
+    parsed.urdu ??
+    deterministicUrduForAnomaly({
+      ...anomaly,
+      explanation: english,
+    });
+
+  return {
+    ...anomaly,
+    explanation: combineBilingualText(english, urdu),
+    explanation_urdu: urdu,
+  };
+};
+
+const deterministicSummaryUrdu = (
+  summaryEnglish: string | null,
+  analyzedShifts: number,
+  anomalies: AnalyzeServiceAnomaly[],
+): string | null => {
+  const english = (summaryEnglish ?? '').trim();
+
+  if (!english && anomalies.length === 0) {
+    return `تجزیے کے لیے ${analyzedShifts} شفٹس دیکھی گئیں اور کوئی غیر معمولی مسئلہ نہیں ملا۔`;
+  }
+
+  const known = fallbackSummaryToUrdu(english);
+  if (known) {
+    return known;
+  }
+
+  if (anomalies.length === 0) {
+    return `ہم نے ${analyzedShifts} شفٹس کا جائزہ لیا اور ادائیگی کا رجحان نارمل رہا۔ اس عرصے میں کوئی واضح مسئلہ سامنے نہیں آیا۔`;
+  }
+
+  const severityScore: Record<string, number> = {
+    critical: 4,
+    high: 3,
+    medium: 2,
+    low: 1,
+  };
+
+  const top = [...anomalies].sort(
+    (left, right) =>
+      (severityScore[right.severity] ?? 0) - (severityScore[left.severity] ?? 0),
+  )[0];
+
+  return `ہم نے ${analyzedShifts} شفٹس چیک کیں اور ${anomalies.length} مسائل ملے۔ سب سے اہم مسئلہ "${anomalyTypeToUrduLabel(top.type)}" ہے، اس لیے اس مدت کی ادائیگی کو فوراً ریویو کریں۔`;
+};
+
 const normalizeAnomalyEntry = (input: unknown): AnalyzeServiceAnomaly | null => {
   if (!input || typeof input !== 'object') {
     return null;
@@ -122,9 +301,11 @@ const normalizeAnomalyEntry = (input: unknown): AnalyzeServiceAnomaly | null => 
   const type = typeof entry.type === 'string' ? entry.type.trim() : '';
   const severity = typeof entry.severity === 'string' ? entry.severity.trim().toLowerCase() : 'low';
   const explanationRaw = typeof entry.explanation === 'string' ? entry.explanation : '';
+  const explanationUrduCandidate =
+    entry.explanation_urdu ?? entry.urdu_explanation ?? entry.urduExplanation ?? entry.urdu;
   const explanationUrduRaw =
-    typeof entry.explanation_urdu === 'string' && entry.explanation_urdu.trim()
-      ? entry.explanation_urdu.trim()
+    typeof explanationUrduCandidate === 'string' && explanationUrduCandidate.trim()
+      ? explanationUrduCandidate.trim()
       : null;
 
   if (!type) {
@@ -165,120 +346,43 @@ const ensureUrduTranslations = async (
   anomalies: AnalyzeServiceAnomaly[],
   summaryEnglish: string | null,
   currentSummaryUrdu: string | null,
-  apiKey: string,
-  model: string,
 ): Promise<{ anomalies: AnalyzeServiceAnomaly[]; summaryUrdu: string | null }> => {
-  const needsSummaryUrdu = Boolean(summaryEnglish && !currentSummaryUrdu?.trim());
-  const needsAnomalyUrdu = anomalies.some((anomaly) => {
+  const translatedAnomalies: AnalyzeServiceAnomaly[] = [];
+
+  for (const anomaly of anomalies) {
     const parsed = splitBilingualText(anomaly.explanation);
-    return !anomaly.explanation_urdu && !parsed.urdu;
-  });
+    const english = parsed.english || anomaly.explanation;
+    let urdu = anomaly.explanation_urdu ?? parsed.urdu ?? null;
 
-  if (!needsSummaryUrdu && !needsAnomalyUrdu) {
-    return {
-      anomalies,
-      summaryUrdu: currentSummaryUrdu,
-    };
-  }
-
-  const requestPayload = {
-    summary: summaryEnglish,
-    anomalies: anomalies.map((anomaly) => {
-      const parsed = splitBilingualText(anomaly.explanation);
-      return {
-        type: anomaly.type,
-        english_explanation: parsed.english || anomaly.explanation,
-      };
-    }),
-    output_schema: {
-      summary_urdu: 'string|null',
-      anomalies: [
-        {
-          type: 'string',
-          urdu_explanation: 'string',
-        },
-      ],
-    },
-  };
-
-  try {
-    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model,
-        temperature: 0.2,
-        messages: [
-          {
-            role: 'system',
-            content: URDU_TRANSLATION_SYSTEM_PROMPT,
-          },
-          {
-            role: 'user',
-            content: JSON.stringify(requestPayload),
-          },
-        ],
-      }),
-    });
-
-    if (!response.ok) {
-      return { anomalies, summaryUrdu: currentSummaryUrdu };
-    }
-
-    const payload = (await response.json()) as Record<string, unknown>;
-    const choices = payload.choices;
-    if (!Array.isArray(choices) || choices.length === 0) {
-      return { anomalies, summaryUrdu: currentSummaryUrdu };
-    }
-
-    const firstChoice = choices[0] as { message?: { content?: unknown } };
-    const parsed = parseOpenRouterJsonContent(firstChoice?.message?.content);
-    if (!parsed) {
-      return { anomalies, summaryUrdu: currentSummaryUrdu };
-    }
-
-    const urduByType = new Map<string, string>();
-    if (Array.isArray(parsed.anomalies)) {
-      for (const item of parsed.anomalies) {
-        if (!item || typeof item !== 'object') continue;
-        const entry = item as Record<string, unknown>;
-        if (
-          typeof entry.type === 'string' &&
-          typeof entry.urdu_explanation === 'string' &&
-          entry.urdu_explanation.trim()
-        ) {
-          urduByType.set(entry.type, entry.urdu_explanation.trim());
-        }
+    if (!urdu) {
+      urdu = await translateToUrdu(english);
+      if (!urdu) {
+        urdu = deterministicUrduForAnomaly({ ...anomaly, explanation: english });
       }
+      await sleep(TRANSLATE_INTER_REQUEST_DELAY_MS);
     }
 
-    const translated = anomalies.map((anomaly) => {
-      const parsedExplanation = splitBilingualText(anomaly.explanation);
-      const english = parsedExplanation.english || anomaly.explanation;
-      const urdu = anomaly.explanation_urdu ?? parsedExplanation.urdu ?? urduByType.get(anomaly.type) ?? null;
-
-      return {
-        ...anomaly,
-        explanation: combineBilingualText(english, urdu),
-        explanation_urdu: urdu ?? undefined,
-      };
+    translatedAnomalies.push({
+      ...anomaly,
+      explanation: combineBilingualText(english, urdu),
+      explanation_urdu: urdu ?? undefined,
     });
-
-    const summaryUrdu =
-      typeof parsed.summary_urdu === 'string' && parsed.summary_urdu.trim()
-        ? parsed.summary_urdu.trim()
-        : currentSummaryUrdu;
-
-    return {
-      anomalies: translated,
-      summaryUrdu,
-    };
-  } catch {
-    return { anomalies, summaryUrdu: currentSummaryUrdu };
   }
+
+  let summaryUrdu = currentSummaryUrdu?.trim() || null;
+  if (!summaryUrdu && summaryEnglish?.trim()) {
+    summaryUrdu = await translateToUrdu(summaryEnglish);
+  }
+
+  if (!summaryUrdu) {
+    summaryUrdu =
+      deterministicSummaryUrdu(summaryEnglish, translatedAnomalies.length, translatedAnomalies) || null;
+  }
+
+  return {
+    anomalies: translatedAnomalies,
+    summaryUrdu,
+  };
 };
 
 const parseOpenRouterJsonContent = (content: unknown): Record<string, unknown> | null => {
@@ -454,8 +558,6 @@ const enrichWithOpenRouter = async (
       enrichedAnomalies,
       summaryEnglish || null,
       urduSummary,
-      apiKey,
-      targetModel,
     );
 
     const finalSummary = summaryEnglish
@@ -600,33 +702,56 @@ export const analyzeWorkerAnomalyHandler = async (c: Context) => {
       console.error('[API] Error during anomaly DB fetch or enrichment fallback', e);
     }
 
-    anomaliesArray = anomaliesArray.map((anomaly) => {
-      const existing = splitBilingualText(anomaly.explanation);
-      if (anomaly.explanation_urdu) {
-        return {
-          ...anomaly,
-          explanation: combineBilingualText(existing.english || anomaly.explanation, anomaly.explanation_urdu),
-          explanation_urdu: anomaly.explanation_urdu,
-        };
-      }
-
-      return {
-        ...anomaly,
-        explanation: combineBilingualText(existing.english, existing.urdu),
-        explanation_urdu: existing.urdu ?? undefined,
-      };
+    const needsUrduTranslation = anomaliesArray.some((anomaly) => {
+      const parsed = splitBilingualText(anomaly.explanation);
+      return !anomaly.explanation_urdu && !parsed.urdu;
     });
+
+    if (needsUrduTranslation && anomaliesArray.length > 0) {
+      const translated = await ensureUrduTranslations(
+        anomaliesArray,
+        summary ? splitBilingualText(summary).english : null,
+        summaryUrdu,
+      );
+
+      anomaliesArray = translated.anomalies;
+      if (!summaryUrdu && translated.summaryUrdu) {
+        summaryUrdu = translated.summaryUrdu;
+      }
+    }
+
+    anomaliesArray = anomaliesArray.map(applyDeterministicUrduFallback);
 
     if (summary) {
       const parsedSummary = splitBilingualText(summary);
       const preferredUrdu =
         summaryUrdu?.trim() ||
         parsedSummary.urdu ||
+        deterministicSummaryUrdu(
+          parsedSummary.english || summary,
+          data.analyzed_shifts ?? shifts.length,
+          anomaliesArray,
+        ) ||
         fallbackSummaryToUrdu(parsedSummary.english || summary);
       summary = combineBilingualText(parsedSummary.english || summary, preferredUrdu);
       summaryUrdu = preferredUrdu;
     } else if (summaryUrdu) {
       summary = combineBilingualText('No anomalies detected in the provided shifts.', summaryUrdu);
+    } else {
+      const generatedSummaryUrdu = deterministicSummaryUrdu(
+        null,
+        data.analyzed_shifts ?? shifts.length,
+        anomaliesArray,
+      );
+      if (generatedSummaryUrdu) {
+        summary = combineBilingualText(
+          anomaliesArray.length > 0
+            ? `We analyzed ${data.analyzed_shifts ?? shifts.length} shifts and found ${anomaliesArray.length} issue(s).`
+            : 'No anomalies detected in the provided shifts.',
+          generatedSummaryUrdu,
+        );
+        summaryUrdu = generatedSummaryUrdu;
+      }
     }
 
     if (anomaliesArray.length > 0) {

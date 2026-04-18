@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { z } from 'zod';
 import {
@@ -91,7 +91,11 @@ type AnomalyDetectResponse = {
   openrouter_response?: unknown;
 };
 
-const urduLabelPattern = /\n\nاردو:\s*\n?/;
+const anomalyStoragePrefix = 'anomaly:last-result:';
+
+function getAnomalyStorageKey(workerId: string): string {
+  return `${anomalyStoragePrefix}${workerId}`;
+}
 
 function splitBilingualText(content: string): { english: string; urdu: string | null } {
   const text = content.trim();
@@ -99,7 +103,7 @@ function splitBilingualText(content: string): { english: string; urdu: string | 
     return { english: '', urdu: null };
   }
 
-  const match = text.match(urduLabelPattern);
+  const match = text.match(/(?:\r?\n){1,2}\s*(?:اردو|urdu)\s*:\s*/i);
   if (!match || typeof match.index !== 'number') {
     return { english: text, urdu: null };
   }
@@ -107,6 +111,151 @@ function splitBilingualText(content: string): { english: string; urdu: string | 
   const english = text.slice(0, match.index).trim();
   const urdu = text.slice(match.index + match[0].length).trim();
   return { english, urdu: urdu || null };
+}
+
+function formatPkr(value: unknown): string | null {
+  const num = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN;
+  if (!Number.isFinite(num)) {
+    return null;
+  }
+  return `PKR ${num.toFixed(2)}`;
+}
+
+function formatPercent(value: unknown): string | null {
+  const num = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN;
+  if (!Number.isFinite(num)) {
+    return null;
+  }
+  return `${num.toFixed(1)}%`;
+}
+
+function deterministicUrduForAnomaly(anomaly: AnomalyResult): string {
+  const data = anomaly.data ?? {};
+
+  switch (anomaly.type) {
+    case 'deduction_spike': {
+      const baseline = formatPercent(
+        typeof data.baseline_median_rate === 'number'
+          ? data.baseline_median_rate * 100
+          : data.baseline_median_rate,
+      );
+      const recent = formatPercent(
+        typeof data.recent_median_rate === 'number'
+          ? data.recent_median_rate * 100
+          : data.recent_median_rate,
+      );
+      const spike = formatPercent(data.spike_pct);
+      if (baseline && recent && spike) {
+        return `ہم نے دیکھا کہ آپ کی کٹوتی ${baseline} سے بڑھ کر ${recent} ہوگئی ہے۔ یہ تقریباً ${spike} اضافہ ہے اور ادائیگی متاثر ہوسکتی ہے۔`;
+      }
+      break;
+    }
+    case 'income_cliff': {
+      const currentRate = formatPkr(data.current_week_median_effective_hourly);
+      const rollingRate = formatPkr(data.rolling_median_effective_hourly);
+      const drop = formatPercent(data.drop_pct);
+      if (currentRate && rollingRate && drop) {
+        return `آپ کی حالیہ فی گھنٹہ آمدنی ${rollingRate} سے کم ہو کر ${currentRate} رہ گئی ہے۔ یہ تقریباً ${drop} کمی ہے۔`;
+      }
+      break;
+    }
+    case 'income_drop_mom': {
+      const current = formatPkr(data.current_month_net);
+      const previous = formatPkr(data.previous_month_net);
+      const drop = formatPercent(data.drop_pct);
+      if (current && previous && drop) {
+        return `پچھلے مہینے کے مقابلے میں آپ کی نیٹ آمدنی ${previous} سے کم ہو کر ${current} ہوگئی ہے۔ یہ تقریباً ${drop} کمی ہے۔`;
+      }
+      break;
+    }
+    case 'below_minimum_wage': {
+      const effective = formatPkr(data.effective_hourly);
+      const legal = formatPkr(data.legal_minimum_hourly);
+      if (effective && legal) {
+        return `آپ کی مؤثر فی گھنٹہ کمائی ${effective} ہے جو قانونی معیار ${legal} سے کم ہے۔`;
+      }
+      break;
+    }
+    case 'commission_creep': {
+      const start = formatPercent(data.start_pct ?? data.baseline_median_rate);
+      const end = formatPercent(data.end_pct ?? data.recent_median_rate);
+      if (start && end) {
+        return `آپ کی کمیشن کٹوتی ${start} سے بڑھ کر ${end} ہوگئی ہے، اس سے نیٹ ادائیگی کم ہوسکتی ہے۔`;
+      }
+      break;
+    }
+    default:
+      break;
+  }
+
+  return 'ہم نے آپ کی ادائیگی میں ایک غیر معمولی مسئلہ دیکھا ہے۔ براہِ کرم متعلقہ شفٹس دوبارہ چیک کریں۔';
+}
+
+function deterministicSummaryUrdu(
+  summaryEnglish: string | null,
+  anomalyCount: number,
+  analyzedShifts: number,
+): string {
+  const english = (summaryEnglish ?? '').trim().toLowerCase();
+  if (!english || english.includes('no anomalies')) {
+    return `ہم نے ${analyzedShifts} شفٹس چیک کیں اور کوئی غیر معمولی مسئلہ نہیں ملا۔`;
+  }
+
+  if (anomalyCount > 0) {
+    return `ہم نے ${analyzedShifts} شفٹس کا جائزہ لیا اور ${anomalyCount} ادائیگی کے مسائل ملے۔ براہِ کرم ان شفٹس کو فوراً ریویو کریں۔`;
+  }
+
+  return `ہم نے ${analyzedShifts} شفٹس کا جائزہ لیا۔ ادائیگی کی تفصیل اوپر فراہم کی گئی ہے۔`;
+}
+
+function normalizeUrduPayload(
+  payload: AnomalyDetectResponse | null,
+): AnomalyDetectResponse | null {
+  if (!payload) {
+    return null;
+  }
+
+  const source = payload.anomalies ?? payload.flags ?? [];
+  const normalizedAnomalies = source.map((anomaly) => {
+    const parsed = splitBilingualText(anomaly.explanation ?? '');
+    const urdu =
+      anomaly.explanation_urdu ??
+      parsed.urdu ??
+      deterministicUrduForAnomaly({
+        ...anomaly,
+        explanation: parsed.english || anomaly.explanation,
+      });
+    const english = parsed.english || anomaly.explanation;
+
+    return {
+      ...anomaly,
+      explanation: urdu ? `${english}\n\nاردو:\n${urdu}` : english,
+      explanation_urdu: urdu,
+    };
+  });
+
+  const parsedSummary = splitBilingualText(payload.summary ?? '');
+  const summaryUrdu =
+    payload.summary_urdu ??
+    parsedSummary.urdu ??
+    deterministicSummaryUrdu(
+      parsedSummary.english || payload.summary || null,
+      normalizedAnomalies.length,
+      (payload.analyzedShifts ?? payload.analyzed_shifts ?? normalizedAnomalies.length) as number,
+    );
+  const summaryEnglish = parsedSummary.english || payload.summary;
+  const summary = summaryEnglish
+    ? summaryUrdu
+      ? `${summaryEnglish}\n\nاردو:\n${summaryUrdu}`
+      : summaryEnglish
+    : payload.summary;
+
+  return {
+    ...payload,
+    anomalies: normalizedAnomalies,
+    summary,
+    summary_urdu: summaryUrdu,
+  };
 }
 
 function formatMoney(value: number): string {
@@ -184,7 +333,34 @@ export default function AnomalyDetectionPanel({ workerId }: { workerId: string }
   const [submittedAt, setSubmittedAt] = useState<string | null>(null);
   const [lastSuccessfulResult, setLastSuccessfulResult] =
     useState<AnomalyDetectResponse | null>(null);
+  const [isStorageHydrated, setIsStorageHydrated] = useState(false);
   const currentCityZone = user && 'cityZone' in user ? user.cityZone : null;
+
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(getAnomalyStorageKey(workerId));
+      if (!saved) {
+        return;
+      }
+
+      const parsed = JSON.parse(saved) as {
+        submittedAt?: string;
+        result?: AnomalyDetectResponse;
+      };
+
+      if (parsed?.result) {
+        setLastSuccessfulResult(parsed.result);
+      }
+
+      if (typeof parsed?.submittedAt === 'string' && parsed.submittedAt) {
+        setSubmittedAt(parsed.submittedAt);
+      }
+    } catch {
+      // Ignore invalid local cache and continue with live fetches.
+    } finally {
+      setIsStorageHydrated(true);
+    }
+  }, [workerId]);
 
   const ninetyDaysAgo = useMemo(() => {
     const date = new Date();
@@ -225,12 +401,28 @@ export default function AnomalyDetectionPanel({ workerId }: { workerId: string }
       return (await response.json()) as AnomalyDetectResponse;
     },
     onSuccess: (result) => {
+      const now = new Date().toISOString();
       setLastSuccessfulResult(result);
-      setSubmittedAt(new Date().toISOString());
+      setSubmittedAt(now);
+
+      try {
+        window.localStorage.setItem(
+          getAnomalyStorageKey(workerId),
+          JSON.stringify({
+            submittedAt: now,
+            result,
+          }),
+        );
+      } catch {
+        // Ignore storage quota/private mode failures.
+      }
     },
   });
 
-  const effectiveResult = detectionMutation.data ?? lastSuccessfulResult;
+  const effectiveResult = useMemo(
+    () => normalizeUrduPayload(detectionMutation.data ?? lastSuccessfulResult),
+    [detectionMutation.data, lastSuccessfulResult],
+  );
 
   const anomalies = effectiveResult?.anomalies ?? effectiveResult?.flags ?? [];
   const openrouterResponse =
@@ -406,7 +598,7 @@ export default function AnomalyDetectionPanel({ workerId }: { workerId: string }
               </div>
             )}
 
-            {!detectionMutation.isPending && !hasAnomalies && detectionMutation.isSuccess && (
+            {!detectionMutation.isPending && !hasAnomalies && effectiveResult && (
               <div className='rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-emerald-950 dark:border-emerald-900/40 dark:bg-emerald-950/20 dark:text-emerald-200'>
                 <div className='flex items-start gap-3'>
                   <CheckCircle2 className='mt-0.5 size-5 shrink-0' aria-hidden='true' />
@@ -495,6 +687,12 @@ export default function AnomalyDetectionPanel({ workerId }: { workerId: string }
                     </div>
                   );
                 })}
+              </div>
+            )}
+
+            {!detectionMutation.isPending && !effectiveResult && isStorageHydrated && shifts.length > 0 && (
+              <div className='rounded-2xl border border-border/60 bg-muted/20 px-4 py-4 text-sm text-muted-foreground'>
+                Run "Check My Pay Now" once to cache your latest bilingual result on this device.
               </div>
             )}
           </CardContent>
