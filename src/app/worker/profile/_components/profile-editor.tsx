@@ -156,7 +156,7 @@ function InfoRow({
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   value: string;
-}): JSX.Element {
+}) {
   return (
     <div className='flex items-start gap-3 rounded-2xl border border-border/60 bg-background/70 px-4 py-3'>
       <div className='flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary'>
@@ -212,7 +212,7 @@ export default function ProfileEditor({ initialUser }: ProfileEditorProps) {
   const displayName = watchedValues.fullName.trim() || initialUser.fullName;
   const cityZoneLabel = findLabel(watchedValues.cityZone || null, cityZoneOptions);
   const categoryLabel = findLabel(watchedValues.category || null, workerCategoryOptions);
-  const hasPhone = watchedValues.phone.trim().length > 0;
+  const hasPhone = (watchedValues.phone?.trim() ?? '').length > 0;
   const profileStatusTone = initialUser.isActive
     ? 'bg-emerald-500/15 text-emerald-100 ring-1 ring-emerald-400/30'
     : 'bg-amber-500/15 text-amber-100 ring-1 ring-amber-400/30';
@@ -227,7 +227,7 @@ export default function ProfileEditor({ initialUser }: ProfileEditorProps) {
         },
         body: JSON.stringify({
           fullName: values.fullName.trim(),
-          phone: values.phone.trim() ? values.phone.trim() : null,
+          phone: values.phone?.trim() ? values.phone.trim() : null,
           cityZone: values.cityZone.trim(),
           category: values.category,
         }),
