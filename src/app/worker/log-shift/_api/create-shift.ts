@@ -1,10 +1,10 @@
-// FairGig scaffold — implement logic here
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { InferRequestType, InferResponseType } from 'hono';
+'use client';
 
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { QUERY_KEYS } from '@/constants/query-keys';
 import { client } from '@/lib/hono';
 import { toast } from 'sonner';
+import { InferRequestType, InferResponseType } from 'hono';
 
 type ResponseType = InferResponseType<typeof client.api.shifts.$post>;
 type RequestType = InferRequestType<
@@ -19,19 +19,18 @@ export const useCreateShift = () => {
   return useMutation<ResponseType, Error, RequestType>({
     mutationFn: async (json) => {
       const response = await client.api.shifts.$post({ json });
-
       if (!response.ok) {
-        throw new Error('Failed to create shift');
+        throw new Error('Failed to log shift');
       }
-
       return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.SHIFTS] });
-      toast.success('Shift created successfully');
+      queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.ANOMALY] });
+      toast.success('Shift logged successfully');
     },
     onError: () => {
-      toast.error('Failed to create shift');
+      toast.error('Failed to log shift. Please try again.');
     },
   });
 };

@@ -7,18 +7,54 @@ export const authRoutes = [
   '/auth/verify-email/verify',
 ];
 
-export const publicRoutes = ['/', '/sample', '/chat'];
+export const onboardingRoutes = [
+  '/worker/onboarding/profile',
+  '/worker/onboarding/role-selection',
+];
+
+export const publicRoutes = ['/', '/sample', '/chat', '/community/board'];
 
 export const protectedRoutes = [
   '/worker/dashboard',
   '/worker/log-shift',
+  '/worker/earnings',
   '/worker/certificate',
   '/worker/profile',
+  '/worker/settings',
   '/verifier/queue',
+  '/verifier/dashboard',
   '/advocate/dashboard',
+  '/advocate/analytics',
   '/advocate/grievances',
-  '/community/board',
+];
+
+export const workerRoutes = [
+  '/worker/dashboard',
+  '/worker/log-shift',
+  '/worker/earnings',
+  '/worker/certificate',
+  '/worker/profile',
+  '/worker/settings',
+  '/worker/onboarding/profile',
+];
+
+export const verifierRoutes = [
+  '/verifier/queue',
+  '/verifier/dashboard',
+];
+
+export const advocateRoutes = [
+  '/advocate/dashboard',
+  '/advocate/analytics',
+  '/advocate/grievances',
 ];
 
 export const SIGN_IN_PAGE_PATH = '/auth/sign-in';
+export const SIGN_UP_PAGE_PATH = '/auth/sign-up';
 export const DEFAULT_LOGIN_REDIRECT = '/';
+
+export const roleDefaultDashboards = {
+  WORKER: '/worker/dashboard',
+  VERIFIER: '/verifier/queue',
+  ADVOCATE: '/advocate/dashboard',
+} as const;

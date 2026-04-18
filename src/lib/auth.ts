@@ -22,10 +22,13 @@ export const auth = betterAuth({
   },
   plugins: [jwt(), bearer()],
   user: {
-    fields: {
-      name: 'fullName',
-      emailVerified: 'isActive',
-      role: 'role',
+    additionalFields: {
+      role: {
+        type: ['WORKER', 'VERIFIER', 'ADVOCATE'],
+        required: false,
+        defaultValue: 'WORKER',
+        input: false, // don't allow user to set role
+      },
     },
   },
   emailAndPassword: { enabled: true },

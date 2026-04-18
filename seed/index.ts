@@ -7,30 +7,42 @@ import {
   VerificationStatus,
   WorkerCategory,
 } from '@/generated/prisma/enums';
+import { Prisma } from '@/generated/prisma/client';
 import db from '@/lib/db';
 
-// cspell:words Bykea bykea Foodpanda foodpanda Careem careem upserted
+// cspell:words Bykea bykea Foodpanda foodpanda Careem careem upserted Indriver indriver Upserts
 
 type SeedContext = {
   userIds: string[];
+  verifierIds: string[];
+  advocateIds: string[];
 };
 
 async function getSeedContext(): Promise<SeedContext> {
   const users = await db.user.findMany({
+    where: { role: 'WORKER' },
     select: { id: true },
-    take: 8,
+    take: 12,
     orderBy: { createdAt: 'asc' },
   });
 
+  const verifiers = await db.user.findMany({
+    where: { role: 'VERIFIER' },
+    select: { id: true },
+    take: 3,
+  });
+
+  const advocates = await db.user.findMany({
+    where: { role: 'ADVOCATE' },
+    select: { id: true },
+    take: 2,
+  });
+
   const userIds = users.map((user) => user.id);
+  const verifierIds = verifiers.map((v) => v.id);
+  const advocateIds = advocates.map((a) => a.id);
 
-  if (userIds.length < 3) {
-    throw new Error(
-      'Seed requires at least 3 existing users. Create users first, then run pnpm seed.',
-    );
-  }
-
-  return { userIds };
+  return { userIds, verifierIds, advocateIds };
 }
 
 function getIsoDateOffset(daysOffset: number): Date {
@@ -44,6 +56,8 @@ async function seedPlatforms() {
     { name: 'Bykea', slug: 'bykea' },
     { name: 'Foodpanda', slug: 'foodpanda' },
     { name: 'Careem', slug: 'careem' },
+    { name: 'Uber', slug: 'uber' },
+    { name: 'Indriver', slug: 'indriver' },
   ];
 
   const platformUpserts = platforms.map((platform) =>
@@ -67,25 +81,38 @@ async function seedShiftLogs(userIds: string[], platformIds: string[]) {
   });
 
   const rows = userIds.flatMap((workerId, userIdx) => {
-    return [0, 1].map((slot) => {
-      const grossEarned = 2600 + userIdx * 220 + slot * 180;
-      const platformDeductions = Math.round(grossEarned * 0.19);
+    // Each worker gets 10-15 shifts over the last 30 days
+    const shiftCount = 10 + (userIdx % 6);
+    return Array.from({ length: shiftCount }).map((_, slot) => {
+      const baseEarned = 1500 + (userIdx % 5) * 300;
+      const randomVol = Math.random() * 800;
+      const grossEarned = baseEarned + randomVol;
+
+      // Variable commission rates
+      const commissionRate = 0.15 + (slot % 10) * 0.02;
+      const platformDeductions = Math.round(grossEarned * commissionRate);
       const netReceived = grossEarned - platformDeductions;
+
+      // Some status variety
+      const statuses = [
+        VerificationStatus.CONFIRMED,
+        VerificationStatus.CONFIRMED,
+        VerificationStatus.PENDING,
+        VerificationStatus.FLAGGED,
+        VerificationStatus.UNVERIFIABLE,
+      ];
 
       return {
         workerId,
         platformId: platformIds[(userIdx + slot) % platformIds.length],
-        shiftDate: getIsoDateOffset(-(userIdx * 2 + slot + 1)),
-        hoursWorked: '8.00',
+        shiftDate: getIsoDateOffset(-slot - 1),
+        hoursWorked: (6 + (slot % 4)).toFixed(2),
         grossEarned: grossEarned.toFixed(2),
         platformDeductions: platformDeductions.toFixed(2),
         netReceived: netReceived.toFixed(2),
-        verificationStatus:
-          slot % 2 === 0
-            ? VerificationStatus.CONFIRMED
-            : VerificationStatus.PENDING,
-        importedViaCsv: slot % 2 === 0,
-        notes: `[seed] Shift ${slot + 1} for worker ${workerId}`,
+        verificationStatus: statuses[slot % statuses.length],
+        importedViaCsv: slot % 3 === 0,
+        notes: `[seed] Shift ${slot + 1} for worker ${workerId}. Automated entry.`,
       };
     });
   });
@@ -104,8 +131,10 @@ async function seedShiftLogs(userIds: string[], platformIds: string[]) {
 
 async function seedScreenshots(
   shiftLogs: Array<{ id: string }>,
-  userIds: string[],
+  verifierIds: string[],
 ) {
+  if (verifierIds.length === 0) return;
+
   await db.screenshot.deleteMany({
     where: {
       fileKey: {
@@ -115,24 +144,31 @@ async function seedScreenshots(
   });
 
   const screenshotRows = shiftLogs
-    .slice(0, Math.min(shiftLogs.length, 8))
+    .slice(0, Math.min(shiftLogs.length, 100))
     .map((log, idx) => ({
       shiftLogId: log.id,
-      verifierId: userIds[(idx + 1) % userIds.length],
-      fileUrl: `https://cdn.example.org/seed/screenshot-${idx + 1}.png`,
-      fileKey: `seed/screenshot-${idx + 1}.png`,
+      verifierId: verifierIds[idx % verifierIds.length],
+      fileUrl: `https://cdn.example.org/seed/screenshot-${(idx % 20) + 1}.png`,
+      fileKey: `seed/screenshot-${(idx % 20) + 1}.png`,
       status:
-        idx % 2 === 0 ? ScreenshotStatus.CONFIRMED : ScreenshotStatus.PENDING,
+        idx % 4 === 0 ? ScreenshotStatus.PENDING : ScreenshotStatus.CONFIRMED,
       verifierNotes:
-        idx % 2 === 0 ? '[seed] Looks valid.' : '[seed] Pending review.',
-      reviewedAt: idx % 2 === 0 ? getIsoDateOffset(-idx) : null,
+        idx % 4 === 0
+          ? '[seed] Awaiting verification.'
+          : '[seed] Matches system records.',
+      reviewedAt: idx % 4 !== 0 ? getIsoDateOffset(-idx % 5) : null,
     }));
 
   await db.screenshot.createMany({ data: screenshotRows });
 }
 
 async function seedAnomalyFlags(
-  shiftLogs: Array<{ id: string; workerId: string }>,
+  shiftLogs: Array<{
+    id: string;
+    workerId: string;
+    grossEarned: Prisma.Decimal;
+    platformDeductions: Prisma.Decimal;
+  }>,
   userIds: string[],
 ) {
   await db.anomalyFlag.deleteMany({
@@ -143,26 +179,33 @@ async function seedAnomalyFlags(
     },
   });
 
-  const seenWorkerIds = new Set<string>();
+  // Generate anomalies for about 20% of shift logs
   const anomalyRows = shiftLogs
-    .filter((log) => {
-      if (seenWorkerIds.has(log.workerId)) return false;
-      seenWorkerIds.add(log.workerId);
-      return true;
-    })
-    .map((log, idx) => ({
-      workerId: log.workerId,
-      shiftLogId: log.id,
-      flagType: idx % 2 === 0 ? 'seed_income_drop' : 'seed_unusual_deduction',
-      severity: idx % 3 === 0 ? 'high' : 'medium',
-      explanation: '[seed] Auto-generated anomaly for dashboard testing.',
-      zScore: (1.25 + idx * 0.2).toFixed(4),
-    }));
+    .filter((_, idx) => idx % 5 === 0)
+    .map((log, idx) => {
+      const types = [
+        'seed_income_drop',
+        'seed_unusual_deduction',
+        'seed_high_commission',
+        'seed_irregular_hours',
+      ];
+      const severities = ['low', 'medium', 'high'];
+
+      return {
+        workerId: log.workerId,
+        shiftLogId: log.id,
+        flagType: types[idx % types.length],
+        severity: severities[idx % severities.length],
+        explanation: `[seed] Alert: Detected ${types[idx % types.length].replace('seed_', '').replace('_', ' ')} for this shift.`,
+        zScore: (1.5 + (idx % 10) * 0.3).toFixed(4),
+      };
+    });
 
   await db.anomalyFlag.createMany({ data: anomalyRows });
 
+  // Vulnerability flags for some workers
   await Promise.all(
-    userIds.map((workerId, idx) =>
+    userIds.slice(0, 5).map((workerId, idx) =>
       db.vulnerabilityFlag.upsert({
         where: {
           workerId_flagMonth: {
@@ -175,10 +218,10 @@ async function seedAnomalyFlags(
           },
         },
         update: {
-          prevMonthNet: (54000 + idx * 1400).toFixed(2),
-          currMonthNet: (42000 + idx * 1200).toFixed(2),
-          dropPct: '0.2200',
-          resolved: false,
+          prevMonthNet: (60000 + idx * 2000).toFixed(2),
+          currMonthNet: (40000 + idx * 1000).toFixed(2),
+          dropPct: '0.3300',
+          resolved: idx % 2 === 0,
         },
         create: {
           workerId,
@@ -187,17 +230,23 @@ async function seedAnomalyFlags(
             new Date().getMonth(),
             1,
           ),
-          prevMonthNet: (54000 + idx * 1400).toFixed(2),
-          currMonthNet: (42000 + idx * 1200).toFixed(2),
-          dropPct: '0.2200',
-          resolved: false,
+          prevMonthNet: (60000 + idx * 2000).toFixed(2),
+          currMonthNet: (40000 + idx * 1000).toFixed(2),
+          dropPct: '0.3300',
+          resolved: idx % 2 === 0,
         },
       }),
     ),
   );
 }
 
-async function seedGrievances(userIds: string[], platformIds: string[]) {
+async function seedGrievances(
+  userIds: string[],
+  platformIds: string[],
+  advocateIds: string[],
+) {
+  if (advocateIds.length === 0) return;
+
   await db.grievanceTag.deleteMany({
     where: {
       tag: {
@@ -222,42 +271,57 @@ async function seedGrievances(userIds: string[], platformIds: string[]) {
     },
   });
 
-  const grievances = await Promise.all(
-    userIds.map((workerId, idx) =>
-      db.grievance.create({
+  const categories = [
+    GrievanceCategory.PAYMENT_DISPUTE,
+    GrievanceCategory.COMMISSION_CHANGE,
+    GrievanceCategory.ACCOUNT_DEACTIVATION,
+    GrievanceCategory.SAFETY_CONCERN,
+    GrievanceCategory.UNFAIR_RATING,
+  ];
+
+  const grievanceData = userIds.slice(0, 8).map((workerId, idx) => ({
+    workerId,
+    platformId: platformIds[idx % platformIds.length],
+    category: categories[idx % categories.length],
+    title: `[seed] Complaint regarding ${categories[idx % categories.length].toLowerCase().replace('_', ' ')}`,
+    description: `[seed] This is a detailed description of the worker grievance regarding ${categories[idx % categories.length]}. The worker claims systemic issues.`,
+    status:
+      idx % 3 === 0
+        ? GrievanceStatus.RESOLVED
+        : idx % 2 === 0
+          ? GrievanceStatus.OPEN
+          : GrievanceStatus.TAGGED,
+    isAnonymous: idx % 4 === 0,
+    clusterId: idx % 2 === 0 ? `seed-cluster-A` : `seed-cluster-B`,
+    idx,
+  }));
+
+  for (const data of grievanceData) {
+    const { idx, ...createData } = data;
+    const grievance = await db.grievance.create({ data: createData });
+
+    // Add tags if status is not OPEN
+    if (grievance.status !== GrievanceStatus.OPEN) {
+      await db.grievanceTag.create({
         data: {
-          workerId,
-          platformId: platformIds[idx % platformIds.length],
-          category:
-            idx % 2 === 0
-              ? GrievanceCategory.PAYMENT_DISPUTE
-              : GrievanceCategory.COMMISSION_CHANGE,
-          title: `[seed] Grievance ${idx + 1}`,
-          description:
-            '[seed] Worker reported discrepancy between gross earnings and payout.',
-          status: idx % 2 === 0 ? GrievanceStatus.OPEN : GrievanceStatus.TAGGED,
-          isAnonymous: false,
-          clusterId: `seed-cluster-${(idx % 2) + 1}`,
+          grievanceId: grievance.id,
+          advocateId: advocateIds[0],
+          tag: idx % 2 === 0 ? 'seed-urgent' : 'seed-follow-up',
         },
-      }),
-    ),
-  );
+      });
+    }
 
-  await db.grievanceTag.createMany({
-    data: grievances.map((grievance, idx) => ({
-      grievanceId: grievance.id,
-      advocateId: userIds[(idx + 1) % userIds.length],
-      tag: idx % 2 === 0 ? 'seed-payment-gap' : 'seed-commission-spike',
-    })),
-  });
-
-  await db.grievanceEscalation.createMany({
-    data: grievances.map((grievance, idx) => ({
-      grievanceId: grievance.id,
-      advocateId: userIds[(idx + 2) % userIds.length],
-      note: `[seed] Escalated for manual review ${idx + 1}.`,
-    })),
-  });
+    // Add escalation if status is TAGGED
+    if (grievance.status === GrievanceStatus.TAGGED) {
+      await db.grievanceEscalation.create({
+        data: {
+          grievanceId: grievance.id,
+          advocateId: advocateIds[idx % advocateIds.length],
+          note: `[seed] Escalating to platform representative due to lack of response.`,
+        },
+      });
+    }
+  }
 }
 
 async function seedIncomeCertificates(
@@ -273,81 +337,112 @@ async function seedIncomeCertificates(
   });
 
   await db.incomeCertificate.createMany({
-    data: userIds.map((workerId, idx) => ({
+    data: userIds.slice(0, 5).map((workerId, idx) => ({
       workerId,
-      fromDate: getIsoDateOffset(-30),
+      fromDate: getIsoDateOffset(-60),
       toDate: getIsoDateOffset(-1),
-      totalVerified: (38000 + idx * 1500).toFixed(2),
-      shiftCount: 12 + idx,
-      platformsList: platformNames,
-      htmlSnapshot: `<html><body>seed-certificate-${idx + 1}</body></html>`,
+      totalVerified: (85000 + idx * 5000).toFixed(2),
+      shiftCount: 45 + idx,
+      platformsList: platformNames.slice(0, 2),
+      htmlSnapshot: `<html><body><h1>Income Certificate</h1><p>Seed-certificate-UUID-${idx}</p></body></html>`,
       status: CertificateStatus.GENERATED,
-      expiresAt: getIsoDateOffset(45),
+      expiresAt: getIsoDateOffset(90),
     })),
   });
 }
 
 async function seedDailyStats(platformIds: string[]) {
+  const cities = ['Lahore', 'Karachi', 'Islamabad', 'Faisalabad'];
+  const categories = [
+    WorkerCategory.FOOD_DELIVERY,
+    WorkerCategory.RIDE_HAILING,
+  ];
+
+  const stats = [];
+
+  for (const platformId of platformIds) {
+    for (const city of cities) {
+      for (const category of categories) {
+        // Create stats for last 3 months
+        for (let i = 0; i < 3; i++) {
+          const idx = i;
+          const date = new Date();
+          date.setMonth(date.getMonth() - idx);
+          date.setDate(1);
+
+          stats.push({
+            platformId,
+            cityZone: city,
+            category,
+            statDate: date,
+            workerCount: 50 + Math.floor(Math.random() * 500),
+            medianNetEarned: (45000 + Math.random() * 20000).toFixed(2),
+            avgCommissionPct: (0.15 + Math.random() * 0.1).toFixed(4),
+            p25NetEarned: (35000 + Math.random() * 10000).toFixed(2),
+            p75NetEarned: (65000 + Math.random() * 15000).toFixed(2),
+          });
+        }
+      }
+    }
+  }
+
+  // Use upsert pattern to avoid duplicates if re-run
   await Promise.all(
-    platformIds.map((platformId, idx) =>
+    stats.map((stat) =>
       db.dailyPlatformStat.upsert({
         where: {
           platformId_cityZone_category_statDate: {
-            platformId,
-            cityZone: 'Lahore',
-            category: WorkerCategory.FOOD_DELIVERY,
-            statDate: new Date(
-              new Date().getFullYear(),
-              new Date().getMonth(),
-              1,
-            ),
+            platformId: stat.platformId,
+            cityZone: stat.cityZone,
+            category: stat.category,
+            statDate: stat.statDate,
           },
         },
-        update: {
-          workerCount: 100 + idx * 10,
-          medianNetEarned: (56000 + idx * 2500).toFixed(2),
-          avgCommissionPct: '0.1850',
-          p25NetEarned: (43000 + idx * 1800).toFixed(2),
-          p75NetEarned: (69000 + idx * 2300).toFixed(2),
-        },
-        create: {
-          platformId,
-          cityZone: 'Lahore',
-          category: WorkerCategory.FOOD_DELIVERY,
-          statDate: new Date(
-            new Date().getFullYear(),
-            new Date().getMonth(),
-            1,
-          ),
-          workerCount: 100 + idx * 10,
-          medianNetEarned: (56000 + idx * 2500).toFixed(2),
-          avgCommissionPct: '0.1850',
-          p25NetEarned: (43000 + idx * 1800).toFixed(2),
-          p75NetEarned: (69000 + idx * 2300).toFixed(2),
-        },
+        update: stat,
+        create: stat,
       }),
     ),
   );
 }
 
 async function main() {
-  const { userIds } = await getSeedContext();
+  console.log('Starting seed...');
+  const { userIds, verifierIds, advocateIds } = await getSeedContext();
+
+  if (userIds.length === 0) {
+    console.error(
+      'No workers found in database. Please run auth seed or create users first.',
+    );
+    return;
+  }
 
   const platforms = await seedPlatforms();
   const platformIds = platforms.map((platform) => platform.id);
   const platformNames = platforms.map((platform) => platform.name);
 
   const shiftLogs = await seedShiftLogs(userIds, platformIds);
-  await seedScreenshots(shiftLogs, userIds);
+  console.log(`- Created ${shiftLogs.length} shift logs`);
+
+  await seedScreenshots(shiftLogs, verifierIds);
+  console.log(`- Created screenshots`);
+
   await seedAnomalyFlags(shiftLogs, userIds);
-  await seedGrievances(userIds, platformIds);
+  console.log(`- Created anomaly flags`);
+
+  await seedGrievances(userIds, platformIds, advocateIds);
+  console.log(`- Created grievances and tags`);
+
   await seedIncomeCertificates(userIds, platformNames);
+  console.log(`- Created income certificates`);
+
   await seedDailyStats(platformIds);
+  console.log(`- Updated daily platform stats`);
 
   console.log('Seed complete:');
-  console.log(`- Users referenced: ${userIds.length}`);
+  console.log(`- Workers referenced: ${userIds.length}`);
+  console.log(`- Verifiers referenced: ${verifierIds.length}`);
+  console.log(`- Advocates referenced: ${advocateIds.length}`);
   console.log(`- Platforms upserted: ${platformIds.length}`);
-  console.log(`- Shift logs created: ${shiftLogs.length}`);
 }
 
 main()
