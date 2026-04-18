@@ -1,5 +1,144 @@
 import db from '@/lib/db';
+import { Prisma } from '@/generated/prisma/client';
 import { Context } from 'hono';
+
+const platformSlugify = (name: string) =>
+  name
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+
+const normalizePlatformName = (name: string) =>
+  name.trim().replace(/\s+/g, ' ');
+
+const parseSafeIsoDate = (value: string): Date | null => {
+  const trimmed = value.trim();
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    return null;
+  }
+
+  const parsed = new Date(`${trimmed}T00:00:00.000Z`);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return parsed;
+};
+
+const getPlatformCacheKey = (name: string) =>
+  normalizePlatformName(name).toLowerCase();
+
+const getPrismaIssueMessage = (error: unknown): string => {
+  if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    if (error.code === 'P2002') {
+      return 'duplicate value for a unique field';
+    }
+
+    if (error.code === 'P2003') {
+      return 'foreign key constraint failed';
+    }
+
+    if (error.code === 'P2025') {
+      return 'dependent record not found';
+    }
+
+    return `database request failed (${error.code})`;
+  }
+
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  return 'database write failed';
+};
+
+const resolvePlatformId = async (
+  rawPlatformName: string,
+  cache?: Map<string, string>,
+): Promise<string> => {
+  const normalizedName = normalizePlatformName(rawPlatformName);
+
+  if (!normalizedName) {
+    throw new Error('platform is required');
+  }
+
+  const cacheKey = getPlatformCacheKey(normalizedName);
+
+  if (cache?.has(cacheKey)) {
+    return cache.get(cacheKey)!;
+  }
+
+  const existingCaseInsensitive = await db.platform.findFirst({
+    where: {
+      name: {
+        equals: normalizedName,
+        mode: 'insensitive',
+      },
+    },
+    select: { id: true },
+  });
+
+  if (existingCaseInsensitive) {
+    cache?.set(cacheKey, existingCaseInsensitive.id);
+    return existingCaseInsensitive.id;
+  }
+
+  const slug = platformSlugify(normalizedName);
+
+  if (!slug) {
+    throw new Error('platform name is invalid');
+  }
+
+  const existingBySlug = await db.platform.findUnique({
+    where: { slug },
+    select: { id: true },
+  });
+
+  if (existingBySlug) {
+    cache?.set(cacheKey, existingBySlug.id);
+    return existingBySlug.id;
+  }
+
+  try {
+    const created = await db.platform.create({
+      data: {
+        name: normalizedName,
+        slug,
+      },
+      select: { id: true },
+    });
+
+    cache?.set(cacheKey, created.id);
+    return created.id;
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      const recovered = await db.platform.findFirst({
+        where: {
+          OR: [
+            {
+              name: {
+                equals: normalizedName,
+                mode: 'insensitive',
+              },
+            },
+            { slug },
+          ],
+        },
+        select: { id: true },
+      });
+
+      if (recovered) {
+        cache?.set(cacheKey, recovered.id);
+        return recovered.id;
+      }
+    }
+
+    throw error;
+  }
+};
 
 // ─── GET /api/shifts ─────────────────────────────────────────────────────────
 export const getShiftsHandler = async (c: Context) => {
@@ -109,21 +248,19 @@ export const createShiftHandler = async (c: Context) => {
     notes?: string;
   }>();
 
-  // Upsert platform by name (free text, no fixed list)
-  const platformRecord = await db.platform.upsert({
-    where: { name: body.platform },
-    create: {
-      name: body.platform,
-      slug: body.platform.toLowerCase().replace(/\s+/g, '-'),
-    },
-    update: {},
-  });
+  const shiftDate = parseSafeIsoDate(body.shiftDate);
+
+  if (!shiftDate) {
+    return c.json({ error: 'shiftDate must be YYYY-MM-DD' }, 400);
+  }
+
+  const platformId = await resolvePlatformId(body.platform);
 
   const shift = await db.shiftLog.create({
     data: {
       workerId,
-      platformId: platformRecord.id,
-      shiftDate: new Date(body.shiftDate),
+      platformId,
+      shiftDate,
       hoursWorked: body.hoursWorked,
       grossEarned: body.grossEarned,
       platformDeductions: body.platformDeductions,
@@ -154,12 +291,14 @@ export const createShiftHandler = async (c: Context) => {
 
 // ─── POST /api/shifts/import ─────────────────────────────────────────────────
 type CsvRow = {
+  source_row_number?: number;
   platform?: string;
   date?: string;
   hours_worked?: string | number;
   gross_earned?: string | number;
   platform_deductions?: string | number;
   net_received?: string | number;
+  notes?: string;
 };
 
 export const importCsvHandler = async (c: Context) => {
@@ -171,20 +310,36 @@ export const importCsvHandler = async (c: Context) => {
 
   const created: string[] = [];
   const errors: { row: number; message: string }[] = [];
+  const platformIdCache = new Map<string, string>();
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
-    const rowNum = i + 1;
+    const parsedRowNumber = Number(row.source_row_number);
+    const rowNum =
+      Number.isInteger(parsedRowNumber) && parsedRowNumber > 0
+        ? parsedRowNumber
+        : i + 1;
 
     // Validate
-    if (!row.platform) {
+    const platformName = normalizePlatformName(row.platform ?? '');
+
+    if (!platformName) {
       errors.push({ row: rowNum, message: 'platform is required' });
       continue;
     }
+
     if (!row.date) {
       errors.push({ row: rowNum, message: 'date is required' });
       continue;
     }
+
+    const shiftDate = parseSafeIsoDate(String(row.date));
+
+    if (!shiftDate) {
+      errors.push({ row: rowNum, message: 'date must be in YYYY-MM-DD format' });
+      continue;
+    }
+
     const hoursWorked = Number(row.hours_worked);
     if (isNaN(hoursWorked) || hoursWorked < 0.5 || hoursWorked > 24) {
       errors.push({ row: rowNum, message: 'hours_worked must be a number between 0.5 and 24' });
@@ -211,31 +366,28 @@ export const importCsvHandler = async (c: Context) => {
     }
 
     try {
-      const platformRecord = await db.platform.upsert({
-        where: { name: row.platform },
-        create: {
-          name: row.platform,
-          slug: row.platform.toLowerCase().replace(/\s+/g, '-'),
-        },
-        update: {},
-      });
+      const platformId = await resolvePlatformId(platformName, platformIdCache);
 
       const shift = await db.shiftLog.create({
         data: {
           workerId,
-          platformId: platformRecord.id,
-          shiftDate: new Date(row.date),
+          platformId,
+          shiftDate,
           hoursWorked,
           grossEarned,
           platformDeductions,
           netReceived,
+          notes: row.notes?.trim() || undefined,
           importedViaCsv: true,
           verificationStatus: 'PENDING',
         },
       });
       created.push(shift.id);
-    } catch {
-      errors.push({ row: rowNum, message: 'Failed to insert row' });
+    } catch (error) {
+      errors.push({
+        row: rowNum,
+        message: `Failed to insert row: ${getPrismaIssueMessage(error)}`,
+      });
     }
   }
 
@@ -270,15 +422,16 @@ export const updateShiftHandler = async (c: Context) => {
 
   let platformId = existing.platformId;
   if (body.platform && body.platform.trim().length > 0) {
-    const platformRecord = await db.platform.upsert({
-      where: { name: body.platform },
-      create: {
-        name: body.platform,
-        slug: body.platform.toLowerCase().replace(/\s+/g, '-'),
-      },
-      update: {},
-    });
-    platformId = platformRecord.id;
+    platformId = await resolvePlatformId(body.platform);
+  }
+
+  const parsedShiftDate =
+    typeof body.shiftDate === 'string'
+      ? parseSafeIsoDate(body.shiftDate)
+      : null;
+
+  if (typeof body.shiftDate === 'string' && !parsedShiftDate) {
+    return c.json({ error: 'shiftDate must be YYYY-MM-DD' }, 400);
   }
 
   const financialFieldsChanged =
@@ -294,7 +447,7 @@ export const updateShiftHandler = async (c: Context) => {
     data: {
       platformId,
       ...(typeof body.shiftDate === 'string'
-        ? { shiftDate: new Date(body.shiftDate) }
+        ? { shiftDate: parsedShiftDate! }
         : {}),
       ...(typeof body.hoursWorked === 'number'
         ? { hoursWorked: body.hoursWorked }

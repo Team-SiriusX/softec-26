@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import Link from 'next/link';
+
 import {
   Sheet,
   SheetContent,
@@ -8,6 +9,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { Separator } from '@/components/ui/separator';
+import { buttonVariants } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   AlertTriangle,
@@ -210,62 +212,14 @@ export function ShiftDetailSheet({ shiftId, onClose }: ShiftDetailSheetProps) {
               )}
 
               {/* Re-upload option for flagged/unverifiable */}
-              {(status === 'FLAGGED' || status === 'UNVERIFIABLE' || status === 'PENDING' || !shift.screenshot) && (
-                <div className='mt-3'>
-                  <UploadButton
-                    endpoint='screenshotUploader'
-                    appearance={{
-                      button:
-                        'ut-ready:bg-background ut-ready:text-foreground ut-ready:border ut-ready:border-border ut-ready:hover:bg-muted ut-uploading:cursor-not-allowed ut-uploading:opacity-70',
-                    }}
-                    content={{
-                      button: ({ isUploading }) =>
-                        isUploading
-                          ? 'Uploading screenshot...'
-                          : shift.screenshot
-                            ? 'Re-upload screenshot'
-                            : 'Upload screenshot',
-                    }}
-                    onUploadBegin={() => {
-                      setUploadError(null);
-                    }}
-                    onBeforeUploadBegin={(files) => {
-                      const [file] = files;
-                      if (file && file.size > 5 * 1024 * 1024) {
-                        setUploadError('File is too large. Max size is 5 MB.');
-                        throw new Error('File exceeds 5 MB limit.');
-                      }
-
-                      return files;
-                    }}
-                    onClientUploadComplete={(uploadedFiles) => {
-                      const uploaded = uploadedFiles[0];
-                      const fileUrl =
-                        uploaded?.serverData?.fileUrl ?? uploaded?.ufsUrl ?? uploaded?.url;
-                      const fileKey = uploaded?.serverData?.fileKey ?? uploaded?.key;
-
-                      if (!shift?.id || !fileUrl || !fileKey) {
-                        setUploadError('Upload succeeded, but file metadata is missing. Please retry.');
-                        return;
-                      }
-
-                      upsertScreenshot.mutate({
-                        json: {
-                          shiftLogId: String(shift.id),
-                          fileUrl,
-                          fileKey,
-                        },
-                      });
-                    }}
-                    onUploadError={(error) => {
-                      setUploadError(error.message || 'Upload failed. Please try again.');
-                    }}
-                  />
-                  <div className='mt-2 inline-flex items-center gap-1 text-xs text-muted-foreground'>
-                    <Upload className='size-3.5' aria-hidden='true' />
-                    JPEG/PNG up to 5 MB
-                  </div>
-                </div>
+              {(status === 'FLAGGED' || status === 'UNVERIFIABLE' || status === 'PENDING') && (
+                <Link
+                  href='/worker/log-shift'
+                  className={`${buttonVariants({ size: 'sm', variant: 'outline' })} mt-3 gap-2`}
+                >
+                  <Upload className='size-3.5' aria-hidden='true' />
+                  {shift.screenshot ? 'Update shift entry' : 'Upload screenshot in log flow'}
+                </Link>
               )}
 
               {(status === 'FLAGGED' || status === 'UNVERIFIABLE' || status === 'PENDING' || !shift.screenshot) && (

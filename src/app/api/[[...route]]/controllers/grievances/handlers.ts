@@ -30,6 +30,18 @@ async function callGrievanceService(
   });
 }
 
+async function passthroughJsonResponse(res: Response): Promise<Response> {
+  const body = await res.text();
+  const contentType = res.headers.get('content-type') ?? 'application/json';
+
+  return new Response(body, {
+    status: res.status,
+    headers: {
+      'Content-Type': contentType,
+    },
+  });
+}
+
 export async function listGrievances(c: Context) {
   const query = c.req.query();
   const params = new URLSearchParams();
@@ -50,7 +62,7 @@ export async function listGrievances(c: Context) {
 
   try {
     const res = await callGrievanceService(`/grievances${suffix}`);
-    return c.json(await res.json(), toStatus(res.status));
+    return passthroughJsonResponse(res);
   } catch {
     return c.json(
       {
@@ -85,7 +97,7 @@ export async function getForClustering(c: Context) {
 
   try {
     const res = await callGrievanceService(`/grievances/for-clustering${suffix}`);
-    return c.json(await res.json(), toStatus(res.status));
+    return passthroughJsonResponse(res);
   } catch {
     return c.json(
       {
@@ -106,7 +118,7 @@ export async function getGrievance(c: Context) {
     if (res.status === 404) {
       return c.json({ error: 'Grievance not found' }, 404);
     }
-    return c.json(await res.json(), toStatus(res.status));
+    return passthroughJsonResponse(res);
   } catch {
     return c.json({ error: 'grievance_service_unavailable' }, 503);
   }
@@ -155,7 +167,7 @@ export async function updateGrievance(c: Context) {
       return c.json({ error: 'Grievance not found' }, 404);
     }
 
-    return c.json(await res.json(), toStatus(res.status));
+    return passthroughJsonResponse(res);
   } catch {
     return c.json({ error: 'grievance_service_unavailable' }, 503);
   }
@@ -173,7 +185,7 @@ export async function deleteGrievance(c: Context) {
       return c.json({ error: 'Grievance not found' }, 404);
     }
 
-    return c.json(await res.json(), toStatus(res.status));
+    return passthroughJsonResponse(res);
   } catch {
     return c.json({ error: 'grievance_service_unavailable' }, 503);
   }
@@ -204,7 +216,7 @@ export async function removeTag(c: Context) {
   const tag = c.req.param('tag');
 
   if (!tag) {
-    return c.json({ error: 'Tag is required' }, 400);
+    return c.json({ error: 'Tag not found' }, 404);
   }
 
   try {
@@ -219,7 +231,7 @@ export async function removeTag(c: Context) {
       return c.json({ error: 'Tag not found' }, 404);
     }
 
-    return c.json(await res.json(), toStatus(res.status));
+    return passthroughJsonResponse(res);
   } catch {
     return c.json({ error: 'grievance_service_unavailable' }, 503);
   }
@@ -244,7 +256,7 @@ export async function escalateGrievance(c: Context) {
       return c.json(await res.json(), 409);
     }
 
-    return c.json(await res.json(), toStatus(res.status));
+    return passthroughJsonResponse(res);
   } catch {
     return c.json({ error: 'grievance_service_unavailable' }, 503);
   }
@@ -279,7 +291,7 @@ export async function resolveGrievance(c: Context) {
       return c.json(await res.json(), 409);
     }
 
-    return c.json(await res.json(), toStatus(res.status));
+    return passthroughJsonResponse(res);
   } catch {
     return c.json({ error: 'grievance_service_unavailable' }, 503);
   }
@@ -288,7 +300,7 @@ export async function resolveGrievance(c: Context) {
 export async function getGrievanceStats(c: Context) {
   try {
     const res = await callGrievanceService('/grievances/stats');
-    return c.json(await res.json(), toStatus(res.status));
+    return passthroughJsonResponse(res);
   } catch {
     return c.json(
       {
@@ -326,7 +338,7 @@ export async function clusterGrievances(c: Context) {
       return c.json({ error: 'ML service unavailable', clusters: [] }, 503);
     }
 
-    return c.json(await mlRes.json(), toStatus(mlRes.status));
+    return passthroughJsonResponse(mlRes);
   } catch {
     return c.json({ error: 'ML service unavailable', clusters: [] }, 503);
   }
@@ -355,7 +367,7 @@ export async function getGrievanceTrends(c: Context) {
       return c.json({ error: 'ML service unavailable' }, 503);
     }
 
-    return c.json(await mlRes.json(), toStatus(mlRes.status));
+    return passthroughJsonResponse(mlRes);
   } catch {
     return c.json({ error: 'ML service unavailable' }, 503);
   }
