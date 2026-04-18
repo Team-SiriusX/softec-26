@@ -44,7 +44,7 @@ export async function currentUser(): Promise<CurrentUser | null> {
       return null;
     }
 
-    return user satisfies CurrentUser;
+    return user;
   } catch (error) {
     console.error('Failed to get current user:', error);
     return null;

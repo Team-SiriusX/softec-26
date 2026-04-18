@@ -2,13 +2,14 @@
 import { useQuery } from '@tanstack/react-query';
 
 import { QUERY_KEYS } from '@/constants/query-keys';
-import { client } from '@/lib/hono';
 
 export const useGetPlatformStats = () => {
   return useQuery({
     queryKey: [QUERY_KEYS.ANALYTICS, 'platforms'],
     queryFn: async () => {
-      const response = await client.api.analytics.platforms.$get();
+      const response = await fetch(
+        '/api/analytics/advocate/platform-concentration-treemap',
+      );
 
       if (!response.ok) {
         throw new Error('Failed to fetch platform stats');

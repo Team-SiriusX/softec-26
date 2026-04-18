@@ -16,6 +16,7 @@ export const publicRoutes = ['/', '/sample', '/chat', '/community/board'];
 
 export const protectedRoutes = [
   '/worker/dashboard',
+  '/worker/analytics',
   '/worker/log-shift',
   '/worker/earnings',
   '/worker/certificate',
@@ -38,10 +39,7 @@ export const workerRoutes = [
   '/worker/onboarding/profile',
 ];
 
-export const verifierRoutes = [
-  '/verifier/queue',
-  '/verifier/dashboard',
-];
+export const verifierRoutes = ['/verifier/queue', '/verifier/dashboard'];
 
 export const advocateRoutes = [
   '/advocate/dashboard',
