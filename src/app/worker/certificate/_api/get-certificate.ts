@@ -9,15 +9,13 @@ export const useGetCertificate = (id: string) => {
     queryKey: [QUERY_KEYS.CERTIFICATES, id],
     enabled: !!id,
     queryFn: async () => {
-      const response = await client.api.certificates[':id'].$get({
-        param: { id },
-      });
+      const response = await client.api.certificates.sample.$get();
 
       if (!response.ok) {
         throw new Error('Failed to fetch certificate');
       }
 
-      return response.json();
+      return response.text();
     },
   });
 };

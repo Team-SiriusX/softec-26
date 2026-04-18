@@ -1,17 +1,44 @@
 // FairGig scaffold — implement logic here
 import { useQuery } from '@tanstack/react-query';
-import { InferResponseType } from 'hono';
 
 import { QUERY_KEYS } from '@/constants/query-keys';
 import { client } from '@/lib/hono';
 
-type ScreenshotsResponse = InferResponseType<typeof client.api.screenshots.$get>;
+export type ScreenshotQueueItem = {
+  id: string;
+  shiftLogId: string;
+  verifierId: string | null;
+  fileUrl: string;
+  fileKey: string;
+  status: 'PENDING' | 'CONFIRMED' | 'FLAGGED' | 'UNVERIFIABLE';
+  verifierNotes: string | null;
+  reviewedAt: string | null;
+  uploadedAt: string;
+  shiftLog: {
+    id: string;
+    grossEarned: number | string;
+    netReceived: number | string;
+    platformDeductions: number | string;
+    hoursWorked: number | string;
+    platform: {
+      name: string;
+    };
+    worker: {
+      id: string;
+      fullName: string | null;
+      cityZone: string | null;
+    };
+  };
+  verifier?: {
+    id: string;
+    fullName: string;
+    role: string;
+  } | null;
+};
 
-export type ScreenshotQueueItem = ScreenshotsResponse extends { data: infer T }
-  ? T extends Array<infer Item>
-    ? Item
-    : never
-  : never;
+type ScreenshotsResponse = {
+  data: ScreenshotQueueItem[];
+};
 
 export const useGetPendingScreenshots = () => {
   return useQuery<ScreenshotsResponse>({
@@ -25,7 +52,7 @@ export const useGetPendingScreenshots = () => {
         throw new Error('Failed to fetch pending screenshots');
       }
 
-      return response.json();
+      return (await response.json()) as ScreenshotsResponse;
     },
   });
 };

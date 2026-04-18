@@ -20,9 +20,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { useGetShift } from '../_api/get-shift';
-import { useUpsertScreenshot } from '../_api/upsert-screenshot';
 import { format } from 'date-fns';
-import { UploadButton } from '@/lib/uploadthing';
 
 const STATUS_CONFIG = {
   PENDING: {
@@ -74,10 +72,7 @@ function DetailRow({
 }
 
 export function ShiftDetailSheet({ shiftId, onClose }: ShiftDetailSheetProps) {
-  const [uploadError, setUploadError] = useState<string | null>(null);
-
   const { data, isLoading } = useGetShift(shiftId ?? '');
-  const upsertScreenshot = useUpsertScreenshot();
   const shiftResponse = data as { data?: Record<string, any> } | undefined;
   const shift = shiftResponse?.data;
 
@@ -226,10 +221,6 @@ export function ShiftDetailSheet({ shiftId, onClose }: ShiftDetailSheetProps) {
                 <p className='mt-2 text-xs text-muted-foreground'>
                   A community reviewer will check this. It may take 24–48 hours.
                 </p>
-              )}
-
-              {uploadError && (
-                <p className='mt-2 text-xs font-medium text-destructive'>{uploadError}</p>
               )}
             </div>
 

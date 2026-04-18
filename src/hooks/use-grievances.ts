@@ -150,7 +150,12 @@ export function useAddGrievanceTag() {
 
   return useMutation({
     mutationFn: async ({ id, tag }: TagPayload) => {
-      const response = await client.api.grievances[':id'].tags.$post({
+      const response = await (
+        client.api.grievances[':id'].tags.$post as unknown as (args: {
+          param: { id: string };
+          json: { tag: string };
+        }) => Promise<Response>
+      )({
         param: { id },
         json: { tag },
       });
@@ -195,7 +200,12 @@ export function useUpdateGrievance() {
 
   return useMutation({
     mutationFn: async ({ id, ...json }: UpdateGrievancePayload) => {
-      const response = await client.api.grievances[':id'].$patch({
+      const response = await (
+        client.api.grievances[':id'].$patch as unknown as (args: {
+          param: { id: string };
+          json: Omit<UpdateGrievancePayload, 'id'>;
+        }) => Promise<Response>
+      )({
         param: { id },
         json,
       });
@@ -219,7 +229,12 @@ export function useEscalateGrievance() {
 
   return useMutation({
     mutationFn: async ({ id, note }: EscalatePayload) => {
-      const response = await client.api.grievances[':id'].escalate.$post({
+      const response = await (
+        client.api.grievances[':id'].escalate.$post as unknown as (args: {
+          param: { id: string };
+          json: { note: string };
+        }) => Promise<Response>
+      )({
         param: { id },
         json: { note },
       });
@@ -243,7 +258,12 @@ export function useResolveGrievance() {
 
   return useMutation({
     mutationFn: async ({ id, note }: ResolvePayload) => {
-      const response = await client.api.grievances[':id'].resolve.$patch({
+      const response = await (
+        client.api.grievances[':id'].resolve.$patch as unknown as (args: {
+          param: { id: string };
+          json: { note?: string };
+        }) => Promise<Response>
+      )({
         param: { id },
         json: note ? { note } : {},
       });
