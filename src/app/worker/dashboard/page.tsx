@@ -651,10 +651,10 @@ export default function WorkerAnalyticsPage() {
               </div>
               <div className='flex flex-wrap gap-2'>
                 <Link
-                  href='/worker/dashboard'
+                  href='/worker/community-feed?view=mine'
                   className={cn(buttonVariants({ variant: 'outline' }))}
                 >
-                  Back To Dashboard
+                  Community Feed
                 </Link>
                 <Link
                   href='/worker/log-shift'

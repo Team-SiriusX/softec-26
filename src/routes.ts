@@ -17,6 +17,7 @@ export const publicRoutes = ['/', '/sample', '/chat', '/community/board', '/cert
 export const protectedRoutes = [
   '/pending-approval',
   '/worker/dashboard',
+  '/worker/community-feed',
   '/worker/analytics',
   '/worker/log-shift',
   '/worker/earnings',
@@ -38,6 +39,7 @@ export const protectedRoutes = [
 
 export const workerRoutes = [
   '/worker/dashboard',
+  '/worker/community-feed',
   '/worker/log-shift',
   '/worker/earnings',
   '/worker/certificate',

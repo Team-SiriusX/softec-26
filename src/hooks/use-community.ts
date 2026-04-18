@@ -19,6 +19,11 @@ type FeedFilters = {
   offset?: number;
 };
 
+type MyPostsFilters = {
+  limit?: number;
+  offset?: number;
+};
+
 type CreatePostPayload = {
   title: string;
   body: string;
@@ -27,7 +32,7 @@ type CreatePostPayload = {
   media?: Array<{
     url: string;
     fileKey?: string;
-    mediaType?: string;
+    mediaType?: 'IMAGE' | 'VIDEO' | 'DOCUMENT';
   }>;
 };
 
@@ -35,6 +40,19 @@ type CreateCommentPayload = {
   postId: string;
   content: string;
   isAnonymous?: boolean;
+};
+
+type UpdatePostPayload = {
+  postId: string;
+  title?: string;
+  body?: string;
+  platformId?: string | null;
+  isAnonymous?: boolean;
+  media?: Array<{
+    url: string;
+    fileKey?: string;
+    mediaType?: 'IMAGE' | 'VIDEO' | 'DOCUMENT';
+  }>;
 };
 
 type ReportPayload = {
@@ -156,6 +174,29 @@ export function useCommunityPost(postId?: string) {
   });
 }
 
+export function useMyCommunityPosts(filters: MyPostsFilters = {}, enabled = true) {
+  return useQuery({
+    queryKey: [QUERY_KEYS.COMMUNITY_MY_POSTS, filters],
+    enabled,
+    queryFn: async () => {
+      const query = new URLSearchParams();
+
+      query.set('limit', String(filters.limit ?? 30));
+      query.set('offset', String(filters.offset ?? 0));
+
+      const response = await fetch(`/api/community/posts/mine?${query.toString()}`, {
+        cache: 'no-store',
+      });
+
+      if (!response.ok) {
+        throw new Error(await parseApiError(response, 'Failed to load your posts'));
+      }
+
+      return (await response.json()) as CommunityFeedResponse;
+    },
+  });
+}
+
 export function useCreateCommunityPost() {
   const queryClient = useQueryClient();
 
@@ -177,6 +218,7 @@ export function useCreateCommunityPost() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.COMMUNITY_POSTS] });
+      queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.COMMUNITY_MY_POSTS] });
       queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.COMMUNITY_MODERATION_QUEUE] });
       toast.success('Post published to community feed');
     },
@@ -206,6 +248,7 @@ export function useToggleCommunityUpvote() {
     },
     onSuccess: (_, postId) => {
       queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.COMMUNITY_POSTS] });
+      queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.COMMUNITY_MY_POSTS] });
       queryClient.invalidateQueries({
         queryKey: [QUERY_KEYS.COMMUNITY_POST_DETAIL, postId],
       });
@@ -237,6 +280,7 @@ export function useCreateCommunityComment() {
     },
     onSuccess: (_, payload) => {
       queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.COMMUNITY_POSTS] });
+      queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.COMMUNITY_MY_POSTS] });
       queryClient.invalidateQueries({
         queryKey: [QUERY_KEYS.COMMUNITY_POST_DETAIL, payload.postId],
       });
@@ -265,6 +309,7 @@ export function useReportCommunityPost() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.COMMUNITY_POSTS] });
+      queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.COMMUNITY_MY_POSTS] });
       queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.COMMUNITY_MODERATION_QUEUE] });
       toast.success('Report submitted');
     },
@@ -293,6 +338,7 @@ export function useRequestPostVerification() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.COMMUNITY_POSTS] });
+      queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.COMMUNITY_MY_POSTS] });
       queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.COMMUNITY_MODERATION_QUEUE] });
       toast.success('Verification request sent');
     },
@@ -321,6 +367,7 @@ export function useRequestHumanReview() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.COMMUNITY_POSTS] });
+      queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.COMMUNITY_MY_POSTS] });
       queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.COMMUNITY_MODERATION_QUEUE] });
       toast.success('Human review request added to queue');
     },
@@ -380,6 +427,77 @@ export function useRunMockAiReview() {
     },
     onError: (error) => {
       toast.error(error instanceof Error ? error.message : 'Failed to run AI review');
+    },
+  });
+}
+
+export function useUpdateCommunityPost() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (payload: UpdatePostPayload) => {
+      const { postId, ...rest } = payload;
+
+      const response = await fetch(`/api/community/posts/${postId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(rest),
+      });
+
+      if (!response.ok) {
+        throw new Error(await parseApiError(response, 'Failed to update post'));
+      }
+
+      return (await response.json()) as CommunityPostResponse;
+    },
+    onSuccess: (_, payload) => {
+      queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.COMMUNITY_POSTS] });
+      queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.COMMUNITY_MY_POSTS] });
+      queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.COMMUNITY_MODERATION_QUEUE] });
+      queryClient.invalidateQueries({
+        queryKey: [QUERY_KEYS.COMMUNITY_POST_DETAIL, payload.postId],
+      });
+      toast.success('Post updated');
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : 'Failed to update post');
+    },
+  });
+}
+
+export function useDeleteCommunityPost() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (postId: string) => {
+      const response = await fetch(`/api/community/posts/${postId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        throw new Error(await parseApiError(response, 'Failed to delete post'));
+      }
+
+      return response.json() as Promise<{
+        data: {
+          id: string;
+          deleted: boolean;
+        };
+      }>;
+    },
+    onSuccess: (_, postId) => {
+      queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.COMMUNITY_POSTS] });
+      queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.COMMUNITY_MY_POSTS] });
+      queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.COMMUNITY_MODERATION_QUEUE] });
+      queryClient.invalidateQueries({
+        queryKey: [QUERY_KEYS.COMMUNITY_POST_DETAIL, postId],
+      });
+      toast.success('Post deleted');
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : 'Failed to delete post');
     },
   });
 }

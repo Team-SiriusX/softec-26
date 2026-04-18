@@ -696,7 +696,7 @@ export default function AnomalyDetectionPanel({ workerId }: { workerId: string }
 
             {!detectionMutation.isPending && !effectiveResult && isStorageHydrated && shifts.length > 0 && (
               <div className='rounded-2xl border border-border/60 bg-muted/20 px-4 py-4 text-sm text-muted-foreground'>
-                Run "Check My Pay Now" once to cache your latest bilingual result on this device.
+                Run &quot;Check My Pay Now&quot; once to cache your latest bilingual result on this device.
               </div>
             )}
           </CardContent>
@@ -774,7 +774,7 @@ export default function AnomalyDetectionPanel({ workerId }: { workerId: string }
                   3
                 </div>
                 <p className='text-sm text-muted-foreground'>
-                  If the issue looks systemic, post it to the grievance board for advocate review.
+                  If the issue looks systemic, post it to the community feed for moderation review.
                 </p>
               </div>
             </CardContent>

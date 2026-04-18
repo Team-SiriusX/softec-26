@@ -86,6 +86,12 @@ enum CommunityReviewQueueStatus {
   RESOLVED
 }
 
+enum CommunityMediaType {
+  IMAGE
+  VIDEO
+  DOCUMENT
+}
+
 enum CertificateStatus {
   GENERATED
   EXPIRED
@@ -332,12 +338,12 @@ model CommunityPost {
 }
 
 model CommunityPostMedia {
-  id        String   @id @default(uuid())
-  postId    String   @map("post_id")
+  id        String             @id @default(uuid())
+  postId    String             @map("post_id")
   url       String
-  fileKey   String?  @map("file_key")
-  mediaType String   @default("IMAGE") @map("media_type")
-  createdAt DateTime @default(now()) @map("created_at")
+  fileKey   String?            @map("file_key")
+  mediaType CommunityMediaType @default(IMAGE) @map("media_type")
+  createdAt DateTime           @default(now()) @map("created_at")
 
   post CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
 

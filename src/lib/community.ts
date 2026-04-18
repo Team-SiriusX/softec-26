@@ -21,11 +21,13 @@ export type CommunityPlatform = {
   slug: string;
 };
 
+export type CommunityMediaType = 'IMAGE' | 'VIDEO' | 'DOCUMENT';
+
 export type CommunityMedia = {
   id: string;
   url: string;
   fileKey: string | null;
-  mediaType: string;
+  mediaType: CommunityMediaType;
   createdAt: string;
 };
 
