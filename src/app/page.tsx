@@ -2,6 +2,9 @@ import { currentUser } from '@/lib/current-user';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { ArrowRight, LayoutDashboard } from 'lucide-react';
+import { HeroSection } from '@/components/ui/glass-video-hero';
+import DemoOne from '@/components/ui/demo';
+import MotionFooterDemo from '@/components/ui/motion-footer-demo';
 
 export default async function Home() {
   const user = await currentUser();
@@ -9,13 +12,17 @@ export default async function Home() {
   console.log({ user });
 
   return (
-    <main className='from-background to-accent/20 flex min-h-screen flex-col items-center justify-center bg-linear-to-b p-6'>
-      <div className='w-full max-w-2xl space-y-8 text-center'>
+    <main className='from-background to-accent/20 min-h-screen bg-linear-to-b'>
+      <HeroSection />
+      <DemoOne />
+      <MotionFooterDemo />
+
+      <section className='mx-auto w-full max-w-2xl space-y-8 p-6 pb-14 text-center'>
         <div className='space-y-4'>
-          <h1 className='text-primary text-4xl font-black tracking-tight lg:text-6xl'>
-            FairGig
-          </h1>
-          <p className='text-muted-foreground text-xl'>
+          <h2 className='text-primary text-3xl font-black tracking-tight lg:text-4xl'>
+            FairGig Portal Access
+          </h2>
+          <p className='text-muted-foreground text-lg'>
             Empowering gig workers with verified earnings and collective
             transparency.
           </p>
@@ -39,7 +46,7 @@ export default async function Home() {
                 size='lg'
                 className='h-12 rounded-full px-8 font-semibold'
               >
-                <Link href='/auth/sign-up font-semibold'>Get Started</Link>
+                <Link href='/auth/sign-up'>Get Started</Link>
               </Button>
               <Button
                 variant='outline'
@@ -61,7 +68,7 @@ export default async function Home() {
             ({user.role})
           </p>
         )}
-      </div>
+      </section>
     </main>
   );
 }

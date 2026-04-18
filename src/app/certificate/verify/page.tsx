@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { Suspense, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
   AlertCircle,
@@ -85,7 +85,7 @@ function extractCertificateId(rawValue: string): string {
   return embeddedUuid?.[0] ?? trimmedValue;
 }
 
-export default function VerifyCertificatePage() {
+function VerifyCertificatePageContent() {
   const searchParams = useSearchParams();
   const initialId = useMemo(() => searchParams.get('id') ?? '', [searchParams]);
 
@@ -384,6 +384,29 @@ export default function VerifyCertificatePage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function VerifyCertificatePage() {
+  return (
+    <Suspense
+      fallback={
+        <div className='min-h-screen bg-gradient-to-b from-slate-50 via-white to-slate-50 px-4 py-12 text-slate-900'>
+          <div className='mx-auto max-w-6xl'>
+            <Card className='overflow-hidden border-slate-200 shadow-lg shadow-slate-200/50 p-0'>
+              <CardHeader>
+                <CardTitle>Loading verifier...</CardTitle>
+                <CardDescription>
+                  Preparing certificate verification interface.
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          </div>
+        </div>
+      }
+    >
+      <VerifyCertificatePageContent />
+    </Suspense>
   );
 }
 
