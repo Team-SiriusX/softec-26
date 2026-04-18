@@ -1,6 +1,5 @@
 "use client";
 
-import { motion } from "motion/react";
 import { BarChart, Bar, BarXAxis, Grid, ChartTooltip } from "@/components/ui/bar-chart";
 
 const fairGigVisualizerData = [
@@ -14,78 +13,41 @@ const fairGigVisualizerData = [
   { frame: "Q8", confidence: 88, momentum: 80 },
 ];
 
-const swingingNotes = [
+const topStickers = [
   {
     text: "Regulatory Grade",
-    className: "-left-2 top-6 md:-left-6",
-    duration: 7.8,
-    delay: 0,
-    x: 12,
-    y: -10,
-    r: 2,
+    rotate: "-rotate-2",
   },
   {
     text: "Live Trust Layer",
-    className: "right-2 top-10 md:-right-5",
-    duration: 8.5,
-    delay: 0.3,
-    x: -11,
-    y: 12,
-    r: -2,
+    rotate: "rotate-1",
   },
   {
     text: "Verified Earnings Trace",
-    className: "left-10 -top-2 md:left-20",
-    duration: 7.2,
-    delay: 0.6,
-    x: 8,
-    y: 10,
-    r: 1.5,
+    rotate: "-rotate-1",
   },
   {
     text: "Dispute-Safe Signals",
-    className: "bottom-5 -left-1 md:-left-8",
-    duration: 8.9,
-    delay: 0.4,
-    x: 10,
-    y: -8,
-    r: 2,
+    rotate: "rotate-2",
   },
+];
+
+const bottomStickers = [
   {
     text: "Advocate Intelligence",
-    className: "-bottom-1 left-[32%]",
-    duration: 7.4,
-    delay: 0.2,
-    x: -10,
-    y: 9,
-    r: -1.8,
+    rotate: "-rotate-2",
   },
   {
     text: "Capital-Ready UX",
-    className: "bottom-6 right-6 md:right-0",
-    duration: 8.1,
-    delay: 0.7,
-    x: 12,
-    y: 7,
-    r: 2.2,
+    rotate: "rotate-1",
   },
   {
     text: "Risk-Calibrated",
-    className: "right-[18%] -top-3",
-    duration: 7.6,
-    delay: 0.5,
-    x: -8,
-    y: 11,
-    r: -1.6,
+    rotate: "-rotate-1",
   },
   {
     text: "Forensic Clarity",
-    className: "left-[14%] bottom-1",
-    duration: 8.4,
-    delay: 0.9,
-    x: 9,
-    y: -9,
-    r: 1.7,
+    rotate: "rotate-2",
   },
 ];
 
@@ -109,25 +71,16 @@ export default function BarChartDemo() {
         <div className="relative rounded-[2rem] border border-border/70 bg-card p-4 shadow-[0_24px_60px_-36px_rgba(15,23,42,0.28)] md:p-7">
           <div className="pointer-events-none absolute inset-0 rounded-[2rem] border border-foreground/5" />
 
-          {swingingNotes.map((note) => (
-            <motion.div
-              key={note.text}
-              animate={{
-                x: [0, note.x, -note.x * 0.4, 0],
-                y: [0, note.y, -note.y * 0.45, 0],
-                rotate: [0, note.r, -note.r * 0.6, 0],
-              }}
-              className={`pointer-events-none absolute hidden rounded-full border border-border/80 bg-background/95 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground shadow-sm md:block ${note.className}`}
-              transition={{
-                duration: note.duration,
-                repeat: Infinity,
-                ease: "easeInOut",
-                delay: note.delay,
-              }}
-            >
-              {note.text}
-            </motion.div>
-          ))}
+          <div className="mb-5 flex flex-wrap items-center justify-center gap-3 md:mb-6 md:gap-4">
+            {topStickers.map((note) => (
+              <div
+                className={`rounded-xl border-2 border-slate-300 bg-white px-4 py-2 font-black text-2xl text-slate-800 leading-none tracking-tight shadow-[0_10px_22px_-14px_rgba(15,23,42,0.45)] md:px-5 md:py-2.5 md:text-[2rem] ${note.rotate}`}
+                key={note.text}
+              >
+                {note.text}
+              </div>
+            ))}
+          </div>
 
           <BarChart data={fairGigVisualizerData} xDataKey="frame" className="w-full">
             <defs>
@@ -202,6 +155,17 @@ export default function BarChartDemo() {
               </p>
             </ChartTooltip>
           </BarChart>
+
+          <div className="mt-5 flex flex-wrap items-center justify-center gap-3 md:mt-6 md:gap-4">
+            {bottomStickers.map((note) => (
+              <div
+                className={`rounded-xl border-2 border-slate-300 bg-white px-4 py-2 font-black text-2xl text-slate-800 leading-none tracking-tight shadow-[0_10px_22px_-14px_rgba(15,23,42,0.45)] md:px-5 md:py-2.5 md:text-[2rem] ${note.rotate}`}
+                key={note.text}
+              >
+                {note.text}
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </section>
