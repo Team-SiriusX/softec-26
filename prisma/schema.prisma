@@ -61,6 +61,31 @@ enum GrievanceCategory {
   OTHER
 }
 
+enum CommunityPostVerificationStatus {
+  UNVERIFIED
+  PENDING_AI_REVIEW
+  AI_VERIFIED
+  AI_UNVERIFIED_LOW_TRUST
+  PENDING_HUMAN_REVIEW
+  HUMAN_VERIFIED
+  HUMAN_UNVERIFIED
+}
+
+enum CommunityVoteType {
+  UPVOTE
+}
+
+enum CommunityReviewQueueReason {
+  USER_REQUEST
+  MULTIPLE_REPORTS
+  TRUST_SCORE_LOW
+}
+
+enum CommunityReviewQueueStatus {
+  PENDING
+  RESOLVED
+}
+
 enum CertificateStatus {
   GENERATED
   EXPIRED
@@ -91,6 +116,11 @@ model User {
   screenshots   Screenshot[]        @relation("VerifierScreenshots")
   grievances    Grievance[]
   grievanceTags GrievanceTag[]
+  communityPosts         CommunityPost[]            @relation("CommunityPostAuthor")
+  communityComments      CommunityPostComment[]     @relation("CommunityCommentAuthor")
+  communityVotes         CommunityPostVote[]
+  communityReports       CommunityPostReport[]
+  communityQueueTriggers CommunityPostReviewQueue[] @relation("CommunityQueueTriggeredBy")
   certificates  IncomeCertificate[]
   refreshTokens RefreshToken[]
   anomalyFlags  AnomalyFlag[]
@@ -132,7 +162,8 @@ model Platform {
   slug      String   @unique // "bykea", "foodpanda"
   createdAt DateTime @default(now()) @map("created_at")
 
-  shiftLogs ShiftLog[]
+  shiftLogs      ShiftLog[]
+  communityPosts CommunityPost[]
 
   @@map("platforms")
 }
@@ -260,6 +291,123 @@ model GrievanceEscalation {
   grievance Grievance @relation(fields: [grievanceId], references: [id], onDelete: Cascade)
 
   @@map("grievance_escalations")
+}
+
+// ─────────────────────────────────────────────
+// COMMUNITY SERVICE V2 — Posts, Votes, Comments
+// ─────────────────────────────────────────────
+
+model CommunityPost {
+  id                      String                          @id @default(uuid())
+  authorId                String                          @map("author_id")
+  platformId              String?                         @map("platform_id")
+  title                   String
+  body                    String
+  isAnonymous             Boolean                         @default(false) @map("is_anonymous")
+  verificationStatus      CommunityPostVerificationStatus @default(UNVERIFIED) @map("verification_status")
+  verificationRequestedAt DateTime?                       @map("verification_requested_at")
+  trustScore              Decimal?                        @map("trust_score") @db.Decimal(5, 4)
+  upvoteCount             Int                             @default(0) @map("upvote_count")
+  commentCount            Int                             @default(0) @map("comment_count")
+  reportCount             Int                             @default(0) @map("report_count")
+  createdAt               DateTime                        @default(now()) @map("created_at")
+  updatedAt               DateTime                        @updatedAt @map("updated_at")
+
+  author      User                     @relation("CommunityPostAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  platform    Platform?                @relation(fields: [platformId], references: [id], onDelete: SetNull)
+  media       CommunityPostMedia[]
+  comments    CommunityPostComment[]
+  votes       CommunityPostVote[]
+  reports     CommunityPostReport[]
+  reviewQueue CommunityPostReviewQueue[]
+
+  @@index([createdAt])
+  @@index([upvoteCount])
+  @@index([verificationStatus])
+  @@index([reportCount])
+  @@index([platformId])
+  @@map("community_posts")
+}
+
+model CommunityPostMedia {
+  id        String   @id @default(uuid())
+  postId    String   @map("post_id")
+  url       String
+  fileKey   String?  @map("file_key")
+  mediaType String   @default("IMAGE") @map("media_type")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  post CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@index([postId])
+  @@map("community_post_media")
+}
+
+model CommunityPostComment {
+  id          String   @id @default(uuid())
+  postId      String   @map("post_id")
+  authorId    String   @map("author_id")
+  content     String
+  isAnonymous Boolean  @default(false) @map("is_anonymous")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  post   CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author User          @relation("CommunityCommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([postId, createdAt])
+  @@index([authorId])
+  @@map("community_post_comments")
+}
+
+model CommunityPostVote {
+  id        String            @id @default(uuid())
+  postId    String            @map("post_id")
+  userId    String            @map("user_id")
+  voteType  CommunityVoteType @default(UPVOTE) @map("vote_type")
+  createdAt DateTime          @default(now()) @map("created_at")
+
+  post CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId])
+  @@index([userId])
+  @@map("community_post_votes")
+}
+
+model CommunityPostReport {
+  id        String   @id @default(uuid())
+  postId    String   @map("post_id")
+  userId    String   @map("user_id")
+  reason    String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  post CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId])
+  @@index([postId, createdAt])
+  @@index([userId])
+  @@map("community_post_reports")
+}
+
+model CommunityPostReviewQueue {
+  id                String                   @id @default(uuid())
+  postId            String                   @map("post_id")
+  triggeredByUserId String?                  @map("triggered_by_user_id")
+  reason            CommunityReviewQueueReason
+  status            CommunityReviewQueueStatus @default(PENDING)
+  note              String?
+  createdAt         DateTime                 @default(now()) @map("created_at")
+  updatedAt         DateTime                 @updatedAt @map("updated_at")
+  resolvedAt        DateTime?                @map("resolved_at")
+
+  post        CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  triggeredBy User?         @relation("CommunityQueueTriggeredBy", fields: [triggeredByUserId], references: [id], onDelete: SetNull)
+
+  @@index([postId, status])
+  @@index([reason, status])
+  @@map("community_post_review_queue")
 }
 
 // ─────────────────────────────────────────────

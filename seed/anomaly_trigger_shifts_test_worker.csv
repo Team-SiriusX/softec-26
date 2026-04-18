@@ -1,0 +1,19 @@
+platform,date,hours_worked,gross_earned,platform_deductions,platform_deductions_extra,net_received,notes
+Careem,2025-12-20,8.5,4200.00,756.00,0.00,3444.00,baseline normal deductions
+Careem,2025-12-23,8.0,4100.00,738.00,0.00,3362.00,baseline normal deductions
+Careem,2025-12-27,9.0,4500.00,900.00,0.00,3600.00,baseline normal deductions
+Careem,2025-12-30,7.5,3900.00,741.00,0.00,3159.00,baseline normal deductions
+Careem,2026-01-03,8.2,4300.00,817.00,0.00,3483.00,baseline normal deductions
+Careem,2026-01-06,8.0,4200.00,840.00,0.00,3360.00,baseline normal deductions
+Careem,2026-01-10,8.6,4400.00,880.00,0.00,3520.00,baseline normal deductions
+Careem,2026-01-13,7.8,4000.00,760.00,0.00,3240.00,baseline normal deductions
+Careem,2026-01-17,8.4,4350.00,957.00,0.00,3393.00,baseline normal deductions
+Careem,2026-01-20,8.0,4100.00,902.00,0.00,3198.00,baseline normal deductions
+Careem,2026-01-24,9.0,3700.00,1295.00,0.00,2405.00,phase shift begins
+Careem,2026-01-27,9.2,3600.00,1620.00,0.00,1980.00,deduction climbing
+Careem,2026-01-31,9.0,3550.00,1952.50,0.00,1597.50,deduction climbing
+Careem,2026-02-03,9.4,3500.00,2170.00,0.00,1330.00,deduction climbing
+Careem,2026-02-07,9.6,3400.00,2312.00,0.00,1088.00,deduction climbing
+Careem,2026-02-10,9.8,3350.00,2445.50,0.00,904.50,deduction climbing
+Careem,2026-02-14,10.0,3300.00,2574.00,0.00,726.00,deduction climbing
+Careem,2026-02-18,10.2,3250.00,2665.00,0.00,585.00,extreme anomaly week
