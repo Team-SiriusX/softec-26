@@ -604,10 +604,14 @@ export default function AnomalyDetectionPanel({ workerId }: { workerId: string }
                   <CheckCircle2 className='mt-0.5 size-5 shrink-0' aria-hidden='true' />
                   <div>
                     <p className='font-semibold'>Everything looks good!</p>
-                    <p className='mt-1 text-sm leading-relaxed'>
-                      Your pay seems normal and we did not find any unfair deductions in your recent trips. 
-                      Keep logging your shifts so we can protect your future earnings.
-                    </p>
+                    <BilingualText
+                      text={
+                        narrativeSummary ??
+                        'Your pay seems normal and we did not find any unfair deductions in your recent trips. Keep logging your shifts so we can protect your future earnings.'
+                      }
+                      urdu={narrativeSummaryUrdu}
+                      className='mt-1 text-sm leading-relaxed'
+                    />
                   </div>
                 </div>
               </div>
