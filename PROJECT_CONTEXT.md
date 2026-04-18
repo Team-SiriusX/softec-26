@@ -65,6 +65,18 @@ Known non-blocking warning during build:
   - A narrow cast is used for the verify patch call to align with current inferred route typing.
   - Functional now, but should be replaced by stricter route-level typing later.
 
+5. Anomaly bridge persistence implemented
+  - /api/anomaly/analyze now persists detected anomalies into AnomalyFlag via createMany.
+  - Persistence is intentionally non-blocking; API response still succeeds if DB write fails.
+
+6. AI explanation enrichment implemented in anomaly service
+  - FastAPI /analyze is now async and supports enrich=true|false query flag.
+  - Enrichment uses OpenRouter (Claude 3 Haiku) and safely falls back to statistical explanations.
+
+7. Demo seed implementation added for anomaly showcase
+  - prisma/seed.ts now inserts realistic worker/platform/shift/grievance/stat snapshots.
+  - Seed data includes a baseline 20% deduction period followed by ~31% deduction period to trigger anomaly detection demonstrations.
+
 ## 4) High-Level Architecture
 
 ### 4.1 API Entry and Route Mounts
@@ -137,7 +149,7 @@ Screenshot is tied 1:1 to ShiftLog and stores review status and verifier notes.
 ### 5.4 AnomalyFlag
 
 AnomalyFlag stores persisted anomaly metadata (flagType, severity, explanation, optional zScore).
-Current anomaly API detection is computed service-side and can be adapted to persist into this model as next step.
+Current anomaly API flow now persists service output to this model in the Hono bridge when anomalies are returned.
 
 ### 5.5 DailyPlatformStat / VulnerabilityFlag / IncomeCertificate
 
@@ -187,6 +199,7 @@ Web bridge files:
 
 - Method: POST
 - Path: /analyze
+- Query parameter: enrich (bool, default true)
 - Request model: AnalyzeRequest
 - Response model: AnalyzeResponse
 
@@ -361,6 +374,12 @@ Data payload includes:
 explainer.py converts detector output into non-technical worker-facing language.
 All four explainers embed concrete values (PKR rates, percentages, Z-score, slope, window details).
 
+An optional second-stage enrichment layer now exists:
+
+- enrichment/ai_enricher.py calls OpenRouter via httpx using model anthropic/claude-3-haiku.
+- If OPEN_ROUTER_API_KEY is missing, HTTP fails, or JSON parse fails, service returns original statistical explanations without breaking /analyze.
+- If enrichment succeeds, anomaly explanations are rewritten and unified_summary can replace default build_summary output.
+
 ### 7.7 Web-App Bridge (Hono -> FastAPI)
 
 Bridge endpoint in web app:
@@ -374,7 +393,8 @@ Bridge handler behavior:
 2. Queries ShiftLog for last 90 days, includes Platform relation, ordered ascending by shiftDate.
 3. Maps Prisma ShiftLog fields to FastAPI AnalyzeRequest fields.
 4. Calls FastAPI analyze endpoint from ANOMALY_SERVICE_URL.
-5. Returns FastAPI JSON if successful.
+5. Persists anomalies into AnomalyFlag using createMany (non-blocking side-effect).
+6. Returns FastAPI JSON unchanged if successful.
 
 Fallback behavior (fail-open):
 
@@ -387,6 +407,16 @@ Endpoint normalization logic:
 - If ANOMALY_SERVICE_URL already ends with /analyze, use as-is.
 - Otherwise append /analyze safely.
 
+Persistence mapping details:
+
+- workerId -> AnomalyFlag.workerId
+- shiftLogId -> first value from anomaly.affected_shifts; falls back to first queried shift id when missing
+- flagType -> anomaly.type
+- severity -> anomaly.severity
+- explanation -> anomaly.explanation (possibly AI-enriched)
+- zScore -> anomaly.data.recent_mean_modified_z when present, else null
+- Persistence errors are logged and ignored for API availability.
+
 ### 7.8 Runtime and Dependency Notes
 
 anomaly-service/requirements.txt:
@@ -397,6 +427,7 @@ anomaly-service/requirements.txt:
 - scipy==1.13.1
 - pydantic==2.7.0
 - python-dateutil==2.9.0
+- httpx==0.27.0
 
 ### 7.9 Operational Runbook (Anomaly Service)
 
@@ -412,7 +443,12 @@ From repo root:
 3. Validate service
   - GET http://127.0.0.1:8001/health
   - POST http://127.0.0.1:8001/analyze with anomaly-service/test_payload.json
+  - POST http://127.0.0.1:8001/analyze?enrich=false with anomaly-service/test_payload.json
   - GET http://127.0.0.1:8001/docs
+
+4. Optional enrichment
+  - Set OPEN_ROUTER_API_KEY to enable AI explanation rewriting.
+  - Without key (or with any enrichment error), API automatically returns statistical explanations.
 
 ### 7.10 Last Verified Test Evidence
 
@@ -429,10 +465,11 @@ Most recent validated service outputs:
 
 ### 7.11 Known Limitations in Current Anomaly Pipeline
 
-1. Detection output is not yet persisted to AnomalyFlag table by default.
-2. Bridge endpoint currently requires workerId with existing shift data; no synthetic fallback path for missing workers.
-3. CORS currently allows localhost:3000 only in FastAPI service.
-4. No automated contract test suite yet between Hono bridge and FastAPI response model.
+1. Bridge endpoint currently requires workerId with existing shift data; no synthetic fallback path for missing workers.
+2. CORS currently allows localhost:3000 only in FastAPI service.
+3. No automated contract test suite yet between Hono bridge and FastAPI response model.
+4. AnomalyFlag inserts are append-only right now (no dedupe/versioning strategy yet).
+5. AI enrichment quality depends on model output format and key availability; fallback is robust but enrichment is nondeterministic textually.
 
 ## 8) Environment Configuration
 
@@ -492,12 +529,16 @@ Recommended local anomaly URL:
 
 1. Add integration tests for anomaly:
   - FastAPI /analyze contract tests
-  - Hono bridge route tests
-2. Persist selected anomaly outputs into AnomalyFlag when appropriate.
-3. Harden verifier patch typing by improving route-level request type inference.
-4. Complete placeholder API handlers in shifts/screenshots/grievances/certificates/analytics.
-5. Upgrade UI states (loading, empty, error, retry) for worker/verifier/advocate/community pages.
-6. Write API_CONTRACTS.md with request/response examples per mounted route.
+  - Hono bridge route tests (including persistence side-effect assertions)
+2. Add dedupe/idempotency strategy for AnomalyFlag persistence (e.g., worker+type+detected window key).
+3. Add enrichment-focused tests for:
+  - enrich=false path
+  - enrich=true with key missing
+  - enrich=true success path with mocked OpenRouter JSON
+4. Harden verifier patch typing by improving route-level request type inference.
+5. Complete placeholder API handlers in shifts/screenshots/grievances/certificates/analytics.
+6. Upgrade UI states (loading, empty, error, retry) for worker/verifier/advocate/community pages.
+7. Write API_CONTRACTS.md with request/response examples per mounted route.
 
 ## 12) Quick Onboarding Mental Model
 
