@@ -1,4 +1,4 @@
-import { getSessionCookie } from 'better-auth/cookies';
+import { getCookieCache } from 'better-auth/cookies';
 import { NextRequest, NextResponse } from 'next/server';
 import {
   authRoutes,
@@ -10,8 +10,11 @@ import {
 export async function proxy(request: NextRequest) {
   const { nextUrl } = request;
 
-  const sessionCookie = getSessionCookie(request);
-  const session = !!sessionCookie;
+  const sessionData = await getCookieCache(request, {
+    secret: process.env.BETTER_AUTH_SECRET,
+    strategy: 'jwt',
+  });
+  const isAuthenticated = !!sessionData?.session;
 
   const pathname = nextUrl.pathname;
 
@@ -26,7 +29,7 @@ export async function proxy(request: NextRequest) {
   }
 
   if (isAuthRoute) {
-    if (session) {
+    if (isAuthenticated) {
       return NextResponse.redirect(
         new URL(DEFAULT_LOGIN_REDIRECT, request.url),
       );
@@ -38,7 +41,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  if (!session) {
+  if (!isAuthenticated) {
     return NextResponse.redirect(new URL(SIGN_IN_PAGE_PATH, request.url));
   }
 

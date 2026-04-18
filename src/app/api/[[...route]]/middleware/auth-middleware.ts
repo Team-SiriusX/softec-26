@@ -1,4 +1,4 @@
-import { auth } from '@/lib/auth';
+import { getCookieCache } from 'better-auth/cookies';
 import { createMiddleware } from 'hono/factory';
 
 type SessionUser = {
@@ -21,20 +21,22 @@ type AuthEnv = {
  */
 export const authMiddleware = createMiddleware<AuthEnv>(async (c, next) => {
   try {
-    const session = await auth.api.getSession({
-      headers: c.req.raw.headers,
+    const session = await getCookieCache(c.req.raw.headers, {
+      secret: process.env.BETTER_AUTH_SECRET,
+      strategy: 'jwt',
     });
 
     if (!session || !session.user) {
       return c.json({ error: 'Unauthorized' }, 401);
     }
 
+    const user = session.user;
+
     c.set('user', {
-      id: session.user.id,
-      email: session.user.email,
-      name: session.user.name,
-      role:
-        ((session.user as Record<string, unknown>).role as string) ?? 'USER',
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role ?? 'USER',
     });
 
     await next();

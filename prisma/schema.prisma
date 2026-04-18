@@ -1,30 +1,309 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
 }
 
-model User {
-  id            String    @id
-  name          String
-  email         String
-  emailVerified Boolean   @default(false)
-  image         String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  sessions      Session[]
-  accounts      Account[]
+// ─────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────
 
-  @@unique([email])
-  @@map("user")
+enum Role {
+  WORKER
+  VERIFIER
+  ADVOCATE
+}
+
+enum WorkerCategory {
+  RIDE_HAILING
+  FOOD_DELIVERY
+  FREELANCE_DESIGN
+  DOMESTIC_WORK
+  OTHER
+}
+
+enum VerificationStatus {
+  PENDING
+  CONFIRMED
+  FLAGGED
+  UNVERIFIABLE
+}
+
+enum ScreenshotStatus {
+  PENDING
+  CONFIRMED
+  FLAGGED
+  UNVERIFIABLE
+}
+
+enum GrievanceStatus {
+  OPEN
+  TAGGED
+  ESCALATED
+  RESOLVED
+}
+
+enum GrievanceCategory {
+  COMMISSION_CHANGE
+  ACCOUNT_DEACTIVATION
+  PAYMENT_DISPUTE
+  UNFAIR_RATING
+  SAFETY_CONCERN
+  OTHER
+}
+
+enum CertificateStatus {
+  GENERATED
+  EXPIRED
+}
+
+// ─────────────────────────────────────────────
+// AUTH SERVICE — Users & Sessions
+// ─────────────────────────────────────────────
+
+model User {
+  id           String          @id @default(uuid())
+  email        String          @unique
+  passwordHash String          @map("password_hash")
+  role         Role            @default(WORKER)
+  fullName     String          @map("full_name")
+  phone        String?
+  cityZone     String?         @map("city_zone") // e.g. "Gulberg", "DHA", "Johar Town"
+  category     WorkerCategory? // only relevant for WORKER role
+  isActive     Boolean         @default(true) @map("is_active")
+  createdAt    DateTime        @default(now()) @map("created_at")
+  updatedAt    DateTime        @updatedAt @map("updated_at")
+
+  // Relations
+  shiftLogs     ShiftLog[]
+  screenshots   Screenshot[]        @relation("VerifierScreenshots")
+  grievances    Grievance[]
+  grievanceTags GrievanceTag[]
+  certificates  IncomeCertificate[]
+  refreshTokens RefreshToken[]
+  anomalyFlags  AnomalyFlag[]
+
+  image    String?
+  sessions Session[]
+  accounts Account[]
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  token     String   @unique
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("refresh_tokens")
+}
+
+// ─────────────────────────────────────────────
+// EARNINGS SERVICE — Platforms, Shifts, Screenshots
+// ─────────────────────────────────────────────
+
+model Platform {
+  id        String   @id @default(uuid())
+  name      String   @unique // "Bykea", "Foodpanda", "Careem", etc.
+  slug      String   @unique // "bykea", "foodpanda"
+  createdAt DateTime @default(now()) @map("created_at")
+
+  shiftLogs ShiftLog[]
+
+  @@map("platforms")
+}
+
+model ShiftLog {
+  id                 String             @id @default(uuid())
+  workerId           String             @map("worker_id")
+  platformId         String             @map("platform_id")
+  shiftDate          DateTime           @map("shift_date") @db.Date
+  hoursWorked        Decimal            @map("hours_worked") @db.Decimal(5, 2)
+  grossEarned        Decimal            @map("gross_earned") @db.Decimal(10, 2)
+  platformDeductions Decimal            @map("platform_deductions") @db.Decimal(10, 2)
+  netReceived        Decimal            @map("net_received") @db.Decimal(10, 2)
+  notes              String?
+  verificationStatus VerificationStatus @default(PENDING) @map("verification_status")
+  importedViaCsv     Boolean            @default(false) @map("imported_via_csv")
+  createdAt          DateTime           @default(now()) @map("created_at")
+  updatedAt          DateTime           @updatedAt @map("updated_at")
+
+  worker   User     @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  platform Platform @relation(fields: [platformId], references: [id])
+
+  screenshot   Screenshot?
+  anomalyFlags AnomalyFlag[]
+
+  // Derived: effective hourly rate = netReceived / hoursWorked (computed at query time)
+  // Derived: commission rate = platformDeductions / grossEarned (computed at query time)
+
+  @@index([workerId, shiftDate])
+  @@index([platformId, shiftDate])
+  @@index([workerId, verificationStatus])
+  @@map("shift_logs")
+}
+
+model Screenshot {
+  id            String           @id @default(uuid())
+  shiftLogId    String           @unique @map("shift_log_id")
+  verifierId    String?          @map("verifier_id")
+  fileUrl       String           @map("file_url")
+  fileKey       String           @map("file_key") // storage key (S3 / local)
+  status        ScreenshotStatus @default(PENDING)
+  verifierNotes String?          @map("verifier_notes")
+  reviewedAt    DateTime?        @map("reviewed_at")
+  uploadedAt    DateTime         @default(now()) @map("uploaded_at")
+
+  shiftLog ShiftLog @relation(fields: [shiftLogId], references: [id], onDelete: Cascade)
+  verifier User?    @relation("VerifierScreenshots", fields: [verifierId], references: [id])
+
+  @@index([status])
+  @@index([verifierId])
+  @@map("screenshots")
+}
+
+// ─────────────────────────────────────────────
+// ANOMALY SERVICE — Flagged earnings anomalies
+// ─────────────────────────────────────────────
+
+model AnomalyFlag {
+  id          String   @id @default(uuid())
+  workerId    String   @map("worker_id")
+  shiftLogId  String   @map("shift_log_id")
+  flagType    String   @map("flag_type") // e.g. "unusual_deduction", "income_drop"
+  severity    String // "low" | "medium" | "high"
+  explanation String // human-readable plain-language explanation
+  zScore      Decimal? @map("z_score") @db.Decimal(8, 4)
+  detectedAt  DateTime @default(now()) @map("detected_at")
+
+  worker   User     @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  shiftLog ShiftLog @relation(fields: [shiftLogId], references: [id], onDelete: Cascade)
+
+  @@index([workerId])
+  @@index([shiftLogId])
+  @@map("anomaly_flags")
+}
+
+// ─────────────────────────────────────────────
+// GRIEVANCE SERVICE — Complaints, Tags, Clusters
+// ─────────────────────────────────────────────
+
+model Grievance {
+  id          String            @id @default(uuid())
+  workerId    String?           @map("worker_id") // nullable for anonymous posts
+  platformId  String?           @map("platform_id")
+  category    GrievanceCategory
+  title       String
+  description String
+  status      GrievanceStatus   @default(OPEN)
+  isAnonymous Boolean           @default(false) @map("is_anonymous")
+  clusterId   String?           @map("cluster_id") // groups similar complaints
+  createdAt   DateTime          @default(now()) @map("created_at")
+  updatedAt   DateTime          @updatedAt @map("updated_at")
+
+  worker      User?                 @relation(fields: [workerId], references: [id], onDelete: SetNull)
+  tags        GrievanceTag[]
+  escalations GrievanceEscalation[]
+
+  @@index([status])
+  @@index([category])
+  @@index([clusterId])
+  @@index([platformId])
+  @@map("grievances")
+}
+
+model GrievanceTag {
+  id          String   @id @default(uuid())
+  grievanceId String   @map("grievance_id")
+  advocateId  String   @map("advocate_id")
+  tag         String // free-form tag string e.g. "commission-spike", "wrongful-deactivation"
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  grievance Grievance @relation(fields: [grievanceId], references: [id], onDelete: Cascade)
+  advocate  User      @relation(fields: [advocateId], references: [id])
+
+  @@unique([grievanceId, tag])
+  @@map("grievance_tags")
+}
+
+model GrievanceEscalation {
+  id          String   @id @default(uuid())
+  grievanceId String   @map("grievance_id")
+  advocateId  String   @map("advocate_id")
+  note        String?
+  escalatedAt DateTime @default(now()) @map("escalated_at")
+
+  grievance Grievance @relation(fields: [grievanceId], references: [id], onDelete: Cascade)
+
+  @@map("grievance_escalations")
+}
+
+// ─────────────────────────────────────────────
+// ANALYTICS SERVICE — Aggregate snapshots
+// Precomputed daily to avoid exposing individual rows
+// Used for city-wide medians, commission trends,
+// vulnerability flags, income distribution
+// ─────────────────────────────────────────────
+
+model DailyPlatformStat {
+  id               String         @id @default(uuid())
+  platformId       String         @map("platform_id")
+  cityZone         String         @map("city_zone")
+  category         WorkerCategory
+  statDate         DateTime       @map("stat_date") @db.Date
+  workerCount      Int            @map("worker_count")
+  medianNetEarned  Decimal        @map("median_net_earned") @db.Decimal(10, 2)
+  avgCommissionPct Decimal        @map("avg_commission_pct") @db.Decimal(5, 4) // 0.0–1.0
+  p25NetEarned     Decimal        @map("p25_net_earned") @db.Decimal(10, 2)
+  p75NetEarned     Decimal        @map("p75_net_earned") @db.Decimal(10, 2)
+  computedAt       DateTime       @default(now()) @map("computed_at")
+
+  @@unique([platformId, cityZone, category, statDate])
+  @@index([statDate])
+  @@index([platformId, statDate])
+  @@map("daily_platform_stats")
+}
+
+model VulnerabilityFlag {
+  id           String   @id @default(uuid())
+  workerId     String   @map("worker_id")
+  flagMonth    DateTime @map("flag_month") @db.Date // first day of the flagged month
+  prevMonthNet Decimal  @map("prev_month_net") @db.Decimal(10, 2)
+  currMonthNet Decimal  @map("curr_month_net") @db.Decimal(10, 2)
+  dropPct      Decimal  @map("drop_pct") @db.Decimal(5, 4) // e.g. 0.23 = 23% drop
+  resolved     Boolean  @default(false)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@unique([workerId, flagMonth])
+  @@index([flagMonth])
+  @@map("vulnerability_flags")
+}
+
+// ─────────────────────────────────────────────
+// CERTIFICATE RENDERER — Income certificates
+// ─────────────────────────────────────────────
+
+model IncomeCertificate {
+  id            String            @id @default(uuid())
+  workerId      String            @map("worker_id")
+  fromDate      DateTime          @map("from_date") @db.Date
+  toDate        DateTime          @map("to_date") @db.Date
+  totalVerified Decimal           @map("total_verified") @db.Decimal(10, 2)
+  shiftCount    Int               @map("shift_count")
+  platformsList String[]          @map("platforms_list") // denormalized for cert rendering
+  htmlSnapshot  String            @map("html_snapshot") // rendered HTML stored for archival
+  status        CertificateStatus @default(GENERATED)
+  generatedAt   DateTime          @default(now()) @map("generated_at")
+  expiresAt     DateTime?         @map("expires_at")
+
+  worker User @relation(fields: [workerId], references: [id], onDelete: Cascade)
+
+  @@index([workerId])
+  @@map("income_certificates")
 }
 
 model Session {

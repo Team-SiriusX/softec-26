@@ -1,5 +1,5 @@
+import { getCookieCache } from 'better-auth/cookies';
 import { headers } from 'next/headers';
-import { auth } from './auth';
 
 /**
  * Retrieves the current authenticated user from the session
@@ -8,13 +8,14 @@ import { auth } from './auth';
 
 export async function currentUser() {
   try {
-    const data = await auth.api.getSession({
-      headers: await headers(),
+    const data = await getCookieCache(await headers(), {
+      secret: process.env.BETTER_AUTH_SECRET,
+      strategy: 'jwt',
     });
 
-    if (!data) return null;
+    if (!data?.user) return null;
 
-    const { user } = data;
+    const user = data.user;
 
     return user;
   } catch (error) {
