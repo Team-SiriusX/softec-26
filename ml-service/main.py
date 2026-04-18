@@ -19,6 +19,18 @@ from datetime import datetime
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+import os
+from dotenv import load_dotenv
+
+root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+env_local_path = os.path.join(root_dir, ".env.local")
+env_path = os.path.join(root_dir, ".env")
+if os.path.exists(env_local_path):
+    load_dotenv(env_local_path)
+elif os.path.exists(env_path):
+    load_dotenv(env_path)
+else:
+    load_dotenv()
 
 from clustering.clusterer import determine_optimal_k, run_clustering
 from clustering.vectorizer import build_tfidf_matrix

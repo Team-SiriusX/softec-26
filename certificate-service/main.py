@@ -1,110 +1,194 @@
+import os
+import uuid
 from datetime import datetime
-from typing import List
-
-from fastapi import FastAPI
-from pydantic import BaseModel, Field
-
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
+from models import (
+    CertificateRequest, 
+    CertificateResponse,
+    CertificateData,
+    ShiftSummary
+)
+from database import get_connection, fetch_worker, fetch_shifts_for_certificate
+from calculator import compute_certificate_data
+from renderer import render_certificate_html
 
 app = FastAPI(
-    title="FairGig Certificate Renderer",
+    title="FairGig Certificate Service",
     version="1.0.0",
-    description="Dedicated service that renders print-friendly HTML income certificates.",
+    description=(
+        "Dedicated service for generating printable "
+        "HTML income certificates from verified "
+        "gig worker earnings. Designed for use with "
+        "landlords, banks, and official institutions."
+    )
 )
 
-
-class RenderRequest(BaseModel):
-    workerName: str = Field(min_length=1)
-    workerId: str = Field(min_length=1)
-    fromDate: str = Field(min_length=1)
-    toDate: str = Field(min_length=1)
-    totalVerified: float
-    shiftCount: int
-    platforms: List[str]
-    generatedAt: str | None = None
-
-
-class RenderResponse(BaseModel):
-    html: str
-
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",
+        "http://localhost:8003"
+    ],
+    allow_methods=["GET", "POST"],
+    allow_headers=["*"]
+)
 
 @app.get("/health")
-def health() -> dict[str, str]:
+async def health():
     return {
         "status": "ok",
-        "service": "certificate-renderer",
-        "timestamp": datetime.utcnow().isoformat(),
+        "service": "fairgig-certificate",
+        "version": "1.0.0"
     }
 
+@app.post("/certificate", response_model=CertificateResponse)
+async def generate_certificate(request: CertificateRequest):
+    """Generate an income certificate for a worker."""
+    conn = await get_connection()
+    try:
+        worker = await fetch_worker(conn, request.worker_id)
+        if not worker:
+            raise HTTPException(404, "Worker not found")
+            
+        shifts = await fetch_shifts_for_certificate(
+            conn,
+            request.worker_id,
+            request.from_date,
+            request.to_date,
+            request.include_unverified
+        )
+        
+        data = compute_certificate_data(
+            request.worker_id,
+            dict(worker),
+            [dict(s) for s in shifts],
+            request.from_date,
+            request.to_date,
+            request.include_unverified
+        )
+        
+        html = render_certificate_html(data)
+        
+        return CertificateResponse(
+            certificate_id=data.certificate_id,
+            worker_id=request.worker_id,
+            html=html,
+            data=data
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Certificate generation failed: {str(e)}")
+    finally:
+        await conn.close()
 
-@app.post("/render", response_model=RenderResponse)
-def render_certificate(payload: RenderRequest) -> RenderResponse:
-    generated_at = payload.generatedAt or datetime.utcnow().isoformat()
-    escaped_platforms = "".join(f"<li>{platform}</li>" for platform in payload.platforms)
+@app.get("/certificate/preview", response_class=HTMLResponse)
+async def preview_certificate(
+    worker_id: str = Query(...),
+    from_date: str = Query(...),
+    to_date: str = Query(...),
+    include_unverified: bool = Query(False)
+):
+    """Returns raw HTML directly — opens in browser."""
+    conn = await get_connection()
+    try:
+        worker = await fetch_worker(conn, worker_id)
+        if not worker:
+            raise HTTPException(status_code=404, detail="Worker not found")
+            
+        shifts = await fetch_shifts_for_certificate(
+            conn,
+            worker_id,
+            from_date,
+            to_date,
+            include_unverified
+        )
+        
+        data = compute_certificate_data(
+            worker_id,
+            dict(worker),
+            [dict(s) for s in shifts],
+            from_date,
+            to_date,
+            include_unverified
+        )
+        
+        html = render_certificate_html(data)
+        return HTMLResponse(content=html)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Certificate generation failed: {str(e)}")
+    finally:
+        await conn.close()
 
-    html = f"""<!doctype html>
-<html lang=\"en\">
-  <head>
-    <meta charset=\"utf-8\" />
-    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />
-    <title>FairGig Income Certificate</title>
-    <style>
-      :root {{ color-scheme: light; }}
-      body {{ font-family: \"Segoe UI\", Tahoma, sans-serif; margin: 0; padding: 24px; color: #111; }}
-      .sheet {{ max-width: 880px; margin: 0 auto; border: 2px solid #111; padding: 24px; }}
-      h1 {{ margin: 0 0 8px; font-size: 28px; letter-spacing: 0.3px; }}
-      .muted {{ color: #555; margin-bottom: 24px; }}
-      .grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 12px 20px; margin-bottom: 20px; }}
-      .label {{ font-size: 12px; text-transform: uppercase; color: #666; letter-spacing: 0.6px; }}
-      .value {{ font-size: 18px; font-weight: 600; }}
-      .total {{ margin: 18px 0; padding: 14px; border: 1px solid #111; }}
-      .platforms {{ margin-top: 12px; }}
-      .platforms li {{ margin: 4px 0; }}
-      .footer {{ margin-top: 28px; font-size: 12px; color: #555; }}
-      @media print {{
-        body {{ padding: 0; }}
-        .sheet {{ border: 0; padding: 0; max-width: none; }}
-      }}
-    </style>
-  </head>
-  <body>
-    <section class=\"sheet\">
-      <h1>FairGig Income Certificate</h1>
-      <p class=\"muted\">Printable summary of verified earnings for reporting to third parties.</p>
-
-      <div class=\"grid\">
-        <div>
-          <div class=\"label\">Worker</div>
-          <div class=\"value\">{payload.workerName}</div>
-        </div>
-        <div>
-          <div class=\"label\">Worker ID</div>
-          <div class=\"value\">{payload.workerId}</div>
-        </div>
-        <div>
-          <div class=\"label\">Period Start</div>
-          <div class=\"value\">{payload.fromDate}</div>
-        </div>
-        <div>
-          <div class=\"label\">Period End</div>
-          <div class=\"value\">{payload.toDate}</div>
-        </div>
-      </div>
-
-      <div class=\"total\">
-        <div class=\"label\">Total Verified Income (PKR)</div>
-        <div class=\"value\">{payload.totalVerified:.2f}</div>
-        <div class=\"label\" style=\"margin-top: 10px;\">Verified Shifts</div>
-        <div class=\"value\">{payload.shiftCount}</div>
-      </div>
-
-      <div>
-        <div class=\"label\">Platforms Included</div>
-        <ul class=\"platforms\">{escaped_platforms}</ul>
-      </div>
-
-      <p class=\"footer\">Generated at {generated_at}. This certificate includes only earnings with CONFIRMED verification status.</p>
-    </section>
-  </body>
-</html>"""
-
-    return RenderResponse(html=html)
+@app.get("/certificate/sample", response_class=HTMLResponse)
+async def sample_certificate():
+    """Returns a sample certificate with fake data."""
+    platforms = [
+        ShiftSummary(
+            platform_name="Careem",
+            shift_count=18,
+            total_hours=144.0,
+            gross_earned=72000.0,
+            total_deductions=16560.0,
+            net_received=55440.0,
+            avg_commission_rate=23.0,
+            verified_count=18,
+            pending_count=0
+        ),
+        ShiftSummary(
+            platform_name="Foodpanda",
+            shift_count=6,
+            total_hours=36.0,
+            gross_earned=18000.0,
+            total_deductions=3600.0,
+            net_received=14400.0,
+            avg_commission_rate=20.0,
+            verified_count=5,
+            pending_count=1
+        )
+    ]
+    
+    total_shifts = sum(p.shift_count for p in platforms)
+    total_hours = sum(p.total_hours for p in platforms)
+    total_gross = sum(p.gross_earned for p in platforms)
+    total_deductions = sum(p.total_deductions for p in platforms)
+    total_net = sum(p.net_received for p in platforms)
+    avg_hourly_rate = total_net / total_hours if total_hours > 0 else 0.0
+    avg_commission_rate = (total_deductions / total_gross * 100) if total_gross > 0 else 0.0
+    verified_shift_count = sum(p.verified_count for p in platforms)
+    pending_shift_count = sum(p.pending_count for p in platforms)
+    has_unverified = pending_shift_count > 0
+    
+    verified_net = 55440.0 + (14400.0 * (5/6))  # Rough approximation for sample
+    
+    fake_data = CertificateData(
+        worker_id="demo-worker",
+        worker_name="Ali Raza",
+        city_zone="Gulberg, Lahore",
+        category="ride_hailing",
+        from_date="2025-10-01",
+        to_date="2026-03-31",
+        generated_at=datetime.utcnow().isoformat(),
+        total_shifts=total_shifts,
+        total_hours=total_hours,
+        total_gross=total_gross,
+        total_deductions=total_deductions,
+        total_net=total_net,
+        avg_hourly_rate=avg_hourly_rate,
+        avg_commission_rate=avg_commission_rate,
+        verified_shift_count=verified_shift_count,
+        pending_shift_count=pending_shift_count,
+        platforms=platforms,
+        has_unverified=has_unverified,
+        verification_note=f"1 shifts are pending verification and are marked accordingly. Verified total: PKR {verified_net:,.0f}",
+        certificate_id=str(uuid.uuid4()),
+        is_print_ready=True
+    )
+    
+    html = render_certificate_html(fake_data)
+    return HTMLResponse(content=html)
