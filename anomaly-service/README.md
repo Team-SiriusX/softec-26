@@ -23,6 +23,11 @@ Interactive docs for judges:
 - Open `GET /docs` after startup
 - FastAPI Swagger UI is generated automatically
 
+## Environment Variables
+
+- `OPEN_ROUTER_API_KEY`: optional; enables explanation enrichment after statistical detection.
+- If unset, the service still works and returns the raw statistical explanations.
+
 ## Detection Rules
 
 | Rule               | Algorithm                                                           | Anomaly Taxonomy Class | Severity                            |

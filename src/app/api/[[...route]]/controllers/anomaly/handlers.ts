@@ -87,6 +87,8 @@ export const analyzeWorkerAnomalyHandler = async (c: Context) => {
     const anomalies = Array.isArray(data.anomalies) ? data.anomalies : [];
 
     if (anomalies.length > 0) {
+      const representativeShiftId = shifts[0]?.id;
+
       const anomalyRows = anomalies.flatMap((anomaly) => {
         const affectedShiftIds = Array.isArray(anomaly.affected_shifts)
           ? anomaly.affected_shifts.filter((shiftId): shiftId is string =>
@@ -94,8 +96,9 @@ export const analyzeWorkerAnomalyHandler = async (c: Context) => {
             )
           : [];
 
-        // shiftLogId is required in schema, so only persist records tied to concrete shifts.
-        if (affectedShiftIds.length === 0) {
+        const shiftLogId = affectedShiftIds[0] ?? representativeShiftId;
+
+        if (!shiftLogId) {
           return [];
         }
 
@@ -104,14 +107,16 @@ export const analyzeWorkerAnomalyHandler = async (c: Context) => {
             ? anomaly.data.recent_mean_modified_z
             : null;
 
-        return affectedShiftIds.map((shiftLogId) => ({
+        return [
+          {
           workerId,
           shiftLogId,
           flagType: anomaly.type,
           severity: anomaly.severity,
           explanation: anomaly.explanation,
           zScore,
-        }));
+          },
+        ];
       });
 
       if (anomalyRows.length > 0) {

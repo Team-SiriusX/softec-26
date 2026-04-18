@@ -1,4 +1,3 @@
-# FairGig scaffold — implement logic here
 """FastAPI service for robust earnings anomaly detection in FairGig.
 
 Detection methods are based on robust statistics literature including
@@ -7,11 +6,15 @@ Iglewicz-Hoaglin modified Z-score and Theil-Sen trend estimation.
 
 from __future__ import annotations
 
+from collections import Counter
+from typing import Annotated
+
 from dateutil.parser import isoparse
-from fastapi import FastAPI
+from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 
 from models import AnalyzeRequest, AnalyzeResponse, AnomalyDetail
+from enrichment.ai_enricher import enrich_anomalies
 from detection.rules import (
     check_below_minimum_wage,
     check_commission_creep,
@@ -49,7 +52,15 @@ def health():
 
 
 @app.post('/analyze', response_model=AnalyzeResponse)
-def analyze(request: AnalyzeRequest):
+async def analyze(
+    request: AnalyzeRequest,
+    enrich: Annotated[
+        bool,
+        Query(
+            description='Enable optional LLM explanation enrichment after statistical detection.',
+        ),
+    ] = True,
+):
     """Analyze earnings history and return non-technical anomaly findings.
 
     Accepts shift-level earnings data and runs four robust detection rules.
@@ -82,6 +93,21 @@ def analyze(request: AnalyzeRequest):
 
     risk_level = compute_risk_level(anomalies)
     summary = build_summary(anomalies, shifts)
+
+    if enrich and anomalies and _openrouter_api_key():
+        platform = _summarize_platforms(shifts)
+        date_range = _format_date_range(shifts)
+        enriched_anomalies, unified_summary = await enrich_anomalies(
+            anomalies=anomalies,
+            worker_id=request.worker_id,
+            platform=platform,
+            shift_count=len(shifts),
+            date_range=date_range,
+        )
+
+        anomalies = enriched_anomalies
+        if unified_summary:
+            summary = unified_summary
 
     return AnalyzeResponse(
         worker_id=request.worker_id,
@@ -119,3 +145,35 @@ def build_summary(anomalies: list[AnomalyDetail], shifts) -> str:
         f"signal(s). The most severe issue is '{top.type}' with '{top.severity}' "
         f'severity, so your recent payout pattern likely needs review.'
     )
+
+
+def _openrouter_api_key() -> str:
+    import os
+
+    return os.environ.get('OPEN_ROUTER_API_KEY', '')
+
+
+def _summarize_platforms(shifts) -> str:
+    platform_names = [shift.platform.name for shift in shifts if getattr(shift, 'platform', None)]
+    if not platform_names:
+        return 'Unknown'
+
+    counts = Counter(platform_names)
+    if len(counts) == 1:
+        return next(iter(counts))
+
+    most_common = ', '.join(name for name, _ in counts.most_common())
+    return f'Multiple platforms ({most_common})'
+
+
+def _format_date_range(shifts) -> str:
+    if not shifts:
+        return 'No shift data available'
+
+    start_date = isoparse(shifts[0].date).date()
+    end_date = isoparse(shifts[-1].date).date()
+
+    if start_date == end_date:
+        return start_date.isoformat()
+
+    return f'{start_date.isoformat()} to {end_date.isoformat()}'
