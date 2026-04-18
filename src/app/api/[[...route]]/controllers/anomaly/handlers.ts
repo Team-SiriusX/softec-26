@@ -15,6 +15,20 @@ type AnalyzeRequestPayload = {
   }>;
 };
 
+type AnalyzeServiceAnomaly = {
+  type: string;
+  severity: string;
+  explanation: string;
+  affected_shifts?: string[];
+  data?: {
+    recent_mean_modified_z?: number;
+  };
+};
+
+type AnalyzeServiceResponse = {
+  anomalies?: AnalyzeServiceAnomaly[];
+};
+
 export const analyzeWorkerAnomalyHandler = async (c: Context) => {
   const { workerId } = await c.req.json<{ workerId: string }>();
 
@@ -68,7 +82,49 @@ export const analyzeWorkerAnomalyHandler = async (c: Context) => {
       return c.json({ anomalies: [], error: 'anomaly_service_unavailable' });
     }
 
-    const data = await response.json();
+    const data = (await response.json()) as AnalyzeServiceResponse;
+
+    const anomalies = Array.isArray(data.anomalies) ? data.anomalies : [];
+
+    if (anomalies.length > 0) {
+      const anomalyRows = anomalies.flatMap((anomaly) => {
+        const affectedShiftIds = Array.isArray(anomaly.affected_shifts)
+          ? anomaly.affected_shifts.filter((shiftId): shiftId is string =>
+              typeof shiftId === 'string',
+            )
+          : [];
+
+        // shiftLogId is required in schema, so only persist records tied to concrete shifts.
+        if (affectedShiftIds.length === 0) {
+          return [];
+        }
+
+        const zScore =
+          typeof anomaly.data?.recent_mean_modified_z === 'number'
+            ? anomaly.data.recent_mean_modified_z
+            : null;
+
+        return affectedShiftIds.map((shiftLogId) => ({
+          workerId,
+          shiftLogId,
+          flagType: anomaly.type,
+          severity: anomaly.severity,
+          explanation: anomaly.explanation,
+          zScore,
+        }));
+      });
+
+      if (anomalyRows.length > 0) {
+        try {
+          await db.anomalyFlag.createMany({
+            data: anomalyRows,
+          });
+        } catch (error) {
+          console.error('Failed to persist anomaly flags', error);
+        }
+      }
+    }
+
     return c.json(data);
   } catch {
     return c.json({ anomalies: [], error: 'anomaly_service_unavailable' });
