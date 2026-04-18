@@ -15,8 +15,11 @@ function validationError(c, error) {
   return c.json({ error: 'Validation failed', details: error.issues }, 400)
 }
 
-function dbError(c, error) {
-  return c.json({ error: 'Database error', message: error?.message ?? 'Unknown error' }, 500)
+function internalError(c, message, err) {
+  return c.json({
+    error: message,
+    details: err instanceof Error ? err.message : 'Unknown error'
+  }, 500)
 }
 
 function toEnumOrUndefined(value, allowed) {
@@ -24,18 +27,20 @@ function toEnumOrUndefined(value, allowed) {
   return allowed.includes(value) ? value : undefined
 }
 
-function applyAnonymization(grievance) {
-  if (!grievance?.isAnonymous) return grievance
-
-  const worker = grievance.worker
-    ? { ...grievance.worker, fullName: 'Anonymous Worker' }
-    : { fullName: 'Anonymous Worker', role: 'WORKER' }
-
-  if ('id' in worker) {
-    delete worker.id
+function anonymize(grievance) {
+  if (!grievance) return null
+  if (!grievance.isAnonymous) return grievance
+  return {
+    ...grievance,
+    worker: grievance.worker
+      ? {
+          id: 'anonymous',
+          fullName: 'Anonymous Worker',
+          role: grievance.worker.role
+        }
+      : null,
+    workerId: 'anonymous'
   }
-
-  return { ...grievance, worker }
 }
 
 function makeTitleFromDescription(description) {
@@ -122,7 +127,7 @@ export const listGrievances = async (c) => {
         }))
       }
 
-      return applyAnonymization(withPlatformAndEscalation)
+      return anonymize(withPlatformAndEscalation)
     })
 
     return c.json({
@@ -132,20 +137,27 @@ export const listGrievances = async (c) => {
       offset,
       hasMore: offset + limit < total
     })
-  } catch (error) {
-    return dbError(c, error)
+  } catch (err) {
+    return internalError(c, 'Failed to list grievances', err)
   }
 }
 
 export const getStats = async (c) => {
   try {
-    const startOfWeek = new Date()
-    const day = startOfWeek.getDay()
-    const diff = (day + 6) % 7
-    startOfWeek.setDate(startOfWeek.getDate() - diff)
-    startOfWeek.setHours(0, 0, 0, 0)
+    const weekStart = new Date()
+    weekStart.setDate(weekStart.getDate() - weekStart.getDay())
+    weekStart.setHours(0, 0, 0, 0)
 
-    const [byStatusRaw, byCategoryRaw, byPlatformRaw, recentEscalationsRaw, total, openCount, thisWeekCount] = await db.$transaction([
+    const [
+      total,
+      byStatusRaw,
+      byCategoryRaw,
+      byPlatformRaw,
+      recentEscalationsRaw,
+      openCount,
+      thisWeekCount
+    ] = await Promise.all([
+      db.grievance.count(),
       db.grievance.groupBy({ by: ['status'], _count: { id: true } }),
       db.grievance.groupBy({ by: ['category'], _count: { id: true } }),
       db.grievance.groupBy({
@@ -168,9 +180,8 @@ export const getStats = async (c) => {
           }
         }
       }),
-      db.grievance.count(),
       db.grievance.count({ where: { status: 'OPEN' } }),
-      db.grievance.count({ where: { createdAt: { gte: startOfWeek } } })
+      db.grievance.count({ where: { createdAt: { gte: weekStart } } })
     ])
 
     const platformIds = [...new Set(byPlatformRaw.map((row) => row.platformId).filter(Boolean))]
@@ -238,8 +249,8 @@ export const getStats = async (c) => {
       byPlatform,
       recentEscalations
     })
-  } catch (error) {
-    return dbError(c, error)
+  } catch (err) {
+    return internalError(c, 'Failed to fetch grievance stats', err)
   }
 }
 
@@ -283,9 +294,9 @@ export const getGrievance = async (c) => {
       }))
     }
 
-    return c.json(applyAnonymization(enriched))
-  } catch (error) {
-    return dbError(c, error)
+    return c.json(anonymize(enriched))
+  } catch (err) {
+    return internalError(c, 'Failed to fetch grievance', err)
   }
 }
 
@@ -331,8 +342,8 @@ export const createGrievance = async (c) => {
     })
 
     return c.json({ ...grievance, platform: grievance.platformId ? platform : null }, 201)
-  } catch (error) {
-    return dbError(c, error)
+  } catch (err) {
+    return internalError(c, 'Failed to create grievance', err)
   }
 }
 
@@ -391,8 +402,8 @@ export const updateGrievance = async (c) => {
       : null
 
     return c.json({ ...updated, platform })
-  } catch (error) {
-    return dbError(c, error)
+  } catch (err) {
+    return internalError(c, 'Failed to update grievance', err)
   }
 }
 
@@ -413,8 +424,8 @@ export const deleteGrievance = async (c) => {
     ])
 
     return c.json({ message: 'Grievance deleted', id })
-  } catch (error) {
-    return dbError(c, error)
+  } catch (err) {
+    return internalError(c, 'Failed to delete grievance', err)
   }
 }
 
@@ -470,8 +481,8 @@ export const addTag = async (c) => {
     })
 
     return c.json(tag, 201)
-  } catch (error) {
-    return dbError(c, error)
+  } catch (err) {
+    return internalError(c, 'Failed to add grievance tag', err)
   }
 }
 
@@ -491,8 +502,8 @@ export const removeTag = async (c) => {
     await db.grievanceTag.delete({ where: { id: existing.id } })
 
     return c.json({ message: 'Tag removed', tag: normalized })
-  } catch (error) {
-    return dbError(c, error)
+  } catch (err) {
+    return internalError(c, 'Failed to remove grievance tag', err)
   }
 }
 
@@ -525,15 +536,16 @@ export const escalateGrievance = async (c) => {
       }, 409)
     }
 
-    const [updatedGrievance, escalation] = await db.$transaction([
-      db.grievance.update({
+    const { updated, escalation } = await db.$transaction(async (tx) => {
+      const updated = await tx.grievance.update({
         where: { id },
         data: {
           status: 'ESCALATED',
           updatedAt: new Date()
         }
-      }),
-      db.grievanceEscalation.create({
+      })
+
+      const escalation = await tx.grievanceEscalation.create({
         data: {
           id: uuidv4(),
           grievanceId: id,
@@ -542,15 +554,17 @@ export const escalateGrievance = async (c) => {
           escalatedAt: new Date()
         }
       })
-    ])
+
+      return { updated, escalation }
+    })
 
     return c.json({
       message: 'Grievance escalated successfully',
-      grievance: updatedGrievance,
+      grievance: updated,
       escalation
     })
-  } catch (error) {
-    return dbError(c, error)
+  } catch (err) {
+    return internalError(c, 'Failed to escalate grievance', err)
   }
 }
 
@@ -577,8 +591,8 @@ export const resolveGrievance = async (c) => {
     })
 
     return c.json(updated)
-  } catch (error) {
-    return dbError(c, error)
+  } catch (err) {
+    return internalError(c, 'Failed to resolve grievance', err)
   }
 }
 
@@ -629,36 +643,38 @@ export const getForClustering = async (c) => {
         where,
         orderBy: { createdAt: 'desc' },
         take: limitParsed.data,
-        select: {
-          id: true,
-          description: true,
-          platformId: true,
-          category: true,
-          createdAt: true,
-          workerId: true,
-          isAnonymous: true
+        include: {
+          worker: {
+            select: {
+              id: true,
+              fullName: true,
+              role: true
+            }
+          }
         }
       }),
       db.grievance.count({ where })
     ])
 
-    const platformIds = [...new Set(grievances.map((g) => g.platformId).filter(Boolean))]
+    const anonymizedGrievances = grievances.map(anonymize)
+
+    const platformIds = [...new Set(anonymizedGrievances.map((g) => g.platformId).filter(Boolean))]
     const platforms = platformIds.length
       ? await db.platform.findMany({ where: { id: { in: platformIds } }, select: { id: true, name: true } })
       : []
     const platformMap = new Map(platforms.map((p) => [p.id, p.name]))
 
-    const payload = grievances.map((grievance) => ({
+    const payload = anonymizedGrievances.map((grievance) => ({
       id: grievance.id,
       text: grievance.description,
       platform: grievance.platformId ? platformMap.get(grievance.platformId) ?? 'Unknown Platform' : 'Unknown Platform',
       category: grievance.category,
       created_at: grievance.createdAt.toISOString(),
-      worker_id: grievance.isAnonymous ? 'anonymous' : (grievance.workerId ?? 'anonymous')
+      worker_id: grievance.workerId ?? 'anonymous'
     }))
 
     return c.json({ grievances: payload, total: count })
-  } catch (error) {
-    return dbError(c, error)
+  } catch (err) {
+    return internalError(c, 'Failed to fetch grievances for clustering', err)
   }
 }

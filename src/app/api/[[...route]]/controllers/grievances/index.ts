@@ -1,57 +1,36 @@
 import { authMiddleware } from '@/app/api/[[...route]]/middleware/auth-middleware';
-import { zValidator } from '@hono/zod-validator';
 import { Hono } from 'hono';
-import * as z from 'zod';
 
 import {
-  addTagHandler,
-  clusterGrievancesHandler,
-  createGrievanceHandler,
-  escalateGrievanceHandler,
-  getGrievancesHandler,
-  resolveGrievanceHandler,
+  addTag,
+  clusterGrievances,
+  createGrievance,
+  deleteGrievance,
+  escalateGrievance,
+  getForClustering,
+  getGrievance,
+  getGrievanceStats,
+  getGrievanceTrends,
+  listGrievances,
+  removeTag,
+  resolveGrievance,
+  updateGrievance,
 } from './handlers';
-
-const createGrievanceSchema = z.object({
-  category: z.enum([
-    'COMMISSION_CHANGE',
-    'ACCOUNT_DEACTIVATION',
-    'PAYMENT_DISPUTE',
-    'UNFAIR_RATING',
-    'SAFETY_CONCERN',
-    'OTHER',
-  ]),
-  title: z.string().min(3),
-  description: z.string().min(10),
-  platformId: z.string().optional(),
-  workerId: z.string().optional(),
-  isAnonymous: z.boolean().default(false),
-});
-
-const tagSchema = z.object({
-  tag: z.string().min(2),
-});
-
-const clusterSchema = z.object({
-  grievanceIds: z.array(z.string().uuid()).min(1),
-  clusterId: z.string().uuid().optional(),
-});
-
-const escalationSchema = z.object({
-  note: z.string().optional(),
-});
 
 const app = new Hono()
   .use('/*', authMiddleware)
-  .get('/', getGrievancesHandler)
-  .post('/', zValidator('json', createGrievanceSchema), createGrievanceHandler)
-  .post('/:id/tags', zValidator('json', tagSchema), addTagHandler)
-  .post('/cluster', zValidator('json', clusterSchema), clusterGrievancesHandler)
-  .post(
-    '/:id/escalate',
-    zValidator('json', escalationSchema),
-    escalateGrievanceHandler,
-  )
-  .patch('/:id/resolve', resolveGrievanceHandler);
+  .get('/stats', getGrievanceStats)
+  .get('/for-cluster', getForClustering)
+  .post('/cluster', clusterGrievances)
+  .post('/trends', getGrievanceTrends)
+  .get('/', listGrievances)
+  .post('/', createGrievance)
+  .get('/:id', getGrievance)
+  .patch('/:id', updateGrievance)
+  .delete('/:id', deleteGrievance)
+  .post('/:id/tags', addTag)
+  .delete('/:id/tags/:tag', removeTag)
+  .post('/:id/escalate', escalateGrievance)
+  .patch('/:id/resolve', resolveGrievance);
 
 export default app;

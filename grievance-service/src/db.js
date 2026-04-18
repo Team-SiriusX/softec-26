@@ -2,7 +2,7 @@ import dotenv from 'dotenv'
 import { existsSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { PrismaClient } from '../src/generated/prisma/index.js'
+import { PrismaClient } from './generated/prisma/index.js'
 
 // Ensure this service resolves DB credentials from the shared repository env.
 const currentFile = fileURLToPath(import.meta.url)

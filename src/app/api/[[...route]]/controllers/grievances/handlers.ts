@@ -1,241 +1,333 @@
 import db from '@/lib/db';
 import { Context } from 'hono';
-import { randomUUID } from 'crypto';
 
 type SessionUser = {
   id: string;
   role: string;
 };
 
-function canModerate(role: string): boolean {
-  return role === 'ADVOCATE' || role === 'VERIFIER';
+void db;
+
+const GRIEVANCE_SERVICE_URL =
+  process.env.GRIEVANCE_SERVICE_URL || 'http://localhost:8003';
+
+const ML_SERVICE_URL = process.env.ML_SERVICE_URL || 'http://localhost:8002';
+
+async function callGrievanceService(
+  path: string,
+  options: RequestInit = {},
+): Promise<Response> {
+  const url = `${GRIEVANCE_SERVICE_URL}${path}`;
+  return fetch(url, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
 }
 
-export const getGrievancesHandler = async (c: Context) => {
-  const user = c.var.user as SessionUser | undefined;
-  if (!user) {
-    return c.json({ error: 'Unauthorized' }, 401);
+export async function listGrievances(c: Context) {
+  const query = c.req.query();
+  const params = new URLSearchParams();
+
+  for (const key of [
+    'platformId',
+    'category',
+    'status',
+    'workerId',
+    'limit',
+    'offset',
+  ]) {
+    const value = query[key];
+    if (value) params.set(key, value);
   }
 
-  const status = c.req.query('status');
-  const category = c.req.query('category');
-  const platformId = c.req.query('platformId');
-  const clusterId = c.req.query('clusterId');
-  const limit = Number(c.req.query('limit') ?? '100');
+  const suffix = params.toString() ? `?${params.toString()}` : '';
 
-  const where = {
-    ...(status ? { status: status as never } : {}),
-    ...(category ? { category: category as never } : {}),
-    ...(platformId ? { platformId } : {}),
-    ...(clusterId ? { clusterId } : {}),
-    ...(user.role === 'WORKER' ? { workerId: user.id } : {}),
-  };
-
-  const grievances = await db.grievance.findMany({
-    where,
-    include: {
-      tags: {
-        orderBy: { createdAt: 'desc' },
+  try {
+    const res = await callGrievanceService(`/grievances${suffix}`);
+    return c.json(await res.json(), res.status);
+  } catch {
+    return c.json(
+      {
+        grievances: [],
+        total: 0,
+        error: 'grievance_service_unavailable',
       },
-      escalations: {
-        orderBy: { escalatedAt: 'desc' },
+      503,
+    );
+  }
+}
+
+export async function getForClustering(c: Context) {
+  const query = c.req.query();
+  const params = new URLSearchParams();
+
+  for (const key of ['platform', 'status', 'limit']) {
+    const value = query[key];
+    if (value) params.set(key, value);
+  }
+
+  const suffix = params.toString() ? `?${params.toString()}` : '';
+
+  try {
+    const res = await callGrievanceService(`/grievances/for-clustering${suffix}`);
+    return c.json(await res.json(), res.status);
+  } catch {
+    return c.json(
+      {
+        grievances: [],
+        total: 0,
+        error: 'grievance_service_unavailable',
       },
-      worker: {
-        select: {
-          id: true,
-          fullName: true,
-          cityZone: true,
-        },
-      },
-    },
-    orderBy: { createdAt: 'desc' },
-    take: Number.isFinite(limit) ? Math.min(Math.max(limit, 1), 200) : 100,
-  });
-
-  return c.json({ data: grievances, total: grievances.length });
-};
-
-export const createGrievanceHandler = async (c: Context) => {
-  const user = c.var.user as SessionUser | undefined;
-  if (!user) {
-    return c.json({ error: 'Unauthorized' }, 401);
+      503,
+    );
   }
+}
 
-  const payload = await c.req.json<{
-    category: string;
-    title: string;
-    description: string;
-    platformId?: string;
-    workerId?: string;
-    isAnonymous?: boolean;
-  }>();
-
-  const workerId =
-    user.role === 'WORKER' ? user.id : (payload.workerId ?? null);
-
-  const grievance = await db.grievance.create({
-    data: {
-      category: payload.category as never,
-      title: payload.title,
-      description: payload.description,
-      platformId: payload.platformId ?? null,
-      workerId,
-      isAnonymous: payload.isAnonymous ?? false,
-      status: 'OPEN',
-    },
-    include: {
-      tags: true,
-      escalations: true,
-    },
-  });
-
-  return c.json({ data: grievance }, 201);
-};
-
-export const addTagHandler = async (c: Context) => {
-  const user = c.var.user as SessionUser | undefined;
-  if (!user) {
-    return c.json({ error: 'Unauthorized' }, 401);
-  }
-
-  if (!canModerate(user.role)) {
-    return c.json({ error: 'Forbidden' }, 403);
-  }
-
+export async function getGrievance(c: Context) {
   const id = c.req.param('id');
-  const { tag } = await c.req.json<{ tag: string }>();
 
-  const grievance = await db.grievance.findUnique({
-    where: { id },
-    select: { id: true },
-  });
-  if (!grievance) {
-    return c.json({ error: 'Grievance not found' }, 404);
+  try {
+    const res = await callGrievanceService(`/grievances/${id}`);
+    if (res.status === 404) {
+      return c.json({ error: 'Grievance not found' }, 404);
+    }
+    return c.json(await res.json(), res.status);
+  } catch {
+    return c.json({ error: 'grievance_service_unavailable' }, 503);
   }
+}
 
-  const created = await db.grievanceTag.upsert({
-    where: {
-      grievanceId_tag: {
-        grievanceId: id,
-        tag,
-      },
-    },
-    update: {},
-    create: {
-      grievanceId: id,
-      advocateId: user.id,
-      tag,
-    },
-  });
-
-  await db.grievance.update({
-    where: { id },
-    data: { status: 'TAGGED' },
-  });
-
-  return c.json({ data: created }, 201);
-};
-
-export const clusterGrievancesHandler = async (c: Context) => {
+export async function createGrievance(c: Context) {
   const user = c.var.user as SessionUser | undefined;
   if (!user) {
     return c.json({ error: 'Unauthorized' }, 401);
   }
 
-  if (!canModerate(user.role)) {
-    return c.json({ error: 'Forbidden' }, 403);
+  try {
+    const body = await c.req.json<{
+      platformId?: string;
+      category: string;
+      description: string;
+      isAnonymous?: boolean;
+    }>();
+
+    const res = await callGrievanceService('/grievances', {
+      method: 'POST',
+      body: JSON.stringify({ ...body, workerId: user.id }),
+    });
+
+    if (res.status === 400) {
+      return c.json(await res.json(), 400);
+    }
+
+    return c.json(await res.json(), 201);
+  } catch {
+    return c.json({ error: 'grievance_service_unavailable' }, 503);
   }
+}
 
-  const { grievanceIds, clusterId } = await c.req.json<{
-    grievanceIds: string[];
-    clusterId?: string;
-  }>();
-
-  if (!Array.isArray(grievanceIds) || grievanceIds.length === 0) {
-    return c.json({ error: 'grievanceIds is required' }, 400);
-  }
-
-  const assignedClusterId = clusterId ?? randomUUID();
-
-  const updated = await db.grievance.updateMany({
-    where: { id: { in: grievanceIds } },
-    data: {
-      clusterId: assignedClusterId,
-      status: 'TAGGED',
-    },
-  });
-
-  return c.json({
-    data: {
-      clusterId: assignedClusterId,
-      matched: updated.count,
-    },
-  });
-};
-
-export const escalateGrievanceHandler = async (c: Context) => {
-  const user = c.var.user as SessionUser | undefined;
-  if (!user) {
-    return c.json({ error: 'Unauthorized' }, 401);
-  }
-
-  if (!canModerate(user.role)) {
-    return c.json({ error: 'Forbidden' }, 403);
-  }
-
+export async function updateGrievance(c: Context) {
   const id = c.req.param('id');
-  const { note } = await c.req.json<{ note?: string }>();
 
-  const grievance = await db.grievance.findUnique({
-    where: { id },
-    select: { id: true, status: true },
-  });
+  try {
+    const body = await c.req.json();
+    const res = await callGrievanceService(`/grievances/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    });
 
-  if (!grievance) {
-    return c.json({ error: 'Grievance not found' }, 404);
+    if (res.status === 404) {
+      return c.json({ error: 'Grievance not found' }, 404);
+    }
+
+    return c.json(await res.json(), res.status);
+  } catch {
+    return c.json({ error: 'grievance_service_unavailable' }, 503);
   }
+}
 
-  const [updated, escalation] = await db.$transaction([
-    db.grievance.update({
-      where: { id },
-      data: { status: 'ESCALATED' },
-    }),
-    db.grievanceEscalation.create({
-      data: {
-        grievanceId: id,
-        advocateId: user.id,
-        note: note ?? null,
+export async function deleteGrievance(c: Context) {
+  const id = c.req.param('id');
+
+  try {
+    const res = await callGrievanceService(`/grievances/${id}`, {
+      method: 'DELETE',
+    });
+
+    if (res.status === 404) {
+      return c.json({ error: 'Grievance not found' }, 404);
+    }
+
+    return c.json(await res.json(), res.status);
+  } catch {
+    return c.json({ error: 'grievance_service_unavailable' }, 503);
+  }
+}
+
+export async function addTag(c: Context) {
+  const id = c.req.param('id');
+
+  try {
+    const body = await c.req.json();
+    const res = await callGrievanceService(`/grievances/${id}/tags`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+
+    if (res.status === 409) {
+      return c.json({ error: 'Tag already exists' }, 409);
+    }
+
+    return c.json(await res.json(), 201);
+  } catch {
+    return c.json({ error: 'grievance_service_unavailable' }, 503);
+  }
+}
+
+export async function removeTag(c: Context) {
+  const id = c.req.param('id');
+  const tag = c.req.param('tag');
+
+  try {
+    const res = await callGrievanceService(
+      `/grievances/${id}/tags/${encodeURIComponent(tag)}`,
+      {
+        method: 'DELETE',
       },
-    }),
-  ]);
+    );
 
-  return c.json({ data: { grievance: updated, escalation } });
-};
+    if (res.status === 404) {
+      return c.json({ error: 'Tag not found' }, 404);
+    }
 
-export const resolveGrievanceHandler = async (c: Context) => {
+    return c.json(await res.json(), res.status);
+  } catch {
+    return c.json({ error: 'grievance_service_unavailable' }, 503);
+  }
+}
+
+export async function escalateGrievance(c: Context) {
   const user = c.var.user as SessionUser | undefined;
   if (!user) {
     return c.json({ error: 'Unauthorized' }, 401);
-  }
-
-  if (!canModerate(user.role)) {
-    return c.json({ error: 'Forbidden' }, 403);
   }
 
   const id = c.req.param('id');
 
-  const grievance = await db.grievance.findUnique({
-    where: { id },
-    select: { id: true },
-  });
-  if (!grievance) {
-    return c.json({ error: 'Grievance not found' }, 404);
+  try {
+    const body = await c.req.json();
+    const res = await callGrievanceService(`/grievances/${id}/escalate`, {
+      method: 'POST',
+      body: JSON.stringify({ ...body, advocateId: user.id }),
+    });
+
+    if (res.status === 409) {
+      return c.json(await res.json(), 409);
+    }
+
+    return c.json(await res.json(), res.status);
+  } catch {
+    return c.json({ error: 'grievance_service_unavailable' }, 503);
   }
+}
 
-  const updated = await db.grievance.update({
-    where: { id },
-    data: { status: 'RESOLVED' },
-  });
+export async function resolveGrievance(c: Context) {
+  const id = c.req.param('id');
 
-  return c.json({ data: updated });
-};
+  try {
+    const res = await callGrievanceService(`/grievances/${id}/resolve`, {
+      method: 'PATCH',
+    });
+
+    if (res.status === 404) {
+      return c.json({ error: 'Grievance not found' }, 404);
+    }
+
+    if (res.status === 409) {
+      return c.json(await res.json(), 409);
+    }
+
+    return c.json(await res.json(), res.status);
+  } catch {
+    return c.json({ error: 'grievance_service_unavailable' }, 503);
+  }
+}
+
+export async function getGrievanceStats(c: Context) {
+  try {
+    const res = await callGrievanceService('/grievances/stats');
+    return c.json(await res.json(), res.status);
+  } catch {
+    return c.json(
+      {
+        total: 0,
+        error: 'grievance_service_unavailable',
+      },
+      503,
+    );
+  }
+}
+
+export async function clusterGrievances(c: Context) {
+  try {
+    const fetchRes = await callGrievanceService('/grievances/for-clustering?limit=100');
+    if (!fetchRes.ok) {
+      return c.json(
+        { error: 'Could not fetch grievances for clustering' },
+        503,
+      );
+    }
+
+    const fetchedGrievances = await fetchRes.json();
+    const body = await c.req.json().catch(() => ({}));
+
+    const mlRes = await fetch(`${ML_SERVICE_URL}/cluster`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        grievances: fetchedGrievances.grievances,
+        anomaly_contexts: body.anomaly_contexts || [],
+      }),
+    });
+
+    if (!mlRes.ok) {
+      return c.json({ error: 'ML service unavailable', clusters: [] }, 503);
+    }
+
+    return c.json(await mlRes.json(), mlRes.status);
+  } catch {
+    return c.json({ error: 'ML service unavailable', clusters: [] }, 503);
+  }
+}
+
+export async function getGrievanceTrends(c: Context) {
+  try {
+    const fetchRes = await callGrievanceService('/grievances/for-clustering?limit=200');
+    if (!fetchRes.ok) {
+      return c.json({ error: 'Could not fetch grievances for trends' }, 503);
+    }
+
+    const fetchedGrievances = await fetchRes.json();
+    const platform = c.req.query('platform');
+
+    const mlRes = await fetch(`${ML_SERVICE_URL}/trends`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        grievances: fetchedGrievances.grievances,
+        platform: platform || null,
+      }),
+    });
+
+    if (!mlRes.ok) {
+      return c.json({ error: 'ML service unavailable' }, 503);
+    }
+
+    return c.json(await mlRes.json(), mlRes.status);
+  } catch {
+    return c.json({ error: 'ML service unavailable' }, 503);
+  }
+}
