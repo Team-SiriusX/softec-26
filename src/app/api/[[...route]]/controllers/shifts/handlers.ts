@@ -241,3 +241,121 @@ export const importCsvHandler = async (c: Context) => {
 
   return c.json({ created: created.length, errors }, 201);
 };
+
+// ─── PATCH /api/shifts/:id ───────────────────────────────────────────────────
+export const updateShiftHandler = async (c: Context) => {
+  const user = c.var.user as { id: string } | undefined;
+  const workerId = user?.id;
+  if (!workerId) return c.json({ error: 'Unauthorized' }, 401);
+
+  const id = c.req.param('id');
+  const body = await c.req.json<{
+    platform?: string;
+    shiftDate?: string;
+    hoursWorked?: number;
+    grossEarned?: number;
+    platformDeductions?: number;
+    netReceived?: number;
+    notes?: string;
+  }>();
+
+  const existing = await db.shiftLog.findFirst({
+    where: { id, workerId },
+    include: { screenshot: true },
+  });
+
+  if (!existing) {
+    return c.json({ error: 'Not found' }, 404);
+  }
+
+  let platformId = existing.platformId;
+  if (body.platform && body.platform.trim().length > 0) {
+    const platformRecord = await db.platform.upsert({
+      where: { name: body.platform },
+      create: {
+        name: body.platform,
+        slug: body.platform.toLowerCase().replace(/\s+/g, '-'),
+      },
+      update: {},
+    });
+    platformId = platformRecord.id;
+  }
+
+  const financialFieldsChanged =
+    typeof body.hoursWorked === 'number' ||
+    typeof body.grossEarned === 'number' ||
+    typeof body.platformDeductions === 'number' ||
+    typeof body.netReceived === 'number' ||
+    typeof body.shiftDate === 'string' ||
+    typeof body.platform === 'string';
+
+  const updated = await db.shiftLog.update({
+    where: { id },
+    data: {
+      platformId,
+      ...(typeof body.shiftDate === 'string'
+        ? { shiftDate: new Date(body.shiftDate) }
+        : {}),
+      ...(typeof body.hoursWorked === 'number'
+        ? { hoursWorked: body.hoursWorked }
+        : {}),
+      ...(typeof body.grossEarned === 'number'
+        ? { grossEarned: body.grossEarned }
+        : {}),
+      ...(typeof body.platformDeductions === 'number'
+        ? { platformDeductions: body.platformDeductions }
+        : {}),
+      ...(typeof body.netReceived === 'number'
+        ? { netReceived: body.netReceived }
+        : {}),
+      ...(typeof body.notes === 'string' ? { notes: body.notes } : {}),
+      ...(financialFieldsChanged ? { verificationStatus: 'PENDING' } : {}),
+    },
+    include: {
+      platform: true,
+      screenshot: { select: { status: true, fileUrl: true, verifierNotes: true } },
+    },
+  });
+
+  if (financialFieldsChanged && existing.screenshot) {
+    await db.screenshot.update({
+      where: { shiftLogId: id },
+      data: {
+        status: 'PENDING',
+        verifierNotes: null,
+        reviewedAt: null,
+      },
+    });
+  }
+
+  return c.json({
+    data: {
+      ...updated,
+      effectiveHourlyRate:
+        Number(updated.hoursWorked) > 0
+          ? Number(updated.netReceived) / Number(updated.hoursWorked)
+          : 0,
+      deductionRatePct:
+        Number(updated.grossEarned) > 0
+          ? (Number(updated.platformDeductions) / Number(updated.grossEarned)) * 100
+          : 0,
+    },
+  });
+};
+
+// ─── DELETE /api/shifts/:id ──────────────────────────────────────────────────
+export const deleteShiftHandler = async (c: Context) => {
+  const user = c.var.user as { id: string } | undefined;
+  const workerId = user?.id;
+  if (!workerId) return c.json({ error: 'Unauthorized' }, 401);
+
+  const id = c.req.param('id');
+
+  const existing = await db.shiftLog.findFirst({ where: { id, workerId } });
+  if (!existing) {
+    return c.json({ error: 'Not found' }, 404);
+  }
+
+  await db.shiftLog.delete({ where: { id } });
+  return c.json({ success: true, id });
+};

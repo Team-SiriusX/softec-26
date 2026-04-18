@@ -1,9 +1,19 @@
-// FairGig scaffold — implement logic here
+import { authMiddleware } from '@/app/api/[[...route]]/middleware/auth-middleware';
 import { zValidator } from '@hono/zod-validator';
 import { Hono } from 'hono';
 import * as z from 'zod';
 
-import { getScreenshotsHandler, updateVerificationHandler } from './handlers';
+import {
+  createScreenshotHandler,
+  getScreenshotsHandler,
+  updateVerificationHandler,
+} from './handlers';
+
+const createScreenshotSchema = z.object({
+  shiftLogId: z.string().uuid(),
+  fileUrl: z.string().url(),
+  fileKey: z.string().min(1),
+});
 
 const updateVerificationSchema = z.object({
   status: z.enum(['CONFIRMED', 'FLAGGED', 'UNVERIFIABLE']),
@@ -11,7 +21,9 @@ const updateVerificationSchema = z.object({
 });
 
 const app = new Hono()
+  .use('/*', authMiddleware)
   .get('/', getScreenshotsHandler)
+  .post('/', zValidator('json', createScreenshotSchema), createScreenshotHandler)
   .patch(
     '/:id/verify',
     zValidator('param', z.object({ id: z.string() })),

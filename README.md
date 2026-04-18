@@ -1,7 +1,3 @@
-<<<<<<< HEAD
-
-=======
->>>>>>> 1966889c36053df84d10524ba2282b4024a35a36
 # Softec 26 - Worker Justice Analytics Platform
 
 This repository now includes a production-grade analytics API for:
@@ -11,6 +7,21 @@ This repository now includes a production-grade analytics API for:
 - Advanced injustice-detection intelligence layer (8 modules)
 
 The analytics frontend is now implemented for worker and advocate routes, backed directly by these Hono endpoints.
+
+## Competition Architecture Verification
+
+For requirement-by-requirement verification against the official problem statement, see:
+
+- [ARCHITECTURE_VERIFICATION.md](ARCHITECTURE_VERIFICATION.md)
+- [SYSTEM_ARCHITECTURE_PIPELINE.md](SYSTEM_ARCHITECTURE_PIPELINE.md)
+- [API_CONTRACTS.md](API_CONTRACTS.md)
+
+## Service Status
+
+- Earnings service endpoints now cover shift CRUD, CSV import, screenshot reference creation, and verification status updates.
+- Grievance workflow endpoints now support complaint creation, tagging, clustering, escalation, and resolution.
+- Certificate generation now stores print-ready HTML snapshots and exposes print endpoints.
+- Dedicated certificate renderer service is available at [certificate-service/README.md](certificate-service/README.md).
 
 ## Product Strategy
 
