@@ -6,10 +6,10 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm, Controller } from 'react-hook-form';
 import { z } from 'zod';
 import Link from 'next/link';
+import Image from 'next/image';
 import { authClient } from '@/lib/auth-client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card } from '@/components/ui/card';
 import { FieldGroup, FieldLabel, FieldError } from '@/components/ui/field';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Spinner } from '@/components/ui/spinner';
@@ -107,19 +107,52 @@ export default function SignUpPage() {
   };
 
   return (
-    <div className='flex min-h-screen items-center justify-center bg-linear-to-br from-slate-50 to-slate-100 px-4 py-12'>
-      <Card className='w-full max-w-md border border-slate-200 shadow-lg'>
-        <div className='p-8'>
-          {/* Header */}
+    <div className='bg-background grid min-h-screen w-full lg:grid-cols-2'>
+      <section className='relative hidden overflow-hidden lg:flex lg:items-end lg:justify-start'>
+        <div
+          className='absolute inset-0'
+          style={{
+            backgroundImage:
+              "linear-gradient(140deg, rgba(15,23,42,0.92), rgba(49,46,129,0.88) 55%, rgba(180,83,9,0.85)), url('https://images.unsplash.com/photo-1556761175-5973dc0f32e7?auto=format&fit=crop&w=1800&q=80')",
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+          }}
+        />
+        <div className='relative z-10 max-w-xl px-12 pb-16 text-white'>
+          <p className='mb-4 text-xs font-semibold tracking-[0.24em] uppercase text-white/80'>
+            FAIRGIG ONBOARDING
+          </p>
+          <h1 className='text-4xl leading-tight font-black xl:text-5xl'>
+            Build your verified gig-work profile with evidence-first workflows.
+          </h1>
+        </div>
+      </section>
+
+      <section className='flex items-center justify-center px-4 py-12 sm:px-8 lg:px-12'>
+        <div className='w-full max-w-md'>
+          <Link href='/' className='mb-8 inline-flex items-center gap-3'>
+            <Image
+              src='/logo2.png'
+              alt='FairGig logo'
+              width={44}
+              height={44}
+              className='rounded-md object-cover'
+              priority
+            />
+            <span className='text-2xl font-bold tracking-tight text-slate-900'>
+              FairGig
+            </span>
+          </Link>
+
           <div className='mb-8'>
-            <h1 className='mb-2 text-3xl font-bold text-slate-900'>FairGig</h1>
+            <h2 className='mb-2 text-3xl font-black text-slate-900'>Join us today</h2>
             <p className='text-sm text-slate-600'>
-              Fair earnings, verified income
+              Start your FairGig journey with secure identity and role-based access.
             </p>
           </div>
 
           {error && (
-            <div className='mb-6 rounded-md border border-red-200 bg-red-50 p-3'>
+            <div className='mb-6 rounded-xl border border-red-200 bg-red-50 p-3'>
               <p className='text-sm text-red-700'>{error}</p>
             </div>
           )}
@@ -129,17 +162,9 @@ export default function SignUpPage() {
               onSubmit={handleSubmit(() => setStep('role'))}
               className='space-y-5'
             >
-              <h2 className='mb-6 text-xl font-semibold text-slate-900'>
-                Create your account
-              </h2>
-
-              {/* Full Name Field */}
               <FieldGroup>
-                <FieldLabel
-                  htmlFor='fullName'
-                  className='font-medium text-slate-700'
-                >
-                  Full Name
+                <FieldLabel htmlFor='fullName' className='font-medium text-slate-700'>
+                  Full name
                 </FieldLabel>
                 <Controller
                   name='fullName'
@@ -151,7 +176,7 @@ export default function SignUpPage() {
                         id='fullName'
                         type='text'
                         placeholder='Enter your full name'
-                        className='text-base'
+                        className='h-12 rounded-xl border border-slate-300 bg-white px-4 text-base'
                         aria-invalid={!!errors.fullName}
                       />
                       {errors.fullName && (
@@ -162,13 +187,9 @@ export default function SignUpPage() {
                 />
               </FieldGroup>
 
-              {/* Email Field */}
               <FieldGroup>
-                <FieldLabel
-                  htmlFor='email'
-                  className='font-medium text-slate-700'
-                >
-                  Email Address
+                <FieldLabel htmlFor='email' className='font-medium text-slate-700'>
+                  Your email
                 </FieldLabel>
                 <Controller
                   name='email'
@@ -179,8 +200,8 @@ export default function SignUpPage() {
                         {...field}
                         id='email'
                         type='email'
-                        placeholder='you@example.com'
-                        className='text-base'
+                        placeholder='hello@fairgig.app'
+                        className='h-12 rounded-xl border border-slate-300 bg-white px-4 text-base'
                         aria-invalid={!!errors.email}
                       />
                       {errors.email && <FieldError errors={[errors.email]} />}
@@ -189,13 +210,9 @@ export default function SignUpPage() {
                 />
               </FieldGroup>
 
-              {/* Password Field */}
               <FieldGroup>
-                <FieldLabel
-                  htmlFor='password'
-                  className='font-medium text-slate-700'
-                >
-                  Password
+                <FieldLabel htmlFor='password' className='font-medium text-slate-700'>
+                  Create new password
                 </FieldLabel>
                 <Controller
                   name='password'
@@ -207,7 +224,7 @@ export default function SignUpPage() {
                         id='password'
                         type='password'
                         placeholder='At least 8 characters'
-                        className='text-base'
+                        className='h-12 rounded-xl border border-slate-300 bg-white px-4 text-base'
                         aria-invalid={!!errors.password}
                       />
                       {errors.password && (
@@ -218,13 +235,12 @@ export default function SignUpPage() {
                 />
               </FieldGroup>
 
-              {/* Confirm Password Field */}
               <FieldGroup>
                 <FieldLabel
                   htmlFor='confirmPassword'
                   className='font-medium text-slate-700'
                 >
-                  Confirm Password
+                  Confirm password
                 </FieldLabel>
                 <Controller
                   name='confirmPassword'
@@ -235,8 +251,8 @@ export default function SignUpPage() {
                         {...field}
                         id='confirmPassword'
                         type='password'
-                        placeholder='Confirm your password'
-                        className='text-base'
+                        placeholder='Re-enter your password'
+                        className='h-12 rounded-xl border border-slate-300 bg-white px-4 text-base'
                         aria-invalid={!!errors.confirmPassword}
                       />
                       {errors.confirmPassword && (
@@ -247,11 +263,9 @@ export default function SignUpPage() {
                 />
               </FieldGroup>
 
-              {/* Navigation */}
               <Button
                 type='submit'
-                className='mt-6 w-full py-6 text-base font-semibold'
-                size='lg'
+                className='h-12 w-full rounded-xl bg-orange-500 text-base font-semibold text-white hover:bg-orange-600'
               >
                 Continue
               </Button>
@@ -261,7 +275,7 @@ export default function SignUpPage() {
                   Already have an account?{' '}
                   <Link
                     href='/auth/sign-in'
-                    className='font-semibold text-blue-600 hover:underline'
+                    className='font-semibold text-slate-900 hover:text-orange-600'
                   >
                     Sign in
                   </Link>
@@ -273,8 +287,8 @@ export default function SignUpPage() {
           {step === 'role' && (
             <form onSubmit={handleSubmit(onSubmit)} className='space-y-6'>
               <div>
-                <h2 className='mb-2 text-xl font-semibold text-slate-900'>
-                  What&apos;s your role?
+                <h2 className='mb-2 text-2xl font-black text-slate-900'>
+                  Select your role
                 </h2>
                 <p className='mb-6 text-sm text-slate-600'>
                   Verifier and advocate accounts require approval from an
@@ -282,22 +296,18 @@ export default function SignUpPage() {
                 </p>
               </div>
 
-              {/* Role Selection */}
               <Controller
                 name='role'
                 control={control}
                 render={({ field }) => (
-                  <RadioGroup
-                    value={field.value}
-                    onValueChange={field.onChange}
-                  >
+                  <RadioGroup value={field.value} onValueChange={field.onChange}>
                     <div className='space-y-3'>
                       {roles.map((role) => (
                         <label
                           key={role.value}
-                          className={`flex cursor-pointer items-center rounded-lg border p-4 transition-all ${
+                          className={`flex cursor-pointer items-center rounded-xl border p-4 transition-all ${
                             selectedRole === role.value
-                              ? 'border-blue-500 bg-blue-50 shadow-sm'
+                              ? 'border-orange-500 bg-orange-50 shadow-sm'
                               : 'border-slate-200 bg-white hover:bg-slate-50'
                           }`}
                         >
@@ -321,12 +331,11 @@ export default function SignUpPage() {
                 )}
               />
 
-              {/* Navigation */}
-              <div className='flex gap-3 pt-4'>
+              <div className='flex gap-3 pt-2'>
                 <Button
                   type='button'
                   variant='outline'
-                  className='flex-1 py-6 text-base font-semibold'
+                  className='h-12 flex-1 rounded-xl text-base font-semibold'
                   onClick={() => setStep('details')}
                 >
                   Back
@@ -334,7 +343,7 @@ export default function SignUpPage() {
                 <Button
                   type='submit'
                   disabled={isLoading}
-                  className='flex-1 py-6 text-base font-semibold'
+                  className='h-12 flex-1 rounded-xl bg-orange-500 text-base font-semibold text-white hover:bg-orange-600'
                 >
                   {isLoading ? (
                     <>
@@ -342,14 +351,14 @@ export default function SignUpPage() {
                       Creating account...
                     </>
                   ) : (
-                    'Create Account'
+                    'Create account'
                   )}
                 </Button>
               </div>
             </form>
           )}
         </div>
-      </Card>
+      </section>
     </div>
   );
 }

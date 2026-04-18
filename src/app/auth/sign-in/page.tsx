@@ -1,13 +1,13 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
 import { FieldError, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
 import { authClient } from '@/lib/auth-client';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { AlertCircle } from 'lucide-react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
@@ -68,38 +68,61 @@ export default function SignInPage() {
   };
 
   return (
-    <div className='flex min-h-screen items-center justify-center bg-linear-to-br from-slate-50 to-slate-100 px-4 py-12'>
-      <Card className='w-full max-w-md border border-slate-200 shadow-lg'>
-        <div className='p-8'>
-          {/* Header */}
+    <div className='bg-background grid min-h-screen w-full lg:grid-cols-2'>
+      <section className='relative hidden overflow-hidden lg:flex lg:items-end lg:justify-start'>
+        <div
+          className='absolute inset-0'
+          style={{
+            backgroundImage:
+              "linear-gradient(140deg, rgba(15,23,42,0.92), rgba(49,46,129,0.88) 55%, rgba(180,83,9,0.85)), url('https://images.unsplash.com/photo-1556740758-90de374c12ad?auto=format&fit=crop&w=1800&q=80')",
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+          }}
+        />
+        <div className='relative z-10 max-w-xl px-12 pb-16 text-white'>
+          <p className='mb-4 text-xs font-semibold tracking-[0.24em] uppercase text-white/80'>
+            FAIRGIG ACCESS
+          </p>
+          <h1 className='text-4xl leading-tight font-black xl:text-5xl'>
+            Secure access to verified earnings and worker advocacy intelligence.
+          </h1>
+        </div>
+      </section>
+
+      <section className='flex items-center justify-center px-4 py-12 sm:px-8 lg:px-12'>
+        <div className='w-full max-w-md'>
+          <Link href='/' className='mb-8 inline-flex items-center gap-3'>
+            <Image
+              src='/logo2.png'
+              alt='FairGig logo'
+              width={44}
+              height={44}
+              className='rounded-md object-cover'
+              priority
+            />
+            <span className='text-2xl font-bold tracking-tight text-slate-900'>
+              FairGig
+            </span>
+          </Link>
+
           <div className='mb-8'>
-            <h1 className='mb-2 text-3xl font-bold text-slate-900'>FairGig</h1>
+            <h2 className='mb-2 text-3xl font-black text-slate-900'>Welcome back</h2>
             <p className='text-sm text-slate-600'>
-              Fair earnings, verified income
+              Sign in to continue with wage verification and case workflows.
             </p>
           </div>
 
           {error && (
-            <div className='mb-6 flex gap-3 rounded-lg border border-red-200 bg-red-50 p-4'>
+            <div className='mb-6 flex gap-3 rounded-xl border border-red-200 bg-red-50 p-4'>
               <AlertCircle className='mt-0.5 h-5 w-5 shrink-0 text-red-600' />
-              <div>
-                <p className='text-sm font-medium text-red-900'>{error}</p>
-              </div>
+              <p className='text-sm font-medium text-red-900'>{error}</p>
             </div>
           )}
 
           <form onSubmit={handleSubmit(onSubmit)} className='space-y-5'>
-            <h2 className='mb-6 text-xl font-semibold text-slate-900'>
-              Sign in to your account
-            </h2>
-
-            {/* Email Field */}
             <FieldGroup>
-              <FieldLabel
-                htmlFor='email'
-                className='font-medium text-slate-700'
-              >
-                Email Address
+              <FieldLabel htmlFor='email' className='font-medium text-slate-700'>
+                Your email
               </FieldLabel>
               <Controller
                 name='email'
@@ -110,8 +133,8 @@ export default function SignInPage() {
                       {...field}
                       id='email'
                       type='email'
-                      placeholder='you@example.com'
-                      className='text-base'
+                      placeholder='hello@fairgig.app'
+                      className='h-12 rounded-xl border border-slate-300 bg-white px-4 text-base'
                       aria-invalid={!!errors.email}
                       disabled={isLoading}
                     />
@@ -121,18 +144,14 @@ export default function SignInPage() {
               />
             </FieldGroup>
 
-            {/* Password Field */}
             <FieldGroup>
               <div className='mb-2 flex items-center justify-between'>
-                <FieldLabel
-                  htmlFor='password'
-                  className='m-0 font-medium text-slate-700'
-                >
+                <FieldLabel htmlFor='password' className='m-0 font-medium text-slate-700'>
                   Password
                 </FieldLabel>
                 <Link
                   href='/auth/forget-password'
-                  className='text-xs font-medium text-blue-600 hover:underline'
+                  className='text-xs font-semibold text-orange-600 hover:underline'
                 >
                   Forgot password?
                 </Link>
@@ -147,24 +166,20 @@ export default function SignInPage() {
                       id='password'
                       type='password'
                       placeholder='Enter your password'
-                      className='text-base'
+                      className='h-12 rounded-xl border border-slate-300 bg-white px-4 text-base'
                       aria-invalid={!!errors.password}
                       disabled={isLoading}
                     />
-                    {errors.password && (
-                      <FieldError errors={[errors.password]} />
-                    )}
+                    {errors.password && <FieldError errors={[errors.password]} />}
                   </>
                 )}
               />
             </FieldGroup>
 
-            {/* Sign In Button */}
             <Button
               type='submit'
               disabled={isLoading}
-              className='mt-6 w-full py-6 text-base font-semibold'
-              size='lg'
+              className='h-12 w-full rounded-xl bg-orange-500 text-base font-semibold text-white hover:bg-orange-600'
             >
               {isLoading ? (
                 <>
@@ -176,29 +191,20 @@ export default function SignInPage() {
               )}
             </Button>
 
-            {/* Sign Up Link */}
-            <div className='text-center'>
+            <div className='pt-1 text-center'>
               <p className='text-sm text-slate-600'>
-                Don&apos;t have an account?
+                Don&apos;t have an account?{' '}
                 <Link
                   href='/auth/sign-up'
-                  className='font-semibold text-blue-600 hover:underline'
+                  className='font-semibold text-slate-900 hover:text-orange-600'
                 >
                   Create one now
                 </Link>
               </p>
             </div>
           </form>
-
-          {/* Demo Info */}
-          <div className='mt-8 rounded-lg border border-blue-200 bg-blue-50 p-4'>
-            <p className='text-center text-xs text-blue-900'>
-              <span className='font-semibold'>Demo Mode:</span> Use test
-              credentials from onboarding
-            </p>
-          </div>
         </div>
-      </Card>
+      </section>
     </div>
   );
 }
