@@ -8,10 +8,15 @@
     "start": "next start",
     "lint": "eslint",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "generate": "prisma generate",
+    "prisma": "prisma",
+    "seed": "tsx seed/index.ts",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.0",
+    "@hono/zod-validator": "^0.7.6",
     "@openrouter/sdk": "^0.12.12",
     "@prisma/adapter-pg": "^7.7.0",
     "@prisma/client": "^7.7.0",

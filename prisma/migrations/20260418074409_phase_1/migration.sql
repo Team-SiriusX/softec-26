@@ -1,12 +1,3 @@
-/*
-  Warnings:
-
-  - You are about to drop the `account` table. If the table is not empty, all the data it contains will be lost.
-  - You are about to drop the `session` table. If the table is not empty, all the data it contains will be lost.
-  - You are about to drop the `user` table. If the table is not empty, all the data it contains will be lost.
-  - You are about to drop the `verification` table. If the table is not empty, all the data it contains will be lost.
-
-*/
 -- CreateEnum
 CREATE TYPE "Role" AS ENUM ('WORKER', 'VERIFIER', 'ADVOCATE');
 
@@ -28,29 +19,11 @@ CREATE TYPE "GrievanceCategory" AS ENUM ('COMMISSION_CHANGE', 'ACCOUNT_DEACTIVAT
 -- CreateEnum
 CREATE TYPE "CertificateStatus" AS ENUM ('GENERATED', 'EXPIRED');
 
--- DropForeignKey
-ALTER TABLE "account" DROP CONSTRAINT "account_userId_fkey";
-
--- DropForeignKey
-ALTER TABLE "session" DROP CONSTRAINT "session_userId_fkey";
-
--- DropTable
-DROP TABLE "account";
-
--- DropTable
-DROP TABLE "session";
-
--- DropTable
-DROP TABLE "user";
-
--- DropTable
-DROP TABLE "verification";
-
 -- CreateTable
-CREATE TABLE "users" (
+CREATE TABLE "User" (
     "id" TEXT NOT NULL,
     "email" TEXT NOT NULL,
-    "password_hash" TEXT NOT NULL,
+    "password_hash" TEXT,
     "role" "Role" NOT NULL DEFAULT 'WORKER',
     "full_name" TEXT NOT NULL,
     "phone" TEXT,
@@ -59,8 +32,9 @@ CREATE TABLE "users" (
     "is_active" BOOLEAN NOT NULL DEFAULT true,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
+    "image" TEXT,
 
-    CONSTRAINT "users_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "User_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -219,8 +193,53 @@ CREATE TABLE "income_certificates" (
     CONSTRAINT "income_certificates_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateTable
+CREATE TABLE "session" (
+    "id" TEXT NOT NULL,
+    "expiresAt" TIMESTAMP(3) NOT NULL,
+    "token" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "ipAddress" TEXT,
+    "userAgent" TEXT,
+    "userId" TEXT NOT NULL,
+
+    CONSTRAINT "session_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "account" (
+    "id" TEXT NOT NULL,
+    "accountId" TEXT NOT NULL,
+    "providerId" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "accessToken" TEXT,
+    "refreshToken" TEXT,
+    "idToken" TEXT,
+    "accessTokenExpiresAt" TIMESTAMP(3),
+    "refreshTokenExpiresAt" TIMESTAMP(3),
+    "scope" TEXT,
+    "password" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "account_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "verification" (
+    "id" TEXT NOT NULL,
+    "identifier" TEXT NOT NULL,
+    "value" TEXT NOT NULL,
+    "expiresAt" TIMESTAMP(3) NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "verification_pkey" PRIMARY KEY ("id")
+);
+
 -- CreateIndex
-CREATE UNIQUE INDEX "users_email_key" ON "users"("email");
+CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "refresh_tokens_token_key" ON "refresh_tokens"("token");
@@ -288,11 +307,23 @@ CREATE UNIQUE INDEX "vulnerability_flags_worker_id_flag_month_key" ON "vulnerabi
 -- CreateIndex
 CREATE INDEX "income_certificates_worker_id_idx" ON "income_certificates"("worker_id");
 
--- AddForeignKey
-ALTER TABLE "refresh_tokens" ADD CONSTRAINT "refresh_tokens_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+-- CreateIndex
+CREATE INDEX "session_userId_idx" ON "session"("userId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "session_token_key" ON "session"("token");
+
+-- CreateIndex
+CREATE INDEX "account_userId_idx" ON "account"("userId");
+
+-- CreateIndex
+CREATE INDEX "verification_identifier_idx" ON "verification"("identifier");
 
 -- AddForeignKey
-ALTER TABLE "shift_logs" ADD CONSTRAINT "shift_logs_worker_id_fkey" FOREIGN KEY ("worker_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "refresh_tokens" ADD CONSTRAINT "refresh_tokens_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "shift_logs" ADD CONSTRAINT "shift_logs_worker_id_fkey" FOREIGN KEY ("worker_id") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "shift_logs" ADD CONSTRAINT "shift_logs_platform_id_fkey" FOREIGN KEY ("platform_id") REFERENCES "platforms"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -301,25 +332,31 @@ ALTER TABLE "shift_logs" ADD CONSTRAINT "shift_logs_platform_id_fkey" FOREIGN KE
 ALTER TABLE "screenshots" ADD CONSTRAINT "screenshots_shift_log_id_fkey" FOREIGN KEY ("shift_log_id") REFERENCES "shift_logs"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "screenshots" ADD CONSTRAINT "screenshots_verifier_id_fkey" FOREIGN KEY ("verifier_id") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "screenshots" ADD CONSTRAINT "screenshots_verifier_id_fkey" FOREIGN KEY ("verifier_id") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "anomaly_flags" ADD CONSTRAINT "anomaly_flags_worker_id_fkey" FOREIGN KEY ("worker_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "anomaly_flags" ADD CONSTRAINT "anomaly_flags_worker_id_fkey" FOREIGN KEY ("worker_id") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "anomaly_flags" ADD CONSTRAINT "anomaly_flags_shift_log_id_fkey" FOREIGN KEY ("shift_log_id") REFERENCES "shift_logs"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "grievances" ADD CONSTRAINT "grievances_worker_id_fkey" FOREIGN KEY ("worker_id") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "grievances" ADD CONSTRAINT "grievances_worker_id_fkey" FOREIGN KEY ("worker_id") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "grievance_tags" ADD CONSTRAINT "grievance_tags_grievance_id_fkey" FOREIGN KEY ("grievance_id") REFERENCES "grievances"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "grievance_tags" ADD CONSTRAINT "grievance_tags_advocate_id_fkey" FOREIGN KEY ("advocate_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "grievance_tags" ADD CONSTRAINT "grievance_tags_advocate_id_fkey" FOREIGN KEY ("advocate_id") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "grievance_escalations" ADD CONSTRAINT "grievance_escalations_grievance_id_fkey" FOREIGN KEY ("grievance_id") REFERENCES "grievances"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "income_certificates" ADD CONSTRAINT "income_certificates_worker_id_fkey" FOREIGN KEY ("worker_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "income_certificates" ADD CONSTRAINT "income_certificates_worker_id_fkey" FOREIGN KEY ("worker_id") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "session" ADD CONSTRAINT "session_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "account" ADD CONSTRAINT "account_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;

@@ -1,5 +1,6 @@
 generator client {
-  provider = "prisma-client-js"
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
 }
 
 datasource db {
@@ -64,17 +65,17 @@ enum CertificateStatus {
 // ─────────────────────────────────────────────
 
 model User {
-  id           String          @id @default(uuid())
-  email        String          @unique
-  passwordHash String          @map("password_hash")
-  role         Role            @default(WORKER)
-  fullName     String          @map("full_name")
-  phone        String?
-  cityZone     String?         @map("city_zone") // e.g. "Gulberg", "DHA", "Johar Town"
-  category     WorkerCategory? // only relevant for WORKER role
-  isActive     Boolean         @default(true) @map("is_active")
-  createdAt    DateTime        @default(now()) @map("created_at")
-  updatedAt    DateTime        @updatedAt @map("updated_at")
+  id        String          @id @default(uuid())
+  email     String          @unique
+  password  String?         @map("password_hash")
+  role      Role            @default(WORKER)
+  fullName  String          @map("full_name")
+  phone     String?
+  cityZone  String?         @map("city_zone") // e.g. "Gulberg", "DHA", "Johar Town"
+  category  WorkerCategory? // only relevant for WORKER role
+  isActive  Boolean         @default(true) @map("is_active")
+  createdAt DateTime        @default(now()) @map("created_at")
+  updatedAt DateTime        @updatedAt @map("updated_at")
 
   // Relations
   shiftLogs     ShiftLog[]
@@ -100,6 +101,16 @@ model RefreshToken {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("refresh_tokens")
+}
+
+model Jwks {
+  id         String    @id
+  publicKey  String
+  privateKey String
+  createdAt  DateTime  @db.Timestamptz(3)
+  expiresAt  DateTime? @db.Timestamptz(3)
+
+  @@map("jwks")
 }
 
 // ─────────────────────────────────────────────

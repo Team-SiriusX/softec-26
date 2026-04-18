@@ -2,6 +2,7 @@ import { PrismaClient } from '@/generated/prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { betterAuth } from 'better-auth';
 import { prismaAdapter } from 'better-auth/adapters/prisma';
+import { bearer, jwt } from 'better-auth/plugins';
 
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL,
@@ -19,6 +20,7 @@ export const auth = betterAuth({
       strategy: 'jwt',
     },
   },
+  plugins: [jwt(), bearer()],
   user: {
     fields: {
       name: 'fullName',
