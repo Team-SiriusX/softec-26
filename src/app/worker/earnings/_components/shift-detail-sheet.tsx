@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import {
   Sheet,
   SheetContent,
@@ -7,7 +8,6 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { Separator } from '@/components/ui/separator';
-import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   AlertTriangle,
@@ -18,7 +18,9 @@ import {
   XCircle,
 } from 'lucide-react';
 import { useGetShift } from '../_api/get-shift';
+import { useUpsertScreenshot } from '../_api/upsert-screenshot';
 import { format } from 'date-fns';
+import { UploadButton } from '@/lib/uploadthing';
 
 const STATUS_CONFIG = {
   PENDING: {
@@ -70,7 +72,10 @@ function DetailRow({
 }
 
 export function ShiftDetailSheet({ shiftId, onClose }: ShiftDetailSheetProps) {
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
   const { data, isLoading } = useGetShift(shiftId ?? '');
+  const upsertScreenshot = useUpsertScreenshot();
   const shiftResponse = data as { data?: Record<string, any> } | undefined;
   const shift = shiftResponse?.data;
 
@@ -205,19 +210,72 @@ export function ShiftDetailSheet({ shiftId, onClose }: ShiftDetailSheetProps) {
               )}
 
               {/* Re-upload option for flagged/unverifiable */}
-              {(status === 'FLAGGED' || status === 'UNVERIFIABLE' || status === 'PENDING') && (
-                <Button size='sm' variant='outline' className='mt-3 gap-2' asChild>
-                  <a href='/worker/log-shift'>
+              {(status === 'FLAGGED' || status === 'UNVERIFIABLE' || status === 'PENDING' || !shift.screenshot) && (
+                <div className='mt-3'>
+                  <UploadButton
+                    endpoint='screenshotUploader'
+                    appearance={{
+                      button:
+                        'ut-ready:bg-background ut-ready:text-foreground ut-ready:border ut-ready:border-border ut-ready:hover:bg-muted ut-uploading:cursor-not-allowed ut-uploading:opacity-70',
+                    }}
+                    content={{
+                      button: ({ isUploading }) =>
+                        isUploading
+                          ? 'Uploading screenshot...'
+                          : shift.screenshot
+                            ? 'Re-upload screenshot'
+                            : 'Upload screenshot',
+                    }}
+                    onUploadBegin={() => {
+                      setUploadError(null);
+                    }}
+                    onBeforeUploadBegin={(files) => {
+                      const [file] = files;
+                      if (file && file.size > 5 * 1024 * 1024) {
+                        setUploadError('File is too large. Max size is 5 MB.');
+                        throw new Error('File exceeds 5 MB limit.');
+                      }
+
+                      return files;
+                    }}
+                    onClientUploadComplete={(uploadedFiles) => {
+                      const uploaded = uploadedFiles[0];
+                      const fileUrl =
+                        uploaded?.serverData?.fileUrl ?? uploaded?.ufsUrl ?? uploaded?.url;
+                      const fileKey = uploaded?.serverData?.fileKey ?? uploaded?.key;
+
+                      if (!shift?.id || !fileUrl || !fileKey) {
+                        setUploadError('Upload succeeded, but file metadata is missing. Please retry.');
+                        return;
+                      }
+
+                      upsertScreenshot.mutate({
+                        json: {
+                          shiftLogId: String(shift.id),
+                          fileUrl,
+                          fileKey,
+                        },
+                      });
+                    }}
+                    onUploadError={(error) => {
+                      setUploadError(error.message || 'Upload failed. Please try again.');
+                    }}
+                  />
+                  <div className='mt-2 inline-flex items-center gap-1 text-xs text-muted-foreground'>
                     <Upload className='size-3.5' aria-hidden='true' />
-                    {shift.screenshot ? 'Update shift entry' : 'Upload screenshot in log flow'}
-                  </a>
-                </Button>
+                    JPEG/PNG up to 5 MB
+                  </div>
+                </div>
               )}
 
-              {(status === 'FLAGGED' || status === 'UNVERIFIABLE' || status === 'PENDING') && (
+              {(status === 'FLAGGED' || status === 'UNVERIFIABLE' || status === 'PENDING' || !shift.screenshot) && (
                 <p className='mt-2 text-xs text-muted-foreground'>
-                  Dedicated screenshot upload and re-upload screens arrive in Phase 3.
+                  A community reviewer will check this. It may take 24–48 hours.
                 </p>
+              )}
+
+              {uploadError && (
+                <p className='mt-2 text-xs font-medium text-destructive'>{uploadError}</p>
               )}
             </div>
 

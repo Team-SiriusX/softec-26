@@ -121,6 +121,7 @@ export const updateVerificationHandler = async (c: Context) => {
     status: 'CONFIRMED' | 'FLAGGED' | 'UNVERIFIABLE';
     verifierNotes?: string;
   }>();
+  const verifierNotes = body.verifierNotes?.trim();
 
   const screenshot = await db.screenshot.findUnique({
     where: { id },
@@ -136,7 +137,7 @@ export const updateVerificationHandler = async (c: Context) => {
       where: { id },
       data: {
         status: body.status,
-        verifierNotes: body.verifierNotes ?? null,
+        verifierNotes: verifierNotes ? verifierNotes : null,
         reviewedAt: new Date(),
         verifierId: user.id,
       },

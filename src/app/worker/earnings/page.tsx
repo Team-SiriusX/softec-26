@@ -59,7 +59,7 @@ export default function WorkerEarningsPage() {
             View your shift history, status badges, and income trends over time.
           </p>
         </div>
-        <Button asChild>
+        <Button>
           <Link href='/worker/log-shift'>Log a shift</Link>
         </Button>
       </div>
