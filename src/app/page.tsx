@@ -5,6 +5,7 @@ import { ArrowRight, LayoutDashboard } from 'lucide-react';
 import { HeroSection } from '@/components/ui/glass-video-hero';
 import DemoOne from '@/components/ui/demo';
 import BarChartDemo from '@/components/ui/bar-chart-demo';
+import FeaturedSectionStatsDemo from '@/components/ui/featured-section-stats-demo';
 
 export default async function Home() {
   const user = await currentUser();
@@ -16,6 +17,7 @@ export default async function Home() {
       <HeroSection />
       <DemoOne />
       <BarChartDemo />
+      <FeaturedSectionStatsDemo />
 
       <section className='mx-auto w-full max-w-2xl space-y-8 p-6 pb-14 text-center'>
         <div className='space-y-4'>
