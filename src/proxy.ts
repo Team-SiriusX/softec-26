@@ -5,6 +5,7 @@ import {
   authRoutes,
   DEFAULT_LOGIN_REDIRECT,
   onboardingRoutes,
+  PENDING_APPROVAL_PAGE_PATH,
   publicRoutes,
   roleDefaultDashboards,
   SIGN_IN_PAGE_PATH,
@@ -13,10 +14,12 @@ import {
 } from './routes';
 
 type UserRole = keyof typeof roleDefaultDashboards;
+type ApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 
 type CookieCacheUser = {
   id?: string;
   role?: string;
+  approvalStatus?: string;
 };
 
 type CookieCacheSession = {
@@ -30,6 +33,7 @@ type SessionCookieCache = {
 };
 
 const roleSet = new Set<UserRole>(['WORKER', 'VERIFIER', 'ADVOCATE']);
+const approvalSet = new Set<ApprovalStatus>(['PENDING', 'APPROVED', 'REJECTED']);
 
 const pathMatches = (pathname: string, routes: readonly string[]) => {
   return routes.some(
@@ -43,6 +47,22 @@ const normalizeRole = (role: string | undefined): UserRole | null => {
   }
 
   return roleSet.has(role as UserRole) ? (role as UserRole) : null;
+};
+
+const normalizeApprovalStatus = (
+  approvalStatus: string | undefined,
+): ApprovalStatus | null => {
+  if (!approvalStatus) {
+    return null;
+  }
+
+  return approvalSet.has(approvalStatus as ApprovalStatus)
+    ? (approvalStatus as ApprovalStatus)
+    : null;
+};
+
+const requiresAdvocateApproval = (role: UserRole | null): role is 'VERIFIER' | 'ADVOCATE' => {
+  return role === 'VERIFIER' || role === 'ADVOCATE';
 };
 
 export async function proxy(request: NextRequest) {
@@ -60,6 +80,9 @@ export async function proxy(request: NextRequest) {
     cachedSession?.session?.id && cachedSession?.user?.id,
   );
   const userRole = normalizeRole(cachedSession?.user?.role);
+  const userApprovalStatus = normalizeApprovalStatus(
+    cachedSession?.user?.approvalStatus,
+  );
 
   const isAuthRoute = authRoutes.includes(pathname);
   const isPublicRoute = publicRoutes.includes(pathname);
@@ -67,6 +90,7 @@ export async function proxy(request: NextRequest) {
   const isVerifierRoute = pathMatches(pathname, verifierRoutes);
   const isAdvocateRoute = pathMatches(pathname, advocateRoutes);
   const isOnboardingRoute = pathMatches(pathname, onboardingRoutes);
+  const isPendingApprovalRoute = pathname === PENDING_APPROVAL_PAGE_PATH;
 
   const isApiRoute =
     pathname.startsWith('/api/') || pathname.startsWith('/trpc/');
@@ -77,6 +101,15 @@ export async function proxy(request: NextRequest) {
 
   if (isAuthRoute) {
     if (isAuthenticated) {
+      if (
+        requiresAdvocateApproval(userRole) &&
+        userApprovalStatus !== 'APPROVED'
+      ) {
+        return NextResponse.redirect(
+          new URL(PENDING_APPROVAL_PAGE_PATH, request.url),
+        );
+      }
+
       const redirectPath = userRole
         ? roleDefaultDashboards[userRole]
         : DEFAULT_LOGIN_REDIRECT;
@@ -98,6 +131,24 @@ export async function proxy(request: NextRequest) {
 
   if (!userRole) {
     return NextResponse.redirect(new URL(SIGN_IN_PAGE_PATH, request.url));
+  }
+
+  if (
+    requiresAdvocateApproval(userRole) &&
+    userApprovalStatus !== 'APPROVED' &&
+    !isPendingApprovalRoute
+  ) {
+    return NextResponse.redirect(new URL(PENDING_APPROVAL_PAGE_PATH, request.url));
+  }
+
+  if (
+    isPendingApprovalRoute &&
+    (!requiresAdvocateApproval(userRole) ||
+      userApprovalStatus === 'APPROVED')
+  ) {
+    return NextResponse.redirect(
+      new URL(roleDefaultDashboards[userRole], request.url),
+    );
   }
 
   if (isOnboardingRoute && userRole !== 'WORKER') {

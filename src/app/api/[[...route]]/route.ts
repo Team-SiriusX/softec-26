@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { handle } from 'hono/vercel';
 import { sample, me } from './controllers/(base)';
+import admin from './controllers/admin';
 import analytics from './controllers/analytics';
 import type { AnalyticsEnv } from './controllers/analytics/types';
 import anomaly from './controllers/anomaly';
@@ -25,6 +26,7 @@ app.onError((err, c) => {
 export const routes = app
   .route('/me', me)
   .route('/sample', sample)
+  .route('/admin', admin)
   .route('/shifts', shifts)
   .route('/screenshots', screenshots)
   .route('/grievances', grievances)

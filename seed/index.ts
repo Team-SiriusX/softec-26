@@ -616,6 +616,7 @@ async function upsertWorkerUsers(): Promise<SeedWorker[]> {
       where: { email: profile.email },
       update: {
         fullName: profile.fullName,
+        name: profile.fullName,
         role: Role.WORKER,
         cityZone: profile.cityZone,
         category: profile.category,
@@ -624,6 +625,7 @@ async function upsertWorkerUsers(): Promise<SeedWorker[]> {
       create: {
         email: profile.email,
         fullName: profile.fullName,
+        name: profile.fullName,
         role: Role.WORKER,
         cityZone: profile.cityZone,
         category: profile.category,
@@ -663,6 +665,7 @@ async function upsertRoleUsers(profiles: SeedUserProfile[]): Promise<SeedUser[]>
       where: { email: profile.email },
       update: {
         fullName: profile.fullName,
+        name: profile.fullName,
         role: profile.role,
         cityZone: profile.cityZone,
         category: null,
@@ -671,6 +674,7 @@ async function upsertRoleUsers(profiles: SeedUserProfile[]): Promise<SeedUser[]>
       create: {
         email: profile.email,
         fullName: profile.fullName,
+        name: profile.fullName,
         role: profile.role,
         cityZone: profile.cityZone,
         category: null,

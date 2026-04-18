@@ -15,6 +15,7 @@ export const onboardingRoutes = [
 export const publicRoutes = ['/', '/sample', '/chat', '/community/board', '/certificate/verify'];
 
 export const protectedRoutes = [
+  '/pending-approval',
   '/worker/dashboard',
   '/worker/analytics',
   '/worker/log-shift',
@@ -31,6 +32,7 @@ export const protectedRoutes = [
   '/advocate/grievances',
   '/advocate/vulnerability-flags',
   '/advocate/commission-tracker',
+  '/advocate/approvals',
 ];
 
 export const workerRoutes = [
@@ -52,10 +54,12 @@ export const advocateRoutes = [
   '/advocate/grievances',
   '/advocate/vulnerability-flags',
   '/advocate/commission-tracker',
+  '/advocate/approvals',
 ];
 
 export const SIGN_IN_PAGE_PATH = '/auth/sign-in';
 export const SIGN_UP_PAGE_PATH = '/auth/sign-up';
+export const PENDING_APPROVAL_PAGE_PATH = '/pending-approval';
 export const DEFAULT_LOGIN_REDIRECT = '/';
 
 export const roleDefaultDashboards = {

@@ -2,6 +2,9 @@
 CREATE TYPE "Role" AS ENUM ('WORKER', 'VERIFIER', 'ADVOCATE');
 
 -- CreateEnum
+CREATE TYPE "ApprovalStatus" AS ENUM ('PENDING', 'APPROVED', 'REJECTED');
+
+-- CreateEnum
 CREATE TYPE "WorkerCategory" AS ENUM ('RIDE_HAILING', 'FOOD_DELIVERY', 'FREELANCE_DESIGN', 'DOMESTIC_WORK', 'OTHER');
 
 -- CreateEnum
@@ -23,9 +26,12 @@ CREATE TYPE "CertificateStatus" AS ENUM ('GENERATED', 'EXPIRED');
 CREATE TABLE "User" (
     "id" TEXT NOT NULL,
     "email" TEXT NOT NULL,
+    "email_verified" BOOLEAN NOT NULL DEFAULT false,
     "password_hash" TEXT,
     "role" "Role" NOT NULL DEFAULT 'WORKER',
+    "approval_status" "ApprovalStatus" NOT NULL DEFAULT 'PENDING',
     "full_name" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
     "phone" TEXT,
     "city_zone" TEXT,
     "category" "WorkerCategory",
@@ -46,6 +52,17 @@ CREATE TABLE "refresh_tokens" (
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "refresh_tokens_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "jwks" (
+    "id" TEXT NOT NULL,
+    "publicKey" TEXT NOT NULL,
+    "privateKey" TEXT NOT NULL,
+    "createdAt" TIMESTAMPTZ(3) NOT NULL,
+    "expiresAt" TIMESTAMPTZ(3),
+
+    CONSTRAINT "jwks_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
