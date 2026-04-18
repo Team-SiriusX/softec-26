@@ -1,5 +1,6 @@
 "use client";
 
+import { motion, type Variants } from "motion/react";
 import { Area, AreaChart, ResponsiveContainer, Tooltip } from "recharts";
 
 interface ChartPoint {
@@ -147,34 +148,96 @@ function StatsTooltip({ active, payload, label }: StatsTooltipProps) {
 }
 
 export default function FeaturedSectionStats() {
+  const containerVariants: Variants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.08,
+        delayChildren: 0.1,
+      },
+    },
+  };
+
+  const cardVariants: Variants = {
+    hidden: { opacity: 0, y: 18, filter: "blur(3px)" },
+    visible: {
+      opacity: 1,
+      y: 0,
+      filter: "blur(0px)",
+      transition: {
+        duration: 0.55,
+        ease: [0.22, 1, 0.36, 1],
+      },
+    },
+  };
+
   return (
     <section className="mx-auto w-full max-w-6xl py-24 text-left">
       <div className="px-4 md:px-6">
-        <div className="relative max-w-5xl overflow-hidden rounded-3xl border border-border/70 bg-card p-6 md:p-8">
-          <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.28em] text-muted-foreground md:text-xs">
+        <motion.div
+          initial={{ opacity: 0, y: 14, filter: "blur(3px)" }}
+          whileInView={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+          viewport={{ once: true, amount: 0.3 }}
+          transition={{ duration: 0.6, ease: "easeOut" }}
+          className="relative max-w-5xl overflow-hidden rounded-3xl border border-border/70 bg-card p-6 md:p-8"
+        >
+          <motion.p
+            initial={{ opacity: 0, y: 8 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, amount: 0.5 }}
+            transition={{ duration: 0.45, delay: 0.05, ease: "easeOut" }}
+            className="mb-2 text-[10px] font-bold uppercase tracking-[0.28em] text-muted-foreground md:text-xs"
+          >
             FAIRGIG INTELLIGENCE LAYER
-          </p>
-          <h3 className="text-3xl font-black tracking-tight text-foreground md:text-5xl lg:text-6xl">
+          </motion.p>
+          <motion.h3
+            initial={{ opacity: 0, y: 12 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, amount: 0.4 }}
+            transition={{ duration: 0.55, delay: 0.1, ease: "easeOut" }}
+            className="text-3xl font-black tracking-tight text-foreground md:text-5xl lg:text-6xl"
+          >
             Verifying gig-work dignity with live, audit-ready intelligence.
-          </h3>
-          <p className="mt-4 max-w-4xl text-base font-medium text-muted-foreground md:text-xl">
+          </motion.h3>
+          <motion.p
+            initial={{ opacity: 0, y: 12 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, amount: 0.4 }}
+            transition={{ duration: 0.55, delay: 0.16, ease: "easeOut" }}
+            className="mt-4 max-w-4xl text-base font-medium text-muted-foreground md:text-xl"
+          >
             FairGig combines earnings proof, certificate validation, and grievance
             anomaly detection into a single trust infrastructure for workers,
             advocates, and institutions.
-          </p>
+          </motion.p>
 
-          <div className="pointer-events-none absolute inset-x-0 bottom-3 flex flex-wrap gap-x-6 gap-y-1 text-[10px] font-bold uppercase tracking-[0.24em] text-foreground/12 md:text-xs">
+          <motion.div
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true, amount: 0.4 }}
+            transition={{ duration: 0.6, delay: 0.24, ease: "easeOut" }}
+            className="pointer-events-none absolute inset-x-0 bottom-3 flex flex-wrap gap-x-6 gap-y-1 text-[10px] font-bold uppercase tracking-[0.24em] text-foreground/12 md:text-xs"
+          >
             <span>WAGE VERIFICATION</span>
             <span>CERTIFICATE TRUST</span>
             <span>GRIEVANCE RISK</span>
             <span>ADVOCATE FLOW</span>
             <span>REAL-TIME DECISIONS</span>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
 
-        <div className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <motion.div
+          variants={containerVariants}
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, amount: 0.25 }}
+          className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"
+        >
           {statCards.map((card) => (
-            <div
+            <motion.div
+              variants={cardVariants}
+              whileHover={{ y: -3, transition: { duration: 0.2, ease: "easeOut" } }}
               className="relative rounded-2xl border border-border/70 bg-card p-5"
               key={card.title}
             >
@@ -197,13 +260,19 @@ export default function FeaturedSectionStats() {
               <div className="pointer-events-none absolute bottom-2 right-3 text-[9px] font-black uppercase tracking-[0.18em] text-foreground/12">
                 FAIRGIG
               </div>
-            </div>
+            </motion.div>
           ))}
-        </div>
+        </motion.div>
       </div>
 
       <div className="mt-8 h-56 w-full px-4 md:px-6">
-        <div className="h-full w-full rounded-2xl border border-border/70 bg-card p-4 md:p-5">
+        <motion.div
+          initial={{ opacity: 0, y: 16, filter: "blur(2px)" }}
+          whileInView={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+          viewport={{ once: true, amount: 0.35 }}
+          transition={{ duration: 0.55, delay: 0.12, ease: "easeOut" }}
+          className="h-full w-full rounded-2xl border border-border/70 bg-card p-4 md:p-5"
+        >
           <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
             Trust Signal Trend
           </div>
@@ -232,7 +301,7 @@ export default function FeaturedSectionStats() {
               />
             </AreaChart>
           </ResponsiveContainer>
-        </div>
+        </motion.div>
       </div>
     </section>
   );

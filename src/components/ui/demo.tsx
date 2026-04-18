@@ -4,15 +4,6 @@ import { cn } from '@/lib/utils';
 export default function DemoOne() {
   return (
     <section className='relative w-full py-14 md:py-16'>
-      <div
-        aria-hidden='true'
-        className={cn(
-          'pointer-events-none absolute -top-1/2 left-1/2 h-[120vmin] w-[120vmin] -translate-x-1/2 rounded-b-full',
-          'bg-[radial-gradient(ellipse_at_center,--theme(--color-foreground/.1),transparent_50%)]',
-          'blur-[30px]'
-        )}
-      />
-
       <div className='relative mx-auto w-full max-w-5xl px-4'>
         <h2 className='mb-6 text-center'>
           <span className='text-muted-foreground block text-2xl font-medium'>
