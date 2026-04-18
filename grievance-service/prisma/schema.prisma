@@ -94,5 +94,6 @@ model User {
   role     Role   @default(WORKER)
   fullName String @map("full_name")
 
-  @@map("users")
+  grievances    Grievance[]
+  grievanceTags GrievanceTag[]
 }
