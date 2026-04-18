@@ -113,7 +113,7 @@ export default function SignUpPage() {
           className='absolute inset-0'
           style={{
             backgroundImage:
-              "linear-gradient(140deg, rgba(15,23,42,0.92), rgba(49,46,129,0.88) 55%, rgba(180,83,9,0.85)), url('https://images.unsplash.com/photo-1556761175-5973dc0f32e7?auto=format&fit=crop&w=1800&q=80')",
+              "linear-gradient(180deg, rgba(0,0,0,0.5), rgba(0,0,0,0.62)), url('https://images.unsplash.com/photo-1521791055366-0d553872125f?auto=format&fit=crop&w=1800&q=80')",
             backgroundSize: 'cover',
             backgroundPosition: 'center',
           }}
@@ -265,7 +265,7 @@ export default function SignUpPage() {
 
               <Button
                 type='submit'
-                className='h-12 w-full rounded-xl bg-orange-500 text-base font-semibold text-white hover:bg-orange-600'
+                className='bg-primary text-primary-foreground hover:bg-primary/90 h-12 w-full rounded-xl text-base font-semibold'
               >
                 Continue
               </Button>
@@ -275,7 +275,7 @@ export default function SignUpPage() {
                   Already have an account?{' '}
                   <Link
                     href='/auth/sign-in'
-                    className='font-semibold text-slate-900 hover:text-orange-600'
+                    className='font-semibold text-slate-900 hover:text-primary'
                   >
                     Sign in
                   </Link>
@@ -307,7 +307,7 @@ export default function SignUpPage() {
                           key={role.value}
                           className={`flex cursor-pointer items-center rounded-xl border p-4 transition-all ${
                             selectedRole === role.value
-                              ? 'border-orange-500 bg-orange-50 shadow-sm'
+                              ? 'border-primary bg-primary/10 shadow-sm'
                               : 'border-slate-200 bg-white hover:bg-slate-50'
                           }`}
                         >
@@ -343,7 +343,7 @@ export default function SignUpPage() {
                 <Button
                   type='submit'
                   disabled={isLoading}
-                  className='h-12 flex-1 rounded-xl bg-orange-500 text-base font-semibold text-white hover:bg-orange-600'
+                  className='bg-primary text-primary-foreground hover:bg-primary/90 h-12 flex-1 rounded-xl text-base font-semibold'
                 >
                   {isLoading ? (
                     <>

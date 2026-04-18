@@ -74,7 +74,7 @@ export default function SignInPage() {
           className='absolute inset-0'
           style={{
             backgroundImage:
-              "linear-gradient(140deg, rgba(15,23,42,0.92), rgba(49,46,129,0.88) 55%, rgba(180,83,9,0.85)), url('https://images.unsplash.com/photo-1556740758-90de374c12ad?auto=format&fit=crop&w=1800&q=80')",
+              "linear-gradient(180deg, rgba(0,0,0,0.52), rgba(0,0,0,0.62)), url('https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=1800&q=80')",
             backgroundSize: 'cover',
             backgroundPosition: 'center',
           }}
@@ -151,7 +151,7 @@ export default function SignInPage() {
                 </FieldLabel>
                 <Link
                   href='/auth/forget-password'
-                  className='text-xs font-semibold text-orange-600 hover:underline'
+                  className='text-primary text-xs font-semibold hover:underline'
                 >
                   Forgot password?
                 </Link>
@@ -179,7 +179,7 @@ export default function SignInPage() {
             <Button
               type='submit'
               disabled={isLoading}
-              className='h-12 w-full rounded-xl bg-orange-500 text-base font-semibold text-white hover:bg-orange-600'
+              className='bg-primary text-primary-foreground hover:bg-primary/90 h-12 w-full rounded-xl text-base font-semibold'
             >
               {isLoading ? (
                 <>
@@ -196,7 +196,7 @@ export default function SignInPage() {
                 Don&apos;t have an account?{' '}
                 <Link
                   href='/auth/sign-up'
-                  className='font-semibold text-slate-900 hover:text-orange-600'
+                  className='font-semibold text-slate-900 hover:text-primary'
                 >
                   Create one now
                 </Link>
