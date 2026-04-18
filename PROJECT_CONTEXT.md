@@ -1,186 +1,79 @@
-# FairGig Project Context (As of 2026-04-18)
+# FairGig Project Context
 
-## 1) Project Identity
+Last updated: 2026-04-18
 
-FairGig is a gig worker income and rights platform for SOFTEC 2026 Web Dev Competition.
+## 1) Project Summary
 
-It currently consists of:
+FairGig is a role-based platform for gig worker income tracking, verification, grievance handling, and anomaly detection, built for SOFTEC 2026.
 
-- A Next.js 16 web app (App Router)
-- Better Auth for identity/session handling
-- Prisma + PostgreSQL domain schema
-- Hono API layer mounted under /api
-- TanStack React Query typed hook pattern
-- A separate Python FastAPI anomaly detection microservice
+Current stack:
 
-## 2) Current Maturity Snapshot
+- Next.js 16 (App Router) + React 19 + TypeScript
+- Hono API mounted inside Next route handlers
+- Prisma ORM (PostgreSQL provider) with generated client in src/generated/prisma
+- Better Auth for session and social/email auth
+- TanStack React Query for client-side data operations
+- Separate Python FastAPI anomaly service using robust statistical rules
+
+## 2) Current Status (Detailed)
+
+### 2.1 Build and Runtime Health
+
+- Prisma module resolution issue is fixed.
+  - Root cause: missing generated client folder.
+  - Action taken: ran Prisma generate, which created src/generated/prisma.
+- Next.js production build currently succeeds.
+  - Turbopack compile: success.
+  - TypeScript check: success.
+  - Static generation: success.
+- Non-blocking build-time warnings still appear for missing social auth env vars (GitHub/Google client credentials), but they do not fail build.
+
+### 2.2 Anomaly Service Validation
+
+Anomaly service was installed, executed, and validated end-to-end at service level.
+
+Validated endpoints:
+
+- GET /health -> 200 OK
+- POST /analyze (with anomaly-service/test_payload.json) -> 200 OK
+- GET /docs -> 200 OK
+
+Observed analyze response:
+
+- analyzed_shifts: 12
+- anomalies_found: 1
+- risk_level: medium
+- detected anomaly type: income_cliff
+
+### 2.3 API and Feature Implementation Level
 
 Implemented and wired:
 
-- Core auth flow (sign in/sign up + middleware guards)
-- Role-oriented app route scaffolding (worker/verifier/advocate/community)
-- Business-domain API controller scaffolding in Hono
-- New query key registry for all domain modules
-- Anomaly API bridge from Next/Hono to Python service
-- Full statistical anomaly engine in anomaly-service
+- Auth pages and middleware routing structure
+- Domain route mounts in Hono
+- Role-based page scaffolding (worker, verifier, advocate, community)
+- Query key registry for domain data
+- Anomaly bridge handler in Next/Hono to Python FastAPI
+- Full anomaly detection logic in Python service
 
-Still scaffold-level in many places:
+Still scaffold-level in multiple domains:
 
-- Most domain UI pages/components are placeholders
-- Several Hono handlers are scaffold responses and need full DB/business logic
-- README at repo root is still generic and should be rewritten for FairGig
+- Several domain handlers return scaffold responses instead of full business logic
+- Most UI modules exist but require richer connected workflows
+- Domain workflows need stronger validation/error modeling
 
-## 3) High-Level Architecture
+## 3) Architecture
 
-### 3.1 Web Application
+### 3.1 Next.js App
 
-- Framework: Next.js 16 + React 19 + TypeScript
-- API pattern: Hono route composition in src/app/api/[[...route]]/route.ts
-- Data layer: Prisma client from src/lib/db.ts
-- Session/auth: Better Auth in src/lib/auth.ts and src/lib/auth-client.ts
-- Frontend fetching: typed hc client in src/lib/hono.ts + React Query hooks
+- App shell and routing in src/app
+- API entry point in src/app/api/[[...route]]/route.ts
+- Auth and route guard config in src/lib/auth.ts, src/lib/auth-client.ts, src/routes.ts, src/proxy.ts
+- Typed Hono client for frontend hooks in src/lib/hono.ts
 
-### 3.2 Anomaly Microservice
+### 3.2 API Layer (Hono in Next)
 
-- Framework: FastAPI
-- Runtime entry: anomaly-service/main.py
-- Algorithms: robust statistics in anomaly-service/detection/rules.py
-- Human explanations: anomaly-service/detection/explainer.py
-- Contract models: anomaly-service/models.py
-
-### 3.3 Cross-Service Flow
-
-1. Frontend calls Hono endpoint POST /api/anomaly/analyze.
-2. Hono handler fetches worker shifts (90 days) via Prisma.
-3. Hono transforms and forwards payload to FastAPI /analyze.
-4. FastAPI returns detected anomalies + risk summary.
-5. Hono relays response to client.
-
-Fallback behavior is implemented: if anomaly service is unavailable, Hono returns anomalies as empty list plus error anomaly_service_unavailable.
-
-## 4) Directory Structure (Updated)
-
-```text
-anomaly-service/
-  detection/
-    __init__.py
-    explainer.py
-    rules.py
-  main.py
-  models.py
-  README.md
-  requirements.txt
-  test_payload.json
-
-src/
-  app/
-    api/
-      [[...route]]/
-        route.ts
-        middleware/
-          auth-middleware.ts
-        controllers/
-          (base)/
-            index.ts
-            sample.ts
-          analytics/
-            index.ts
-            handlers.ts
-          anomaly/
-            index.ts
-            handlers.ts
-          certificates/
-            index.ts
-            handlers.ts
-          grievances/
-            index.ts
-            handlers.ts
-          screenshots/
-            index.ts
-            handlers.ts
-          shifts/
-            index.ts
-            handlers.ts
-
-    worker/
-      dashboard/
-        page.tsx
-        _components/
-          earnings-chart.tsx
-          anomaly-alert-card.tsx
-          city-median-card.tsx
-          effective-rate-card.tsx
-      log-shift/
-        page.tsx
-        _api/
-          create-shift.ts
-          get-shifts.ts
-          import-csv.ts
-        _components/
-          shift-form.tsx
-          csv-upload.tsx
-      certificate/
-        page.tsx
-        _api/
-          get-certificate.ts
-          create-certificate.ts
-        _components/
-          certificate-document.tsx
-      profile/
-        page.tsx
-
-    verifier/
-      queue/
-        page.tsx
-        _api/
-          get-pending-screenshots.ts
-          update-verification.ts
-        _components/
-          screenshot-review-card.tsx
-          verification-action-bar.tsx
-
-    advocate/
-      dashboard/
-        page.tsx
-        _api/
-          get-platform-stats.ts
-          get-vulnerability-flags.ts
-          get-income-distribution.ts
-        _components/
-          platform-commission-chart.tsx
-          vulnerability-flag-table.tsx
-          income-heatmap.tsx
-      grievances/
-        page.tsx
-        _components/
-          grievance-cluster-view.tsx
-
-    community/
-      board/
-        page.tsx
-        _api/
-          get-grievances.ts
-          create-grievance.ts
-        _components/
-          grievance-card.tsx
-          post-grievance-form.tsx
-
-  constants/
-    query-keys.ts
-  lib/
-    auth-client.ts
-    auth.ts
-    current-user.ts
-    db.ts
-    hono.ts
-    open-router.ts
-  proxy.ts
-  routes.ts
-```
-
-## 5) API Surface (Hono Mounts)
-
-Current mount points in src/app/api/[[...route]]/route.ts:
+Mounted route groups:
 
 - /api/sample
 - /api/shifts
@@ -190,12 +83,45 @@ Current mount points in src/app/api/[[...route]]/route.ts:
 - /api/certificates
 - /api/anomaly
 
-## 6) Route Access Model
+### 3.3 Data Layer (Prisma)
 
-Defined in src/routes.ts:
+- Prisma schema: prisma/schema.prisma
+- Generator output: src/generated/prisma
+- Shared DB client: src/lib/db.ts
 
-- authRoutes: sign-in/up and verification flows
-- publicRoutes: /, /sample, /chat
+Core domain models include:
+
+- User/auth/session/account/token entities
+- Platform and ShiftLog
+- Screenshot and verification flows
+- Grievance, tags, escalations
+- Anomaly and vulnerability flags
+- Daily platform stats
+- Income certificates
+
+### 3.4 Anomaly Service
+
+- Entry: anomaly-service/main.py
+- Models: anomaly-service/models.py
+- Detection rules: anomaly-service/detection/rules.py
+- Explanations: anomaly-service/detection/explainer.py
+
+Cross-service flow:
+
+1. Frontend sends request to /api/anomaly/analyze.
+2. Hono handler fetches 90-day shift data via Prisma.
+3. Handler maps payload and calls FastAPI /analyze.
+4. FastAPI returns anomaly list + severity summary.
+5. If service call fails, Hono returns graceful fallback:
+   - anomalies: []
+   - error: anomaly_service_unavailable
+
+## 4) Access and Routing
+
+Current route group status from src/routes.ts:
+
+- authRoutes: sign in/up and auth-related flows
+- publicRoutes: includes base and sample routes
 - protectedRoutes:
   - /worker/dashboard
   - /worker/log-shift
@@ -206,11 +132,9 @@ Defined in src/routes.ts:
   - /advocate/grievances
   - /community/board
 
-Middleware in src/proxy.ts enforces redirects for auth/public/protected scenarios.
+## 5) Query Layer Conventions
 
-## 7) Client Query Key Registry
-
-Defined in src/constants/query-keys.ts:
+Query keys in src/constants/query-keys.ts:
 
 - SAMPLE
 - SHIFTS
@@ -220,40 +144,27 @@ Defined in src/constants/query-keys.ts:
 - CERTIFICATES
 - ANOMALY
 
-## 8) Anomaly Service Technical Notes
+Frontend hooks follow a typed request/response pattern with Hono client and React Query.
 
-### 8.1 Start/Install
+## 6) Important Recent Fixes
 
-- Install: pip install -r requirements.txt
-- Run: uvicorn main:app --reload --port 8001
-- Judge testing: GET /docs
+### 6.1 Build Blocking Fixes
 
-### 8.2 Implemented Detection Rules
+- Generated Prisma client to resolve missing import in auth/db modules.
+- Installed and aligned missing API dependency usage for Hono validators.
+- Resolved multiple type-level request parsing issues in API handlers and frontend API hooks.
 
-1. Deduction Spike (Point Anomaly)
-   - Iglewicz-Hoaglin modified Z-score
-   - Threshold |mZ| > 3.5
-   - Recent window vs baseline behavior
+### 6.2 Handler Parsing Normalization
 
-2. Income Cliff (Contextual Anomaly)
-   - Weekly effective-hourly medians
-   - Rolling median with MAD-normalized lower bound
+Several scaffold handlers now use explicit request parsing (json/param) rather than relying on inferred c.req.valid types in plain Context handlers.
 
-3. Below Minimum Wage (Collective Anomaly)
-   - PKR 37,000/month converted to hourly threshold (37000/208)
-   - Last 30-day aggregate effective rate
+### 6.3 Verifier Hook Typing Workaround
 
-4. Commission Creep (Collective Anomaly)
-   - Theil-Sen slope estimation
-   - Upward trend threshold slope > 0.002/day
+In verifier queue update verification API hook, a narrow call-site cast is used to satisfy current inferred Hono client typing behavior.
 
-### 8.3 Output UX Design
+This is functionally valid but should be replaced with stricter route-level typing refinement later.
 
-- Explanations are worker-facing plain language
-- Include concrete numbers (percentages, PKR rates, trend values)
-- Return risk_level based on highest severity among anomalies
-
-## 9) Environment Variables (Current Inferred Set)
+## 7) Environment Variables (Current Expected Set)
 
 - DATABASE_URL
 - BETTER_AUTH_SECRET
@@ -265,56 +176,39 @@ Defined in src/constants/query-keys.ts:
 - OPEN_ROUTER_API_KEY
 - ANOMALY_SERVICE_URL
 
-Reference env example file:
+Reference file:
 
 - .env.local.example
 
-## 10) Data Domain Status
+## 8) Current Risks / Gaps
 
-Prisma schema already includes core FairGig entities:
+1. Domain handlers are partially scaffolded and need full persistence/business behavior.
+2. Some frontend pages/components are structural and need production-grade states and flows.
+3. Social auth env values are not fully configured in some environments.
+4. One verifier hook still uses a temporary type cast and should be hardened.
 
-- User, Session, Account, Verification, RefreshToken
-- Platform, ShiftLog, Screenshot
-- AnomalyFlag, VulnerabilityFlag
-- Grievance, GrievanceTag, GrievanceEscalation
-- DailyPlatformStat
-- IncomeCertificate
+## 9) Recommended Next Work (Priority Order)
 
-This means database domain modeling is relatively mature; the main work left is service-level logic and UI completion.
+1. Complete domain handlers with full DB and validation logic.
+2. Add integration tests for:
+   - /api/anomaly/analyze (bridge)
+   - anomaly-service /analyze (contract)
+3. Replace temporary verifier request cast with robust typed route contract.
+4. Harden UX states (loading/error/empty) for role dashboards.
+5. Update root README to reflect FairGig architecture and runbook.
 
-## 11) Practical Development Guidance
+## 10) Quick Mental Model for New Contributors
 
-When extending features:
+The project is no longer raw scaffolding.
 
-- Follow sample co-location pattern for new page modules
-- Keep typed Hono client flow for hooks
-- Keep robust error handling in API handlers
-- Keep anomaly service and web app decoupled via ANOMALY_SERVICE_URL
+It already has:
 
-Priority next steps:
+- Solid app/API/data architecture
+- A functioning anomaly microservice and bridge
+- A passing production build
 
-1. Replace scaffold handlers with full DB-backed implementations.
-2. Connect placeholder UI components to real hooks and role-aware data.
-3. Add integration tests for Hono anomaly bridge and FastAPI analyze endpoint.
+What remains is primarily product-layer completion:
 
-This means the project is already positioned for feature scaling without a major structural rewrite.
-
-## 14) If You Are New to This Repo: Fast Mental Model
-
-Think of this project as:
-
-- A Next.js application shell with authentication and route guarding done
-- A typed internal API setup done (Hono)
-- A rich, serious Postgres schema done for a worker-rights/earnings-verification product
-- Business endpoints, workflows, and polished product UX still being built
-
-In short: the foundation is in place; the product layer is the next major implementation phase.
-
-## 15) Suggested Next Documentation Files (Optional)
-
-To make onboarding even stronger after this file, you could add:
-
-- API_CONTRACTS.md: every endpoint grouped by domain with request/response examples
-- DATA_MODEL_GUIDE.md: table-by-table domain explanation with relationship diagrams
-- AUTH_FLOW.md: full session lifecycle and protected-route behavior
-- FEATURE_ROADMAP.md: what domain modules are scaffolded vs fully implemented
+- richer domain logic,
+- polished UI flows,
+- and stronger test coverage.
