@@ -12,7 +12,15 @@ const createCertificateSchema = z.object({
 });
 
 const app = new Hono()
-  .get('/:id', zValidator('param', z.object({ id: z.string() })), getCertificateHandler)
-  .post('/', zValidator('json', createCertificateSchema), createCertificateHandler);
+  .get(
+    '/:id',
+    zValidator('param', z.object({ id: z.string() })),
+    getCertificateHandler,
+  )
+  .post(
+    '/',
+    zValidator('json', createCertificateSchema),
+    createCertificateHandler,
+  );
 
 export default app;
