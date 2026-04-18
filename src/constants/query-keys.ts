@@ -10,6 +10,7 @@ export const enum QUERY_KEYS {
   GRIEVANCE_CLUSTER = 'grievance-cluster',
   GRIEVANCE_TRENDS = 'grievance-trends',
   COMMUNITY_POSTS = 'community-posts',
+  COMMUNITY_MY_POSTS = 'community-my-posts',
   COMMUNITY_POST_DETAIL = 'community-post-detail',
   COMMUNITY_PLATFORMS = 'community-platforms',
   COMMUNITY_MODERATION_QUEUE = 'community-moderation-queue',

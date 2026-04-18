@@ -17,7 +17,6 @@ import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
@@ -85,7 +84,7 @@ function extractCertificateId(rawValue: string): string {
   return embeddedUuid?.[0] ?? trimmedValue;
 }
 
-export default function VerifyCertificatePage() {
+function VerifyCertificatePageContent() {
   const searchParams = useSearchParams();
   const initialId = useMemo(() => searchParams.get('id') ?? '', [searchParams]);
 
@@ -384,6 +383,34 @@ export default function VerifyCertificatePage() {
         )}
       </div>
     </div>
+  );
+}
+
+function VerifyCertificateLoadingFallback() {
+  return (
+    <div className='min-h-screen bg-linear-to-b from-slate-50 via-white to-slate-50 px-4 py-12 text-slate-900'>
+      <div className='mx-auto max-w-6xl space-y-8'>
+        <div className='space-y-3 text-center'>
+          <div className='inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs font-semibold tracking-widest text-emerald-700 uppercase'>
+            <BadgeCheck className='h-4 w-4' /> Certificate Verification
+          </div>
+          <h1 className='text-5xl font-bold tracking-tight text-balance'>
+            Verify a FairGig Certificate
+          </h1>
+          <p className='mx-auto max-w-2xl text-lg leading-relaxed text-slate-600'>
+            Loading verification interface...
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function VerifyCertificatePage() {
+  return (
+    <Suspense fallback={<VerifyCertificateLoadingFallback />}>
+      <VerifyCertificatePageContent />
+    </Suspense>
   );
 }
 
