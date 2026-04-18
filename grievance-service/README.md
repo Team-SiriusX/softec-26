@@ -10,11 +10,11 @@ This service is the grievance data layer for all worker complaints. The Next.js 
 ## Quick Start
 ```bash
 cd grievance-service
-npm install
+pnpm install
 cp .env.example .env
 # Edit .env with your DATABASE_URL
-npm run db:generate
-npm start
+pnpm db:generate
+pnpm start
 ```
 
 Service runs on: http://localhost:8003
