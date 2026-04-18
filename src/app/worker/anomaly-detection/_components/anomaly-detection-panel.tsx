@@ -76,13 +76,38 @@ type AnomalyResult = {
   type: string;
   severity: keyof typeof severityTone;
   explanation: string;
+  explanation_urdu?: string;
+  data?: Record<string, unknown>;
 };
 
 type AnomalyDetectResponse = {
   anomalies?: AnomalyResult[];
   flags?: AnomalyResult[];
   analyzedShifts?: number;
+  analyzed_shifts?: number;
+  summary?: string;
+  summary_urdu?: string;
+  openrouterResponse?: unknown;
+  openrouter_response?: unknown;
 };
+
+const urduLabelPattern = /\n\nاردو:\s*\n?/;
+
+function splitBilingualText(content: string): { english: string; urdu: string | null } {
+  const text = content.trim();
+  if (!text) {
+    return { english: '', urdu: null };
+  }
+
+  const match = text.match(urduLabelPattern);
+  if (!match || typeof match.index !== 'number') {
+    return { english: text, urdu: null };
+  }
+
+  const english = text.slice(0, match.index).trim();
+  const urdu = text.slice(match.index + match[0].length).trim();
+  return { english, urdu: urdu || null };
+}
 
 function formatMoney(value: number): string {
   return new Intl.NumberFormat('en-PK', {
@@ -108,9 +133,57 @@ function computeRate(shift: ShiftRow): number {
   return Number(shift.netReceived) / hours;
 }
 
+function formatAnalyticsValue(value: unknown): string {
+  if (typeof value === 'number') {
+    if (Math.abs(value) >= 1000) {
+      return formatMoney(value);
+    }
+    return Number.isInteger(value) ? `${value}` : value.toFixed(2);
+  }
+  if (typeof value === 'string') {
+    return value;
+  }
+  if (typeof value === 'boolean') {
+    return value ? 'Yes' : 'No';
+  }
+  return 'N/A';
+}
+
+function formatAnalyticsLabel(key: string): string {
+  return key.replace(/[_-]/g, ' ');
+}
+
+function BilingualText({ text, urdu, className }: { text: string; urdu?: string | null; className?: string }) {
+  if (!text) return null;
+  const parsed = splitBilingualText(text);
+  const english = parsed.english || text;
+  const urduText = (urdu ?? parsed.urdu ?? '').trim();
+
+  return (
+    <div className={cn("flex flex-col gap-4", className)}>
+      <div dir="ltr" className="whitespace-pre-wrap">{english}</div>
+      {urduText && (
+        <div 
+          dir="rtl" 
+          lang="ur" 
+          className="font-[family-name:var(--font-urdu)] whitespace-pre-wrap text-right text-[1.15em]"
+          style={{ 
+            unicodeBidi: 'embed',
+            lineHeight: 2
+          }}
+        >
+          {urduText}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function AnomalyDetectionPanel({ workerId }: { workerId: string }) {
   const { user } = useCurrentUser();
   const [submittedAt, setSubmittedAt] = useState<string | null>(null);
+  const [lastSuccessfulResult, setLastSuccessfulResult] =
+    useState<AnomalyDetectResponse | null>(null);
   const currentCityZone = user && 'cityZone' in user ? user.cityZone : null;
 
   const ninetyDaysAgo = useMemo(() => {
@@ -141,7 +214,7 @@ export default function AnomalyDetectionPanel({ workerId }: { workerId: string }
 
   const detectionMutation = useMutation({
     mutationFn: async () => {
-      const response = await client.api.anomaly.detect.$post({
+      const response = await client.api.anomaly.analyze.$post({
         json: { workerId },
       });
 
@@ -151,12 +224,20 @@ export default function AnomalyDetectionPanel({ workerId }: { workerId: string }
 
       return (await response.json()) as AnomalyDetectResponse;
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
+      setLastSuccessfulResult(result);
       setSubmittedAt(new Date().toISOString());
     },
   });
 
-  const anomalies = detectionMutation.data?.anomalies ?? detectionMutation.data?.flags ?? [];
+  const effectiveResult = detectionMutation.data ?? lastSuccessfulResult;
+
+  const anomalies = effectiveResult?.anomalies ?? effectiveResult?.flags ?? [];
+  const openrouterResponse =
+    effectiveResult?.openrouterResponse ??
+    effectiveResult?.openrouter_response;
+  const narrativeSummary = effectiveResult?.summary ?? null;
+  const narrativeSummaryUrdu = effectiveResult?.summary_urdu ?? null;
   const sortedAnomalies = useMemo(
     () =>
       [...anomalies].sort(
@@ -191,7 +272,10 @@ export default function AnomalyDetectionPanel({ workerId }: { workerId: string }
 
   const highestAnomaly = sortedAnomalies[0];
   const hasAnomalies = sortedAnomalies.length > 0;
-  const analyzedShifts = detectionMutation.data?.analyzedShifts ?? shifts.length;
+  const analyzedShifts =
+    effectiveResult?.analyzedShifts ??
+    effectiveResult?.analyzed_shifts ??
+    shifts.length;
 
   return (
     <div className='space-y-6'>
@@ -201,30 +285,29 @@ export default function AnomalyDetectionPanel({ workerId }: { workerId: string }
           <div className='space-y-4'>
             <div className='flex flex-wrap items-center gap-2'>
               <Badge className='border-0 bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-white'>
-                Problem statement feature
+                Pay Protection
               </Badge>
               <Badge className='border-0 bg-cyan-400/15 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-cyan-100'>
-                90-day earnings scan
+                Last 90 Days Checked
               </Badge>
             </div>
             <div className='max-w-3xl space-y-3'>
               <h1 className='text-3xl font-black tracking-tight text-white lg:text-4xl'>
-                Anomaly detection
+                Check My Pay
               </h1>
               <p className='max-w-2xl text-sm text-slate-300 sm:text-base'>
-                FairGig checks your recent earnings for unusual deductions or sudden
-                income drops, then explains the issue in plain language so you can
-                decide what to verify or dispute.
+                We check your recent trips to see if the app unfairly reduced your pay or took hidden fees. 
+                If we find anything wrong, we explain it simply so you know exactly what to do.
               </p>
             </div>
             <div className='flex flex-wrap gap-2 text-xs text-slate-300'>
               <span className='inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1.5'>
                 <Sparkles className='size-3.5' aria-hidden='true' />
-                Transparent detection, not hidden scoring
+                Clear math
               </span>
               <span className='inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1.5'>
                 <Waves className='size-3.5' aria-hidden='true' />
-                Uses your logged shift history
+                Based on real trips
               </span>
             </div>
           </div>
@@ -232,19 +315,19 @@ export default function AnomalyDetectionPanel({ workerId }: { workerId: string }
           <div className='grid gap-3 sm:grid-cols-3 lg:min-w-[380px] lg:grid-cols-1 xl:grid-cols-3'>
             <div className='rounded-2xl border border-white/10 bg-white/8 px-4 py-3 backdrop-blur-sm'>
               <p className='text-xs uppercase tracking-[0.22em] text-slate-300'>
-                Logged shifts
+                Shifts
               </p>
               <p className='mt-1 text-2xl font-bold text-white'>{shifts.length}</p>
             </div>
             <div className='rounded-2xl border border-white/10 bg-white/8 px-4 py-3 backdrop-blur-sm'>
               <p className='text-xs uppercase tracking-[0.22em] text-slate-300'>
-                Avg. rate/hr
+                Avg rate
               </p>
               <p className='mt-1 text-2xl font-bold text-white'>{formatMoney(averageRate)}</p>
             </div>
             <div className='rounded-2xl border border-white/10 bg-white/8 px-4 py-3 backdrop-blur-sm'>
               <p className='text-xs uppercase tracking-[0.22em] text-slate-300'>
-                Deduction rate
+                Deductions
               </p>
               <p className='mt-1 text-2xl font-bold text-white'>{averageDeductionRate.toFixed(1)}%</p>
             </div>
@@ -257,14 +340,14 @@ export default function AnomalyDetectionPanel({ workerId }: { workerId: string }
           <CardHeader className='space-y-3'>
             <div className='flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between'>
               <div>
-                <CardTitle className='text-xl'>Run detection</CardTitle>
+                <CardTitle className='text-xl'>Start Checking</CardTitle>
                 <CardDescription>
-                  Scans the latest 90 days of logged shifts for anomalies.
+                  We will look at your last 90 days of work to find any pay issues.
                 </CardDescription>
               </div>
               <Badge variant='outline' className='w-fit gap-1.5'>
                 <Clock3 className='size-3.5' aria-hidden='true' />
-                {submittedAt ? `Last run ${new Intl.DateTimeFormat('en-PK', { timeStyle: 'short', dateStyle: 'medium' }).format(new Date(submittedAt))}` : 'Not run yet'}
+                {submittedAt ? `Last run: ${new Intl.DateTimeFormat('en-PK', { timeStyle: 'short', dateStyle: 'medium' }).format(new Date(submittedAt))}` : 'Not run yet'}
               </Badge>
             </div>
           </CardHeader>
@@ -278,13 +361,13 @@ export default function AnomalyDetectionPanel({ workerId }: { workerId: string }
               </div>
               <div className='rounded-2xl border border-border/60 bg-muted/30 px-4 py-3'>
                 <p className='text-xs uppercase tracking-[0.18em] text-muted-foreground'>
-                  Shifts analyzed
+                  Analyzed
                 </p>
                 <p className='mt-1 text-sm font-medium'>{analyzedShifts}</p>
               </div>
               <div className='rounded-2xl border border-border/60 bg-muted/30 px-4 py-3'>
                 <p className='text-xs uppercase tracking-[0.18em] text-muted-foreground'>
-                  Total net earnings
+                  Net
                 </p>
                 <p className='mt-1 text-sm font-medium'>{formatMoney(totalNet)}</p>
               </div>
@@ -296,11 +379,11 @@ export default function AnomalyDetectionPanel({ workerId }: { workerId: string }
                 disabled={detectionMutation.isPending || shiftsLoading || shifts.length === 0}
                 className='gap-2'
               >
-                {detectionMutation.isPending ? 'Analyzing...' : 'Run anomaly check'}
+                {detectionMutation.isPending ? 'Checking your pay...' : 'Check My Pay Now'}
                 <ArrowRight className='size-4' aria-hidden='true' />
               </Button>
               <p className='text-sm text-muted-foreground'>
-                The system will only flag unusual patterns it can explain.
+                We only flag things when money looks missing.
               </p>
             </div>
 
@@ -315,6 +398,11 @@ export default function AnomalyDetectionPanel({ workerId }: { workerId: string }
             {!detectionMutation.isPending && detectionMutation.isError && (
               <div className='rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-rose-950 dark:border-rose-900/40 dark:bg-rose-950/20 dark:text-rose-200'>
                 <p className='text-sm font-medium'>Unable to run anomaly detection right now.</p>
+                {lastSuccessfulResult && (
+                  <p className='mt-1 text-xs opacity-80'>
+                    Showing your last successful check below.
+                  </p>
+                )}
               </div>
             )}
 
@@ -323,10 +411,10 @@ export default function AnomalyDetectionPanel({ workerId }: { workerId: string }
                 <div className='flex items-start gap-3'>
                   <CheckCircle2 className='mt-0.5 size-5 shrink-0' aria-hidden='true' />
                   <div>
-                    <p className='font-semibold'>No unusual patterns were detected.</p>
+                    <p className='font-semibold'>Everything looks good!</p>
                     <p className='mt-1 text-sm leading-relaxed'>
-                      Your recent earnings look consistent enough for the model to stay quiet.
-                      If a platform changes deductions later, run this again after logging new shifts.
+                      Your pay seems normal and we did not find any unfair deductions in your recent trips. 
+                      Keep logging your shifts so we can protect your future earnings.
                     </p>
                   </div>
                 </div>
@@ -335,8 +423,27 @@ export default function AnomalyDetectionPanel({ workerId }: { workerId: string }
 
             {!detectionMutation.isPending && hasAnomalies && (
               <div className='space-y-4'>
+                {narrativeSummary && (
+                  <div className='rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-emerald-950 dark:border-emerald-900/40 dark:bg-emerald-950/20 dark:text-emerald-100'>
+                    <p className='text-xs font-semibold uppercase tracking-[0.18em] opacity-80'>
+                      Plain-language summary
+                    </p>
+                    <BilingualText
+                      text={narrativeSummary}
+                      urdu={narrativeSummaryUrdu}
+                      className='mt-2 text-sm leading-relaxed'
+                    />
+                  </div>
+                )}
+
                 {sortedAnomalies.map((anomaly, index) => {
                   const Icon = severityIcon[anomaly.severity];
+                  const analyticsEntries = Object.entries(anomaly.data ?? {}).filter(
+                    ([, value]) =>
+                      typeof value === 'number' ||
+                      typeof value === 'string' ||
+                      typeof value === 'boolean',
+                  );
 
                   return (
                     <div
@@ -355,9 +462,29 @@ export default function AnomalyDetectionPanel({ workerId }: { workerId: string }
                                 {anomaly.severity}
                               </Badge>
                             </div>
-                            <p className='mt-2 text-sm leading-relaxed opacity-95'>
-                              {anomaly.explanation}
-                            </p>
+                            <BilingualText 
+                              text={anomaly.explanation}
+                              urdu={anomaly.explanation_urdu}
+                              className='mt-3 text-sm leading-relaxed opacity-95' 
+                            />
+
+                            {analyticsEntries.length > 0 && (
+                              <div className='mt-3 grid gap-2 sm:grid-cols-2'>
+                                {analyticsEntries.slice(0, 6).map(([key, value]) => (
+                                  <div
+                                    key={key}
+                                    className='rounded-xl border border-current/15 bg-background/60 px-3 py-2'
+                                  >
+                                    <p className='text-[10px] uppercase tracking-[0.14em] opacity-75'>
+                                      {formatAnalyticsLabel(key)}
+                                    </p>
+                                    <p className='mt-1 text-xs font-semibold'>
+                                      {formatAnalyticsValue(value)}
+                                    </p>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         </div>
 
@@ -376,28 +503,28 @@ export default function AnomalyDetectionPanel({ workerId }: { workerId: string }
         <div className='space-y-6'>
           <Card className='border-border/70 shadow-sm shadow-slate-950/5'>
             <CardHeader>
-              <CardTitle className='text-base'>What the model looks for</CardTitle>
+              <CardTitle className='text-base'>What we look for</CardTitle>
               <CardDescription>
-                This mirrors the problem statement requirement: unusual deductions and sudden income drops.
+                We check for hidden fees and missing money in your pay.
               </CardDescription>
             </CardHeader>
             <CardContent className='space-y-4'>
               <div className='flex gap-3 rounded-2xl bg-primary/5 px-4 py-3'>
                 <TrendingDown className='mt-0.5 size-4 shrink-0 text-primary' aria-hidden='true' />
                 <p className='text-sm text-muted-foreground'>
-                  Sudden income drops compared with your own recent shift history.
+                  Sudden drops in your pay compared to your past trips.
                 </p>
               </div>
               <div className='flex gap-3 rounded-2xl bg-primary/5 px-4 py-3'>
                 <TrendingUp className='mt-0.5 size-4 shrink-0 text-primary' aria-hidden='true' />
                 <p className='text-sm text-muted-foreground'>
-                  Unexpected deductions or commission changes that do not fit the normal pattern.
+                  Hidden fees or extra deductions taken by the app without clear reason.
                 </p>
               </div>
               <div className='flex gap-3 rounded-2xl bg-primary/5 px-4 py-3'>
                 <Sparkles className='mt-0.5 size-4 shrink-0 text-primary' aria-hidden='true' />
                 <p className='text-sm text-muted-foreground'>
-                  Human-readable explanations that a non-technical worker can understand.
+                  We explain everything clearly so you know exactly what happened.
                 </p>
               </div>
 
@@ -418,9 +545,9 @@ export default function AnomalyDetectionPanel({ workerId }: { workerId: string }
 
           <Card className='border-border/70 shadow-sm shadow-slate-950/5'>
             <CardHeader>
-              <CardTitle className='text-base'>Next steps</CardTitle>
+              <CardTitle className='text-base'>What to do next</CardTitle>
               <CardDescription>
-                What to do when the check returns a signal.
+                If we catch a pay issue, here is what you can do.
               </CardDescription>
             </CardHeader>
             <CardContent className='space-y-3'>

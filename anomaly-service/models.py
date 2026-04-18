@@ -38,6 +38,7 @@ class AnalyzeResponse(BaseModel):
     risk_level: str
     anomalies: list[AnomalyDetail]
     summary: str
+    openrouter_response: dict | None = None
 
 
 class DetectFlag(BaseModel):
@@ -65,6 +66,7 @@ class BatchWorkerResult(BaseModel):
     risk_level: str
     anomalies: list[AnomalyDetail]
     summary: str
+    openrouter_response: dict | None = None
     error: str | None = None
 
 

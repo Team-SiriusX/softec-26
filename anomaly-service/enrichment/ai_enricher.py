@@ -12,18 +12,20 @@ from models import AnomalyDetail
 
 LOGGER = logging.getLogger(__name__)
 
-SYSTEM_PROMPT = """You are FairGig's income analyst. Gig worker earnings have been 
-statistically analyzed and anomalies were found. Explain findings 
-in plain, empathetic English a non-technical delivery rider understands.
+DEFAULT_OPENROUTER_MODEL = 'google/gemma-4-26b-a4b-it:free'
+
+SYSTEM_PROMPT = """You are a friendly helper for gig delivery riders.
+We checked their recent pay and found some issues. Explain these issues using very, very simple and easy-to-understand words.
 
 Rules:
-- Never say "algorithm", "statistical", "Z-score", "MAD", or "Theil-Sen"
-- Say "we noticed" or "the data shows" instead
-- Always reference real numbers from the findings (PKR amounts, percentages)
-- Tone: honest, supportive, not alarmist  
-- If severity is critical, be direct but not scary
-- Maximum 2 sentences per anomaly explanation
-- Output ONLY valid JSON, no markdown, no preamble
+- Speak as if you are talking to a friend who doesn't know tech or math.
+- Never use complex words. Do NOT say "algorithm", "statistical", "Z-score", "anomaly", or "variance".
+- Use simple phrases like "We noticed your pay dropped" or "The app took more money than usual".
+- Always include the real PKR money amounts from the data so they know exactly how much is missing.
+- Tone: very friendly, kind, and supportive.
+- Maximum 2 very short sentences per explanation. Be direct and clear.
+- Provide both an English and a matching Urdu translation in the JSON response.
+- Output ONLY valid JSON, no markdown, no other text.
 """
 
 
@@ -33,15 +35,20 @@ async def enrich_anomalies(
     platform: str,
     shift_count: int,
     date_range: str,
-) -> tuple[list[AnomalyDetail], str]:
-    api_key = os.environ.get('OPEN_ROUTER_API_KEY', '')
+) -> tuple[list[AnomalyDetail], str, dict[str, Any] | None]:
+    api_key = _openrouter_api_key()
     if not api_key:
-        return anomalies, ''
+        return anomalies, '', None
+
+    model = os.environ.get('OPENROUTER_MODEL') or os.environ.get(
+        'OPEN_ROUTER_MODEL',
+        DEFAULT_OPENROUTER_MODEL,
+    )
 
     user_message = _build_user_message(anomalies, platform, shift_count, date_range)
 
     payload = {
-        'model': 'anthropic/claude-3-haiku',
+        'model': model,
         'temperature': 0.3,
         'messages': [
             {'role': 'system', 'content': SYSTEM_PROMPT},
@@ -69,9 +76,10 @@ async def enrich_anomalies(
         parsed = _parse_json_content(content)
         enriched_items = parsed.get('enriched_anomalies', [])
         unified_summary = parsed.get('unified_summary', '')
+        unified_summary_urdu = parsed.get('unified_summary_urdu', '')
 
         if not isinstance(enriched_items, list):
-            return anomalies, ''
+            return anomalies, '', response_json
 
         enriched_by_type: dict[str, str] = {}
         for item in enriched_items:
@@ -79,8 +87,11 @@ async def enrich_anomalies(
                 continue
             anomaly_type = item.get('type')
             plain_explanation = item.get('plain_explanation')
+            urdu_explanation = item.get('urdu_explanation', '')
+            
             if isinstance(anomaly_type, str) and isinstance(plain_explanation, str):
-                enriched_by_type.setdefault(anomaly_type, plain_explanation)
+                combined = f"{plain_explanation}\n\nاردو:\n{urdu_explanation}" if urdu_explanation else plain_explanation
+                enriched_by_type.setdefault(anomaly_type, combined)
 
         updated_anomalies: list[AnomalyDetail] = []
         for anomaly in anomalies:
@@ -94,11 +105,31 @@ async def enrich_anomalies(
 
         if not isinstance(unified_summary, str):
             unified_summary = ''
+        else:
+            if isinstance(unified_summary_urdu, str) and unified_summary_urdu.strip():
+                unified_summary = f"{unified_summary}\n\nاردو:\n{unified_summary_urdu}"
 
-        return updated_anomalies, unified_summary
+        return updated_anomalies, unified_summary, response_json
+    except httpx.HTTPStatusError as exc:
+        LOGGER.exception('OpenRouter returned HTTP error for worker %s', worker_id)
+        error_payload: dict[str, Any] = {
+            'error': {
+                'status_code': exc.response.status_code,
+                'message': str(exc),
+            }
+        }
+        try:
+            provider_payload = exc.response.json()
+            if isinstance(provider_payload, dict):
+                error_payload['provider'] = provider_payload
+            else:
+                error_payload['provider'] = {'raw': provider_payload}
+        except ValueError:
+            error_payload['provider'] = {'raw': exc.response.text}
+        return anomalies, '', error_payload
     except (httpx.HTTPError, KeyError, IndexError, TypeError, ValueError):
         LOGGER.exception('Failed to enrich anomalies for worker %s', worker_id)
-        return anomalies, ''
+        return anomalies, '', None
 
 
 def _build_user_message(
@@ -127,9 +158,10 @@ def _build_user_message(
         'Return this exact JSON structure:\n'
         '{\n'
         '  "enriched_anomalies": [\n'
-        '    {"type": "...", "plain_explanation": "..."}\n'
+        '    {"type": "...", "plain_explanation": "...", "urdu_explanation": "..."}\n'
         '  ],\n'
         '  "unified_summary": "One paragraph explaining what happened to this worker\'s income this month in plain language.",\n'
+        '  "unified_summary_urdu": "Urdu translation of the unified summary.",\n'
         '  "recommended_action": "One concrete action the worker should take."\n'
         '}'
     )
@@ -146,3 +178,10 @@ def _parse_json_content(content: Any) -> dict[str, Any]:
             stripped_content = stripped_content[4:].strip()
 
     return json.loads(stripped_content)
+
+
+def _openrouter_api_key() -> str:
+    return os.environ.get('OPENROUTER_API_KEY') or os.environ.get(
+        'OPEN_ROUTER_API_KEY',
+        '',
+    )
