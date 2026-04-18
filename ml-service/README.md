@@ -2,6 +2,75 @@
 
 Collective intelligence layer for gig worker complaints. Complements statistical anomaly detection with unsupervised pattern recognition across workers.
 
+## AI Model Context For Vibe Coding
+
+This section gives an AI coding agent the shortest accurate context needed to modify this service safely.
+
+### What the model is
+
+- Unsupervised NLP pipeline built per request:
+  - TF-IDF vectorization
+  - LSA-style dimensionality reduction via TruncatedSVD
+  - KMeans clustering
+  - silhouette-based k selection
+- No pretrained deep model and no external model API dependency.
+
+### What the model is not
+
+- Not a supervised classifier.
+- Not a persisted embedding index.
+- Not a neural network service.
+- Not dependent on anomaly-service to function.
+
+### Non-negotiable invariants
+
+1. The service must run fully offline with request data only.
+2. `optimal_k` must be data-driven (silhouette selection), not hardcoded.
+3. Cluster outputs must remain explainable: label, keywords, sample text, severity.
+4. Cross-service anomaly correlation must be additive context, not a hard dependency.
+
+### Current model pipeline details
+
+- Vectorizer config currently uses:
+  - max_features 500
+  - ngram_range (1, 2)
+  - stop_words english
+  - min_df 1
+  - max_df 0.95
+  - sublinear_tf true
+- Dimensionality reduction:
+  - TruncatedSVD with adaptive component clamp for small corpora
+  - L2 normalization after SVD
+- Clustering:
+  - KMeans with n_init 10, random_state 42
+  - k search over bounded range with silhouette scoring
+
+### Why this matters for vibe coding agents
+
+- You can ship fast without model-download complexity.
+- Every output artifact can be explained to judges with transparent math.
+- Small accidental parameter changes can alter cluster quality dramatically, so treat vectorizer and k-selection settings as high-impact configuration.
+
+### Safe change checklist for AI agents
+
+- Keep request/response schemas backward compatible.
+- Keep trend and severity semantics stable unless explicitly changing product behavior.
+- Preserve anomaly-context optionality (`anomaly_contexts` may be empty).
+- If changing label heuristics, verify no major drop in interpretability.
+- If changing k bounds or silhouette logic, document rationale and expected behavior on small datasets.
+
+### Integration contract with anomaly-service
+
+- `anomaly_contexts` is keyed by worker_id and used for overlap insights.
+- Cluster generation does not require anomaly data.
+- Correlation strings and cross-service insight are informational overlays.
+
+### Do not regress
+
+- `/cluster` and `/trends` endpoint availability and schema shape.
+- Offline operation without API keys.
+- Human-readable and evidence-backed cluster outputs.
+
 ## Architecture Role
 
 The anomaly-service detects individual statistical signals — a single worker's deduction rate spiking, their hourly income collapsing below a rolling median. This service operates at a different layer: it finds collective patterns across workers, grouping complaints by topic to reveal whether an issue is isolated or systemic. Together, the two services give advocates both individual evidence (statistical anomalies per worker) and systemic proof (clusters of workers reporting the same issue at the same time on the same platform). One layer alone is insufficient — the combination is the argument.

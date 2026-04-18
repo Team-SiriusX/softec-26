@@ -2,6 +2,64 @@
 
 Production anomaly analysis API for gig-worker earnings. It performs robust statistical detection across payout history and can optionally enrich the final explanations with an LLM without changing the statistical outcomes.
 
+## AI Model Context
+
+This section is the fast mental model an AI coding agent should load before changing this service.
+
+### What the model layer is
+
+- Primary model layer: deterministic statistical detectors in `detection/rules.py`.
+- Secondary model layer: optional language rewrite/enrichment in `enrichment/ai_enricher.py`.
+- The enrichment model is not the source of truth for anomaly decisions.
+
+### What the model layer is not
+
+- It is not a learned forecasting model.
+- It does not train or persist weights.
+- It does not decide whether an anomaly exists using LLM output.
+
+### Non-negotiable invariants
+
+1. Anomaly detection must remain deterministic and based on numeric rules.
+2. AI enrichment may rewrite text only; it must not alter anomaly type, severity, or evidence numbers.
+3. If enrichment fails for any reason, baseline statistical output must still return successfully.
+4. `/analyze` must be operational without any API key.
+
+### Input and output contract summary
+
+- Input: worker_id plus chronological shift-level payout records.
+- Output: anomaly list with evidence payloads and explainable risk level.
+- Risk level is computed from severities, never from free-form text.
+
+### Current model components
+
+- Deduction spike detector (modified Z-score over deduction-rate behavior).
+- Income cliff detector (rolling weekly median with MAD bound).
+- Below-minimum-wage detector (legal benchmark over trailing 30-day window).
+- Commission-creep detector (Theil-Sen trend slope over deduction rates).
+- Optional enrichment model call to OpenRouter (`anthropic/claude-3-haiku`) for text clarity.
+
+### Safe change checklist for AI agents
+
+- Keep detector thresholds explicit, version-visible, and testable.
+- Do not hide detector values that are used in API response evidence.
+- Preserve `enrich=false` behavior as deterministic baseline mode.
+- Preserve fail-open behavior for enrichment network/JSON failures.
+- Keep field names in `AnomalyDetail.data` stable unless all consumers are updated.
+
+### Preferred extension points
+
+- Add new statistical detector as a pure function returning `AnomalyDetail | None`.
+- Register it in `main.py` detection order intentionally.
+- Add matching baseline explanation function in `detection/explainer.py`.
+- Optionally include enrichment mapping by anomaly `type` in ai enricher output.
+
+### Do not regress
+
+- CORS local-dev behavior.
+- Existing `/health` and `/analyze` response shape.
+- Summary fallback path when unified summary is missing.
+
 ## Service Scope
 
 This service is responsible for:
