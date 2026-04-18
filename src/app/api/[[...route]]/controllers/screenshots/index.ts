@@ -15,10 +15,21 @@ const createScreenshotSchema = z.object({
   fileKey: z.string().min(1),
 });
 
-const updateVerificationSchema = z.object({
-  status: z.enum(['CONFIRMED', 'FLAGGED', 'UNVERIFIABLE']),
-  verifierNotes: z.string().optional(),
-});
+const updateVerificationSchema = z
+  .object({
+    status: z.enum(['CONFIRMED', 'FLAGGED', 'UNVERIFIABLE']),
+    verifierNotes: z.string().optional(),
+  })
+  .superRefine((value, ctx) => {
+    const note = value.verifierNotes?.trim() ?? '';
+    if ((value.status === 'FLAGGED' || value.status === 'UNVERIFIABLE') && !note) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['verifierNotes'],
+        message: 'A reviewer note is required for flagged or unverifiable screenshots.',
+      });
+    }
+  });
 
 const app = new Hono()
   .use('/*', authMiddleware)
