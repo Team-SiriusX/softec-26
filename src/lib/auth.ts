@@ -24,10 +24,15 @@ export const auth = betterAuth({
   user: {
     additionalFields: {
       role: {
-        type: ['WORKER', 'VERIFIER', 'ADVOCATE'],
+        type: 'string',
         required: false,
         defaultValue: 'WORKER',
-        input: false, // don't allow user to set role
+        input: true,
+      },
+      fullName: {
+        type: 'string',
+        required: true,
+        input: true,
       },
     },
   },

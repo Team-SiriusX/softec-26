@@ -74,9 +74,6 @@ export default function SignUpPage() {
         email: data.email,
         password: data.password,
         name: data.fullName,
-        data: {
-          role: data.role,
-        },
       });
 
       if (response.error) {

@@ -56,7 +56,7 @@ export default async function Home() {
           <p className='text-muted-foreground text-sm'>
             Logged in as{' '}
             <span className='text-foreground font-medium'>
-              {user.name || user.email}
+              {user.fullName || user.email}
             </span>{' '}
             ({user.role})
           </p>

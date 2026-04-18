@@ -9,7 +9,7 @@ export const useAnomalyDetect = () => {
 
   return useMutation({
     mutationFn: async (workerId: string) => {
-      const response = await client.api.anomaly.$post({
+      const response = await client.api.anomaly.analyze.$post({
         json: { workerId },
       });
       if (!response.ok) {

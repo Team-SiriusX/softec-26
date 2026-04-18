@@ -85,7 +85,7 @@ export function EarningsHistory({
         <FileText className='size-10 mb-3 opacity-30' aria-hidden='true' />
         <p className='text-sm font-medium'>No shifts logged yet</p>
         <p className='text-xs mt-1'>Your shift history will appear here.</p>
-        <Button asChild size='sm' className='mt-4'>
+        <Button size='sm' className='mt-4'>
           <a href='/worker/log-shift'>Log your first shift →</a>
         </Button>
       </div>

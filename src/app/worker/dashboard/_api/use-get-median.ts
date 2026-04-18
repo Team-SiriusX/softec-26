@@ -4,15 +4,25 @@ import { useQuery } from '@tanstack/react-query';
 import { QUERY_KEYS } from '@/constants/query-keys';
 import { client } from '@/lib/hono';
 
+type CityMedianResponse = {
+  median_hourly: number | null;
+  median_income: number | null;
+  avg_commission_rate: number | null;
+  sample_size: number;
+  city_zone?: string;
+  category?: string;
+  message?: string;
+};
+
 export const useGetMedian = (category?: string, zone?: string) => {
-  return useQuery({
-    queryKey: [QUERY_KEYS.MEDIAN, category, zone],
+  return useQuery<CityMedianResponse>({
+    queryKey: [QUERY_KEYS.CITY_MEDIAN, category, zone],
     queryFn: async () => {
       const query: Record<string, string> = {};
       if (category) query.category = category;
-      if (zone) query.zone = zone;
+      if (zone) query.cityZone = zone;
 
-      const response = await client.api.analytics.median.$get({ query });
+      const response = await client.api.anomaly['city-median'].$get({ query });
 
       if (!response.ok) {
         throw new Error('Failed to fetch city median');

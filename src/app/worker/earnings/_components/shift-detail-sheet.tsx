@@ -72,7 +72,8 @@ function DetailRow({
 
 export function ShiftDetailSheet({ shiftId, onClose }: ShiftDetailSheetProps) {
   const { data, isLoading } = useGetShift(shiftId ?? '');
-  const shift = (data as { data?: Record<string, unknown> } | undefined)?.data;
+  const shiftResponse = data as { data?: Record<string, any> } | undefined;
+  const shift = shiftResponse?.data;
 
   const status = (shift?.verificationStatus as keyof typeof STATUS_CONFIG) ?? 'PENDING';
   const statusCfg = STATUS_CONFIG[status];
@@ -207,7 +208,7 @@ export function ShiftDetailSheet({ shiftId, onClose }: ShiftDetailSheetProps) {
               {/* Re-upload option for flagged/unverifiable */}
               {(status === 'FLAGGED' || status === 'UNVERIFIABLE' || status === 'PENDING') && (
                 <Button
-                  asChild
+                
                   size='sm'
                   variant='outline'
                   className='mt-3 gap-2'

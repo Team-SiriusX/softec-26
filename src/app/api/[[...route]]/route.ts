@@ -30,7 +30,7 @@ export const routes = app
   .route('/grievances', grievances)
   .route('/analytics', analytics)
   .route('/certificates', certificates)
-  .route('/anomaly', anomaly);
+  .route('/anomaly', anomaly)
 
 export const GET = handle(app);
 export const POST = handle(app);

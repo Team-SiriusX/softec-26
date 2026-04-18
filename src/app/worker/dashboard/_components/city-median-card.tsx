@@ -17,7 +17,7 @@ export function CityMedianCard({
 }: CityMedianCardProps) {
   const { data, isLoading } = useGetMedian(category, zone);
 
-  const median = data?.data?.medianHourlyRate ?? null;
+  const median = data?.median_hourly ?? data?.median_income ?? null;
 
   const pct =
     median && workerHourlyRate !== null
