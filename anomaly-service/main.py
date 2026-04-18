@@ -98,9 +98,11 @@ async def analyze(
             risk_level='none',
             anomalies=[],
             summary='No shift data provided for analysis.',
+            openrouter_response=None,
         )
 
     anomalies: list[AnomalyDetail] = []
+    openrouter_response = None
 
     for detector in (
         check_deduction_spike,
@@ -118,7 +120,7 @@ async def analyze(
     if enrich and anomalies and _openrouter_api_key():
         platform = _summarize_platforms(shifts)
         date_range = _format_date_range(shifts)
-        enriched_anomalies, unified_summary = await enrich_anomalies(
+        enriched_anomalies, unified_summary, openrouter_response = await enrich_anomalies(
             anomalies=anomalies,
             worker_id=request.worker_id,
             platform=platform,
@@ -137,6 +139,7 @@ async def analyze(
         risk_level=risk_level,
         anomalies=anomalies,
         summary=summary,
+        openrouter_response=openrouter_response,
     )
 
 
@@ -197,6 +200,7 @@ async def analyze_batch(
             shifts = sorted(worker_input.earnings, key=lambda s: isoparse(s.date).date())
 
             anomalies: list[AnomalyDetail] = []
+            openrouter_response = None
             for detector in (
                 check_deduction_spike,
                 check_income_cliff,
@@ -213,7 +217,7 @@ async def analyze_batch(
             if enrich and anomalies and _openrouter_api_key():
                 platform = _summarize_platforms(shifts)
                 date_range = _format_date_range(shifts)
-                enriched_anomalies, unified_summary = await enrich_anomalies(
+                enriched_anomalies, unified_summary, openrouter_response = await enrich_anomalies(
                     anomalies=anomalies,
                     worker_id=worker_input.worker_id,
                     platform=platform,
@@ -231,6 +235,7 @@ async def analyze_batch(
                 risk_level=risk_level,
                 anomalies=anomalies,
                 summary=summary,
+                openrouter_response=openrouter_response,
                 error=None,
             )
         except Exception as exc:
@@ -240,6 +245,7 @@ async def analyze_batch(
                 risk_level='none',
                 anomalies=[],
                 summary='',
+                openrouter_response=None,
                 error=str(exc),
             )
 
@@ -314,11 +320,25 @@ def build_summary(anomalies: list[AnomalyDetail], shifts) -> str:
 def _openrouter_api_key() -> str:
     import os
 
-    return os.environ.get('OPEN_ROUTER_API_KEY', '')
+    return os.environ.get('OPENROUTER_API_KEY') or os.environ.get(
+        'OPEN_ROUTER_API_KEY',
+        '',
+    )
 
 
 def _summarize_platforms(shifts) -> str:
-    platform_names = [shift.platform.name for shift in shifts if getattr(shift, 'platform', None)]
+    platform_names = []
+    for shift in shifts:
+        platform = getattr(shift, 'platform', None)
+        if platform is None:
+            continue
+        if isinstance(platform, str):
+            platform_names.append(platform)
+            continue
+        platform_name = getattr(platform, 'name', None)
+        if isinstance(platform_name, str):
+            platform_names.append(platform_name)
+
     if not platform_names:
         return 'Unknown'
 

@@ -1,7 +1,7 @@
 import Providers from '@/components/providers';
 import { cn } from '@/lib/utils';
 import type { Metadata } from 'next';
-import { Geist, Geist_Mono, Inter } from 'next/font/google';
+import { Geist, Geist_Mono, Inter, Noto_Nastaliq_Urdu } from 'next/font/google';
 import './globals.css';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
@@ -14,6 +14,13 @@ const geistSans = Geist({
 const geistMono = Geist_Mono({
   variable: '--font-geist-mono',
   subsets: ['latin'],
+});
+
+const notoNastaliqUrdu = Noto_Nastaliq_Urdu({
+  variable: '--font-urdu',
+  weight: '400',
+  subsets: ['arabic'],
+  display: 'swap',
 });
 
 export const metadata: Metadata = {
@@ -34,6 +41,7 @@ export default function RootLayout({
         'antialiased',
         geistSans.variable,
         geistMono.variable,
+        notoNastaliqUrdu.variable,
         'font-sans',
         inter.variable,
       )}
