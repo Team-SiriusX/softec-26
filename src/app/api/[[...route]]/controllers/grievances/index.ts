@@ -19,12 +19,12 @@ import {
 } from './handlers';
 
 const app = new Hono()
+  .use('/*', authMiddleware)
   .get('/stats', getGrievanceStats)
   .get('/platforms', getGrievancePlatforms)
   .get('/for-cluster', getForClustering)
   .get('/', listGrievances)
   .get('/:id', getGrievance)
-  .use('/*', authMiddleware)
   .post('/cluster', clusterGrievances)
   .post('/trends', getGrievanceTrends)
   .post('/', createGrievance)

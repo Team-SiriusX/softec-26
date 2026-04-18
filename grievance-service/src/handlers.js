@@ -477,12 +477,15 @@ export const addTag = async (c) => {
     }
 
     const advocate = await db.user.findFirst({
-      where: { role: 'ADVOCATE' },
+      where: {
+        id: parsed.data.advocateId,
+        role: 'ADVOCATE'
+      },
       select: { id: true }
     })
 
     if (!advocate) {
-      return c.json({ error: 'No advocate user available for tagging' }, 409)
+      return c.json({ error: 'Invalid advocate user' }, 409)
     }
 
     const tag = await db.grievanceTag.create({

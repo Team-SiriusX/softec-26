@@ -116,6 +116,13 @@ export type WorkerProfileEditorUser = {
 
 type ProfileEditorProps = {
   initialUser: WorkerProfileEditorUser;
+  verificationSummary: {
+    total: number;
+    confirmed: number;
+    flagged: number;
+    unverifiable: number;
+    pending: number;
+  };
 };
 
 function getInitials(value: string): string {
@@ -172,7 +179,10 @@ function InfoRow({
   );
 }
 
-export default function ProfileEditor({ initialUser }: ProfileEditorProps) {
+export default function ProfileEditor({
+  initialUser,
+  verificationSummary,
+}: ProfileEditorProps) {
   const queryClient = useQueryClient();
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -216,6 +226,10 @@ export default function ProfileEditor({ initialUser }: ProfileEditorProps) {
   const profileStatusTone = initialUser.isActive
     ? 'bg-emerald-500/15 text-emerald-100 ring-1 ring-emerald-400/30'
     : 'bg-amber-500/15 text-amber-100 ring-1 ring-amber-400/30';
+  const verifiedRate =
+    verificationSummary.total > 0
+      ? Math.round((verificationSummary.confirmed / verificationSummary.total) * 100)
+      : 0;
 
   const updateProfileMutation = useMutation({
     mutationFn: async (values: ProfileFormValues) => {
@@ -548,6 +562,57 @@ export default function ProfileEditor({ initialUser }: ProfileEditorProps) {
         </Card>
 
         <div className='space-y-6'>
+          <Card className='border-border/70 shadow-sm shadow-slate-950/5'>
+            <CardHeader>
+              <CardTitle className='text-base'>Earnings verification status</CardTitle>
+              <CardDescription>
+                Screenshot review outcomes for your submitted shifts.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className='space-y-4'>
+              <div className='rounded-2xl border border-border/60 bg-primary/5 px-4 py-3'>
+                <p className='text-xs uppercase tracking-[0.18em] text-muted-foreground'>
+                  Verified rate
+                </p>
+                <div className='mt-1 flex items-center justify-between gap-3'>
+                  <p className='text-2xl font-bold text-foreground'>{verifiedRate}%</p>
+                  <Badge variant={verifiedRate >= 70 ? 'secondary' : 'outline'}>
+                    {verificationSummary.confirmed} / {verificationSummary.total} confirmed
+                  </Badge>
+                </div>
+              </div>
+
+              <div className='grid grid-cols-2 gap-3'>
+                <div className='rounded-xl border border-border/60 px-3 py-2'>
+                  <p className='text-[11px] uppercase tracking-[0.16em] text-muted-foreground'>
+                    Pending
+                  </p>
+                  <p className='mt-1 text-lg font-semibold'>{verificationSummary.pending}</p>
+                </div>
+                <div className='rounded-xl border border-border/60 px-3 py-2'>
+                  <p className='text-[11px] uppercase tracking-[0.16em] text-muted-foreground'>
+                    Confirmed
+                  </p>
+                  <p className='mt-1 text-lg font-semibold'>{verificationSummary.confirmed}</p>
+                </div>
+                <div className='rounded-xl border border-border/60 px-3 py-2'>
+                  <p className='text-[11px] uppercase tracking-[0.16em] text-muted-foreground'>
+                    Flagged
+                  </p>
+                  <p className='mt-1 text-lg font-semibold'>{verificationSummary.flagged}</p>
+                </div>
+                <div className='rounded-xl border border-border/60 px-3 py-2'>
+                  <p className='text-[11px] uppercase tracking-[0.16em] text-muted-foreground'>
+                    Unverifiable
+                  </p>
+                  <p className='mt-1 text-lg font-semibold'>
+                    {verificationSummary.unverifiable}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
           <Card className='border-border/70 shadow-sm shadow-slate-950/5'>
             <CardHeader>
               <CardTitle className='text-base'>Profile snapshot</CardTitle>

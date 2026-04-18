@@ -16,6 +16,30 @@ const ML_SERVICE_URL = process.env.ML_SERVICE_URL || 'http://localhost:8002';
 
 const toStatus = (status: number) => status as ContentfulStatusCode;
 
+const requireUser = (c: Context): SessionUser | Response => {
+  const user = c.var.user as SessionUser | undefined;
+  if (!user) {
+    return c.json({ error: 'Unauthorized' }, 401);
+  }
+  return user;
+};
+
+const requireRole = (
+  c: Context,
+  roles: Array<SessionUser['role']>,
+): SessionUser | Response => {
+  const maybeUser = requireUser(c);
+  if (maybeUser instanceof Response) {
+    return maybeUser;
+  }
+
+  if (!roles.includes(maybeUser.role)) {
+    return c.json({ error: 'Forbidden' }, 403);
+  }
+
+  return maybeUser;
+};
+
 async function callGrievanceService(
   path: string,
   options: RequestInit = {},
@@ -43,8 +67,17 @@ async function passthroughJsonResponse(res: Response): Promise<Response> {
 }
 
 export async function listGrievances(c: Context) {
+  const maybeUser = requireUser(c);
+  if (maybeUser instanceof Response) {
+    return maybeUser;
+  }
+
   const query = c.req.query();
   const params = new URLSearchParams();
+
+  if (maybeUser.role === 'WORKER' && !query.workerId) {
+    params.set('workerId', maybeUser.id);
+  }
 
   for (const key of [
     'platformId',
@@ -76,6 +109,11 @@ export async function listGrievances(c: Context) {
 }
 
 export async function getGrievancePlatforms(c: Context) {
+  const maybeUser = requireUser(c);
+  if (maybeUser instanceof Response) {
+    return maybeUser;
+  }
+
   try {
     const res = await callGrievanceService('/platforms');
     return c.json(await res.json(), toStatus(res.status));
@@ -85,6 +123,11 @@ export async function getGrievancePlatforms(c: Context) {
 }
 
 export async function getForClustering(c: Context) {
+  const maybeUser = requireRole(c, ['ADVOCATE']);
+  if (maybeUser instanceof Response) {
+    return maybeUser;
+  }
+
   const query = c.req.query();
   const params = new URLSearchParams();
 
@@ -111,6 +154,11 @@ export async function getForClustering(c: Context) {
 }
 
 export async function getGrievance(c: Context) {
+  const maybeUser = requireUser(c);
+  if (maybeUser instanceof Response) {
+    return maybeUser;
+  }
+
   const id = c.req.param('id');
 
   try {
@@ -125,9 +173,9 @@ export async function getGrievance(c: Context) {
 }
 
 export async function createGrievance(c: Context) {
-  const user = c.var.user as SessionUser | undefined;
-  if (!user) {
-    return c.json({ error: 'Unauthorized' }, 401);
+  const maybeUser = requireRole(c, ['WORKER']);
+  if (maybeUser instanceof Response) {
+    return maybeUser;
   }
 
   try {
@@ -140,7 +188,7 @@ export async function createGrievance(c: Context) {
 
     const res = await callGrievanceService('/grievances', {
       method: 'POST',
-      body: JSON.stringify({ ...body, workerId: user.id }),
+      body: JSON.stringify({ ...body, workerId: maybeUser.id }),
     });
 
     if (res.status === 400) {
@@ -154,6 +202,11 @@ export async function createGrievance(c: Context) {
 }
 
 export async function updateGrievance(c: Context) {
+  const maybeUser = requireRole(c, ['ADVOCATE']);
+  if (maybeUser instanceof Response) {
+    return maybeUser;
+  }
+
   const id = c.req.param('id');
 
   try {
@@ -174,6 +227,11 @@ export async function updateGrievance(c: Context) {
 }
 
 export async function deleteGrievance(c: Context) {
+  const maybeUser = requireRole(c, ['ADVOCATE']);
+  if (maybeUser instanceof Response) {
+    return maybeUser;
+  }
+
   const id = c.req.param('id');
 
   try {
@@ -192,13 +250,21 @@ export async function deleteGrievance(c: Context) {
 }
 
 export async function addTag(c: Context) {
+  const maybeUser = requireRole(c, ['ADVOCATE']);
+  if (maybeUser instanceof Response) {
+    return maybeUser;
+  }
+
   const id = c.req.param('id');
 
   try {
-    const body = await c.req.json();
+    const body = await c.req.json<{ tag: string }>();
     const res = await callGrievanceService(`/grievances/${id}/tags`, {
       method: 'POST',
-      body: JSON.stringify(body),
+      body: JSON.stringify({
+        tag: body.tag,
+        advocateId: maybeUser.id,
+      }),
     });
 
     if (res.status === 409) {
@@ -212,6 +278,11 @@ export async function addTag(c: Context) {
 }
 
 export async function removeTag(c: Context) {
+  const maybeUser = requireRole(c, ['ADVOCATE']);
+  if (maybeUser instanceof Response) {
+    return maybeUser;
+  }
+
   const id = c.req.param('id');
   const tag = c.req.param('tag');
 
@@ -238,9 +309,9 @@ export async function removeTag(c: Context) {
 }
 
 export async function escalateGrievance(c: Context) {
-  const user = c.var.user as SessionUser | undefined;
-  if (!user) {
-    return c.json({ error: 'Unauthorized' }, 401);
+  const maybeUser = requireRole(c, ['ADVOCATE']);
+  if (maybeUser instanceof Response) {
+    return maybeUser;
   }
 
   const id = c.req.param('id');
@@ -249,7 +320,7 @@ export async function escalateGrievance(c: Context) {
     const body = await c.req.json();
     const res = await callGrievanceService(`/grievances/${id}/escalate`, {
       method: 'POST',
-      body: JSON.stringify({ ...body, advocateId: user.id }),
+      body: JSON.stringify({ ...body, advocateId: maybeUser.id }),
     });
 
     if (res.status === 409) {
@@ -263,9 +334,9 @@ export async function escalateGrievance(c: Context) {
 }
 
 export async function resolveGrievance(c: Context) {
-  const user = c.var.user as SessionUser | undefined;
-  if (!user) {
-    return c.json({ error: 'Unauthorized' }, 401);
+  const maybeUser = requireRole(c, ['ADVOCATE']);
+  if (maybeUser instanceof Response) {
+    return maybeUser;
   }
 
   const id = c.req.param('id');
@@ -279,7 +350,7 @@ export async function resolveGrievance(c: Context) {
       method: 'PATCH',
       body: JSON.stringify({
         note: body.note,
-        advocateId: user.id,
+        advocateId: maybeUser.id,
       }),
     });
 
@@ -298,6 +369,11 @@ export async function resolveGrievance(c: Context) {
 }
 
 export async function getGrievanceStats(c: Context) {
+  const maybeUser = requireRole(c, ['ADVOCATE']);
+  if (maybeUser instanceof Response) {
+    return maybeUser;
+  }
+
   try {
     const res = await callGrievanceService('/grievances/stats');
     return passthroughJsonResponse(res);
@@ -313,6 +389,11 @@ export async function getGrievanceStats(c: Context) {
 }
 
 export async function clusterGrievances(c: Context) {
+  const maybeUser = requireRole(c, ['ADVOCATE']);
+  if (maybeUser instanceof Response) {
+    return maybeUser;
+  }
+
   try {
     const fetchRes = await callGrievanceService('/grievances/for-clustering?limit=100');
     if (!fetchRes.ok) {
@@ -345,6 +426,11 @@ export async function clusterGrievances(c: Context) {
 }
 
 export async function getGrievanceTrends(c: Context) {
+  const maybeUser = requireRole(c, ['ADVOCATE']);
+  if (maybeUser instanceof Response) {
+    return maybeUser;
+  }
+
   try {
     const fetchRes = await callGrievanceService('/grievances/for-clustering?limit=200');
     if (!fetchRes.ok) {

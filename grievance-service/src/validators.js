@@ -31,6 +31,7 @@ export const updateGrievanceSchema = z.object({
 })
 
 export const addTagSchema = z.object({
+  advocateId: z.string().min(1),
   tag: z.string().min(1).max(50).trim()
 })
 

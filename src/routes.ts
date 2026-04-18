@@ -18,6 +18,7 @@ export const protectedRoutes = [
   '/pending-approval',
   '/worker/dashboard',
   '/worker/community-feed',
+  '/worker/grievances',
   '/worker/analytics',
   '/worker/log-shift',
   '/worker/earnings',
@@ -40,6 +41,7 @@ export const protectedRoutes = [
 export const workerRoutes = [
   '/worker/dashboard',
   '/worker/community-feed',
+  '/worker/grievances',
   '/worker/log-shift',
   '/worker/earnings',
   '/worker/certificate',
