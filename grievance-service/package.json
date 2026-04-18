@@ -8,8 +8,8 @@
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
     "build": "pnpm db:generate",
-    "db:generate": "prisma generate --schema=prisma/schema.prisma",
-    "db:push": "prisma db push --schema=prisma/schema.prisma"
+    "db:generate": "prisma@5.22.0 generate --schema=prisma/schema.prisma",
+    "db:push": "prisma@5.22.0 db push --schema=prisma/schema.prisma"
   },
   "dependencies": {
     "@hono/node-server": "^1.19.14",
