@@ -1,36 +1,9 @@
-import { authMiddleware } from '@/app/api/[[...route]]/middleware/auth-middleware';
-import { zValidator } from '@hono/zod-validator';
 import { Hono } from 'hono';
-import * as z from 'zod';
-
-import {
-  createCertificateHandler,
-  getCertificateHandler,
-  printCertificateHandler,
-} from './handlers';
-
-const createCertificateSchema = z.object({
-  workerId: z.string().optional(),
-  fromDate: z.string(),
-  toDate: z.string(),
-});
+import { generateCertificate, previewCertificate, sampleCertificate } from './handlers';
 
 const app = new Hono()
-  .use('/*', authMiddleware)
-  .get(
-    '/:id',
-    zValidator('param', z.object({ id: z.string() })),
-    getCertificateHandler,
-  )
-  .get(
-    '/:id/print',
-    zValidator('param', z.object({ id: z.string() })),
-    printCertificateHandler,
-  )
-  .post(
-    '/',
-    zValidator('json', createCertificateSchema),
-    createCertificateHandler,
-  );
+  .post('/generate', generateCertificate)
+  .get('/preview', previewCertificate)
+  .get('/sample', sampleCertificate);
 
 export default app;

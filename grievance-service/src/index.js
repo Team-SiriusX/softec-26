@@ -1,4 +1,20 @@
-import 'dotenv/config'
+import path from 'path';
+import { fileURLToPath } from 'url';
+import fs from 'fs';
+import dotenv from 'dotenv';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const rootDir = path.resolve(__dirname, '../../');
+const envLocalPath = path.join(rootDir, '.env.local');
+const envPath = path.join(rootDir, '.env');
+
+if (fs.existsSync(envPath)) {
+  dotenv.config({ path: envPath });
+}
+if (fs.existsSync(envLocalPath)) {
+  dotenv.config({ path: envLocalPath, override: true });
+}
 import { serve } from '@hono/node-server'
 import app from './app.js'
 import { db } from './db.js'
