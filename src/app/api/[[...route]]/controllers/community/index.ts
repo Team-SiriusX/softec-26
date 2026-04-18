@@ -13,6 +13,7 @@ import {
   listPlatforms,
   listPosts,
   reportPost,
+  runAiReview,
   requestHumanReview,
   requestVerification,
   runMockAiReview,
@@ -73,6 +74,11 @@ const mockAiReviewSchema = z.object({
   note: z.string().trim().min(3).max(500).optional(),
 });
 
+const aiReviewSchema = z.object({
+  note: z.string().trim().min(3).max(500).optional(),
+  includeRawResponse: z.boolean().optional().default(false),
+});
+
 const humanReviewSchema = z.object({
   verdict: z.enum(['VERIFIED', 'UNVERIFIED']),
   note: z.string().trim().min(3).max(500).optional(),
@@ -107,6 +113,12 @@ const app = new Hono()
   .post('/posts/:id/request-verification', authMiddleware, requestVerification)
   .post('/posts/:id/request-human-review', authMiddleware, requestHumanReview)
   .get('/moderation/queue', authMiddleware, getModerationQueue)
+  .patch(
+    '/moderation/posts/:id/ai-review',
+    authMiddleware,
+    zValidator('json', aiReviewSchema),
+    runAiReview,
+  )
   .patch(
     '/moderation/posts/:id/mock-ai-review',
     authMiddleware,

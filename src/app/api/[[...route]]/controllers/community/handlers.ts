@@ -2,6 +2,8 @@ import { Prisma } from '@/generated/prisma/client';
 import db from '@/lib/db';
 import { Context } from 'hono';
 
+import { runCommunityAiReview } from './ai-reviewer';
+
 type SessionUser = {
   id: string;
   role: 'WORKER' | 'VERIFIER' | 'ADVOCATE';
@@ -1384,6 +1386,213 @@ export const getModerationQueue = async (c: Context) => {
         mediaPreview: item.post.media[0] ?? null,
       },
     })),
+  });
+};
+
+// ─── PATCH /api/community/moderation/posts/:id/ai-review ───────────────────
+export const runAiReview = async (c: Context) => {
+  const user = getUser(c);
+
+  if (!user) {
+    return c.json({ error: 'Unauthorized' }, 401);
+  }
+
+  if (!isModerator(user)) {
+    return c.json({ error: 'Forbidden' }, 403);
+  }
+
+  const postId = c.req.param('id');
+
+  if (!postId) {
+    return c.json({ error: 'Post id is required' }, 400);
+  }
+
+  const body = (c.req as unknown as { valid: (target: 'json') => unknown }).valid('json') as {
+    note?: string;
+    includeRawResponse?: boolean;
+  };
+
+  const post = await db.communityPost.findUnique({
+    where: { id: postId },
+    select: {
+      id: true,
+      title: true,
+      body: true,
+      createdAt: true,
+      verificationStatus: true,
+      upvoteCount: true,
+      commentCount: true,
+      reportCount: true,
+      platform: {
+        select: {
+          name: true,
+          slug: true,
+        },
+      },
+      media: {
+        select: {
+          id: true,
+          url: true,
+          mediaType: true,
+        },
+        orderBy: {
+          createdAt: 'asc',
+        },
+        take: MAX_MEDIA_ITEMS_PER_POST,
+      },
+      comments: {
+        select: {
+          id: true,
+          content: true,
+          isAnonymous: true,
+          createdAt: true,
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+        take: 20,
+      },
+      reports: {
+        select: {
+          reason: true,
+          createdAt: true,
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+        take: 20,
+      },
+      reviewQueue: {
+        where: {
+          status: 'PENDING',
+        },
+        select: {
+          reason: true,
+        },
+      },
+    },
+  });
+
+  if (!post) {
+    return c.json({ error: 'Post not found' }, 404);
+  }
+
+  let aiReviewRun: Awaited<ReturnType<typeof runCommunityAiReview>>;
+
+  try {
+    aiReviewRun = await runCommunityAiReview(
+      {
+        postId: post.id,
+        title: post.title,
+        body: post.body,
+        createdAt: post.createdAt.toISOString(),
+        platform: post.platform,
+        upvoteCount: post.upvoteCount,
+        commentCount: post.commentCount,
+        reportCount: post.reportCount,
+        media: post.media,
+        recentComments: post.comments.map((comment) => ({
+          id: comment.id,
+          content: comment.content,
+          isAnonymous: comment.isAnonymous,
+          createdAt: comment.createdAt.toISOString(),
+        })),
+        reportReasons: post.reports.map((report) => report.reason),
+        pendingQueueReasons: post.reviewQueue.map((item) => item.reason),
+        moderatorNote: body.note?.trim() || undefined,
+      },
+      {
+        includeRawResponse: Boolean(body.includeRawResponse),
+      },
+    );
+  } catch (error) {
+    console.error('Community AI review failed', {
+      postId,
+      reviewerId: user.id,
+      error,
+    });
+
+    const message =
+      error instanceof Error && error.message.trim()
+        ? error.message
+        : 'Failed to run AI review';
+
+    return c.json({ error: message }, 502);
+  }
+
+  const trustScore = clamp(aiReviewRun.decision.trustScore, 0.01, 0.99);
+  const nextStatus = aiReviewRun.decision.verdict;
+
+  const resolvedNote = [
+    `AI review completed with ${(trustScore * 100).toFixed(0)}% trust via ${aiReviewRun.model}.`,
+    aiReviewRun.decision.summary,
+    body.note?.trim() ? `Moderator note: ${body.note.trim()}` : null,
+  ]
+    .filter(Boolean)
+    .join(' ');
+
+  await db.$transaction(async (tx) => {
+    await tx.communityPost.update({
+      where: { id: postId },
+      data: {
+        verificationStatus: nextStatus,
+        trustScore,
+      },
+    });
+
+    await tx.communityPostReviewQueue.updateMany({
+      where: {
+        postId,
+        status: 'PENDING',
+        reason: {
+          in: ['USER_REQUEST', 'MULTIPLE_REPORTS'],
+        },
+      },
+      data: {
+        status: 'RESOLVED',
+        resolvedAt: new Date(),
+        note: resolvedNote,
+      },
+    });
+  });
+
+  if (nextStatus === 'AI_UNVERIFIED_LOW_TRUST') {
+    await ensurePendingQueueItem({
+      postId,
+      reason: 'TRUST_SCORE_LOW',
+      triggeredByUserId: user.id,
+      note: [
+        `AI reviewer recommendation: ${aiReviewRun.decision.recommendation}.`,
+        aiReviewRun.decision.summary,
+      ].join(' '),
+    });
+  }
+
+  return c.json({
+    data: {
+      id: postId,
+      verificationStatus: nextStatus,
+      trustScore,
+      aiReview: {
+        provider: aiReviewRun.provider,
+        model: aiReviewRun.model,
+        promptVersion: aiReviewRun.promptVersion,
+        latencyMs: aiReviewRun.latencyMs,
+        trustScore,
+        verdict: aiReviewRun.decision.verdict,
+        confidence: aiReviewRun.decision.confidence,
+        recommendation: aiReviewRun.decision.recommendation,
+        summary: aiReviewRun.decision.summary,
+        reasons: aiReviewRun.decision.reasons,
+        riskFlags: aiReviewRun.decision.riskFlags,
+        usage: aiReviewRun.usage,
+        ...(body.includeRawResponse
+          ? {
+              rawResponse: aiReviewRun.rawResponse ?? null,
+            }
+          : {}),
+      },
+    },
   });
 };
 

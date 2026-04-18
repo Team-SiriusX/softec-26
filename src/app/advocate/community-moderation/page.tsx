@@ -10,17 +10,21 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
+  type CommunityAiReviewResult,
   useCommunityModerationQueue,
-  useRunMockAiReview,
+  useRunAiReview,
   useSubmitHumanReview,
 } from '@/hooks/use-community';
 import { cn } from '@/lib/utils';
 
 export default function CommunityModerationPage() {
   const [notesByPostId, setNotesByPostId] = useState<Record<string, string>>({});
+  const [aiReviewByPostId, setAiReviewByPostId] = useState<
+    Record<string, CommunityAiReviewResult>
+  >({});
 
   const queueQuery = useCommunityModerationQueue();
-  const runMockAiReview = useRunMockAiReview();
+  const runAiReview = useRunAiReview();
   const submitHumanReview = useSubmitHumanReview();
 
   const queueItems = queueQuery.data?.data ?? [];
@@ -35,7 +39,7 @@ export default function CommunityModerationPage() {
             </Badge>
             <CardTitle className='text-2xl'>Community Moderation Console</CardTitle>
             <p className='text-sm text-muted-foreground'>
-              Run mock AI verification for queued posts and finalize low-trust cases
+              Run AI verification for queued posts and finalize low-trust cases
               with human review decisions.
             </p>
           </CardHeader>
@@ -69,6 +73,7 @@ export default function CommunityModerationPage() {
         ) : (
           queueItems.map((item) => {
             const note = notesByPostId[item.post.id] ?? '';
+            const aiReview = aiReviewByPostId[item.post.id];
             const canRunAi =
               item.post.verificationStatus === 'PENDING_AI_REVIEW' ||
               item.reason === 'MULTIPLE_REPORTS' ||
@@ -132,16 +137,26 @@ export default function CommunityModerationPage() {
                       <Button
                         type='button'
                         variant='outline'
-                        disabled={runMockAiReview.isPending}
-                        onClick={() =>
-                          runMockAiReview.mutate({
-                            postId: item.post.id,
-                            note: note.trim() || undefined,
-                          })
-                        }
+                        disabled={runAiReview.isPending}
+                        onClick={() => {
+                          void runAiReview
+                            .mutateAsync({
+                              postId: item.post.id,
+                              note: note.trim() || undefined,
+                            })
+                            .then((result) => {
+                              setAiReviewByPostId((prev) => ({
+                                ...prev,
+                                [item.post.id]: result.data.aiReview,
+                              }));
+                            })
+                            .catch(() => {
+                              // Error handling is centralized in the mutation hook.
+                            });
+                        }}
                       >
                         <Bot className='size-4' />
-                        Run Mock AI Review
+                        Run AI Review
                       </Button>
                     ) : null}
 
@@ -180,6 +195,90 @@ export default function CommunityModerationPage() {
                       </Button>
                     ) : null}
                   </div>
+
+                  {aiReview ? (
+                    <div className='space-y-2 rounded-2xl border border-border/70 bg-muted/20 p-3'>
+                      <div className='flex flex-wrap items-center gap-2'>
+                        <Badge
+                          variant={
+                            aiReview.verdict === 'AI_VERIFIED' ? 'default' : 'destructive'
+                          }
+                        >
+                          {aiReview.verdict.replaceAll('_', ' ')}
+                        </Badge>
+                        <Badge variant='secondary'>
+                          Trust {(aiReview.trustScore * 100).toFixed(0)}%
+                        </Badge>
+                        <Badge variant='outline'>
+                          Confidence {(aiReview.confidence * 100).toFixed(0)}%
+                        </Badge>
+                        <Badge variant='outline'>{aiReview.recommendation.replaceAll('_', ' ')}</Badge>
+                      </div>
+
+                      <p className='text-sm text-foreground/90'>{aiReview.summary}</p>
+
+                      <div className='grid gap-2 text-xs text-muted-foreground sm:grid-cols-2 lg:grid-cols-4'>
+                        <p>
+                          Model: <span className='font-medium text-foreground'>{aiReview.model}</span>
+                        </p>
+                        <p>
+                          Provider:{' '}
+                          <span className='font-medium text-foreground'>{aiReview.provider}</span>
+                        </p>
+                        <p>
+                          Prompt: <span className='font-medium text-foreground'>{aiReview.promptVersion}</span>
+                        </p>
+                        <p>
+                          Latency:{' '}
+                          <span className='font-medium text-foreground'>{aiReview.latencyMs}ms</span>
+                        </p>
+                        <p>
+                          Prompt tokens:{' '}
+                          <span className='font-medium text-foreground'>
+                            {aiReview.usage.promptTokens ?? 'n/a'}
+                          </span>
+                        </p>
+                        <p>
+                          Completion tokens:{' '}
+                          <span className='font-medium text-foreground'>
+                            {aiReview.usage.completionTokens ?? 'n/a'}
+                          </span>
+                        </p>
+                        <p>
+                          Total tokens:{' '}
+                          <span className='font-medium text-foreground'>
+                            {aiReview.usage.totalTokens ?? 'n/a'}
+                          </span>
+                        </p>
+                      </div>
+
+                      {aiReview.reasons.length > 0 ? (
+                        <div className='space-y-1'>
+                          <p className='text-xs font-medium text-muted-foreground'>AI Reasons</p>
+                          <div className='space-y-1'>
+                            {aiReview.reasons.map((reason) => (
+                              <p key={reason} className='text-xs text-foreground/80'>
+                                - {reason}
+                              </p>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+
+                      {aiReview.riskFlags.length > 0 ? (
+                        <div className='space-y-1'>
+                          <p className='text-xs font-medium text-muted-foreground'>Risk Flags</p>
+                          <div className='space-y-1'>
+                            {aiReview.riskFlags.map((riskFlag) => (
+                              <p key={riskFlag} className='text-xs text-amber-700'>
+                                - {riskFlag}
+                              </p>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
 
                   {item.reason === 'MULTIPLE_REPORTS' ? (
                     <p className='inline-flex items-center gap-2 text-xs text-amber-700'>

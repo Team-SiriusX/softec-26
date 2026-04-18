@@ -1,10 +1,8 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
 @import 'shadcn/tailwind.css';
-@import '@uploadthing/react/styles.css';
-
-@import "tailwindcss";
-
+@import "uploadthing/tw/v4";
+@source "../../node_modules/@uploadthing/react/dist";
 
 
 @custom-variant dark (&:is(.dark *));

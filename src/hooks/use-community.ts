@@ -102,6 +102,35 @@ type ModerationQueueResponse = {
   data: ModerationQueueItem[];
 };
 
+export type CommunityAiReviewResult = {
+  provider: 'openrouter';
+  model: string;
+  promptVersion: string;
+  latencyMs: number;
+  trustScore: number;
+  verdict: 'AI_VERIFIED' | 'AI_UNVERIFIED_LOW_TRUST';
+  confidence: number;
+  recommendation: 'VERIFY' | 'ESCALATE_HUMAN' | 'NEED_MORE_EVIDENCE';
+  summary: string;
+  reasons: string[];
+  riskFlags: string[];
+  usage: {
+    promptTokens: number | null;
+    completionTokens: number | null;
+    totalTokens: number | null;
+  };
+  rawResponse?: unknown;
+};
+
+type CommunityAiReviewResponse = {
+  data: {
+    id: string;
+    verificationStatus: CommunityPost['verificationStatus'];
+    trustScore: number;
+    aiReview: CommunityAiReviewResult;
+  };
+};
+
 async function parseApiError(response: Response, fallback: string) {
   try {
     const payload = (await response.json()) as { error?: string };
@@ -391,6 +420,47 @@ export function useCommunityModerationQueue(enabled = true) {
       }
 
       return (await response.json()) as ModerationQueueResponse;
+    },
+  });
+}
+
+export function useRunAiReview() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (payload: {
+      postId: string;
+      note?: string;
+      includeRawResponse?: boolean;
+    }) => {
+      const response = await fetch(
+        `/api/community/moderation/posts/${payload.postId}/ai-review`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            note: payload.note,
+            includeRawResponse: payload.includeRawResponse,
+          }),
+        },
+      );
+
+      if (!response.ok) {
+        throw new Error(await parseApiError(response, 'Failed to run AI review'));
+      }
+
+      return (await response.json()) as CommunityAiReviewResponse;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.COMMUNITY_POSTS] });
+      queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.COMMUNITY_MODERATION_QUEUE] });
+      queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.COMMUNITY_MY_POSTS] });
+      toast.success('AI review completed');
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : 'Failed to run AI review');
     },
   });
 }

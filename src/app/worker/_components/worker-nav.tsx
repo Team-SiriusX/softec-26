@@ -46,7 +46,7 @@ export default function WorkerNav({ user }: { user: WorkerNavUser }) {
   return (
     <>
       {/* Desktop sidebar */}
-      <aside className='hidden lg:flex flex-col w-64 border-r border-border bg-sidebar min-h-screen sticky top-0'>
+      <aside className='hidden md:flex flex-col w-64 border-r border-border bg-sidebar min-h-screen sticky top-0'>
         {/* Brand */}
         <div className='px-6 py-5 border-b border-border'>
           <span className='text-lg font-bold tracking-tight text-sidebar-foreground'>
@@ -91,7 +91,7 @@ export default function WorkerNav({ user }: { user: WorkerNavUser }) {
       </aside>
 
       {/* Mobile bottom nav */}
-      <nav className='lg:hidden fixed bottom-1 left-0 right-0 z-50 bg-background/80 backdrop-blur-lg border-t border-border px-4 py-2 flex items-center justify-around pb-safe-area-inset-bottom'>
+      <nav className='md:hidden fixed bottom-1 left-0 right-0 z-50 bg-background/80 backdrop-blur-lg border-t border-border px-4 py-2 flex items-center justify-around pb-safe-area-inset-bottom'>
         {navItems.map(({ href, label, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(href + '/');
           return (
@@ -114,7 +114,7 @@ export default function WorkerNav({ user }: { user: WorkerNavUser }) {
       </nav>
 
       {/* Mobile top bar */}
-      <header className='lg:hidden fixed top-0 left-0 right-0 z-50 bg-background border-b border-border px-4 py-3 flex items-center justify-between'>
+      <header className='md:hidden fixed top-0 left-0 right-0 z-50 bg-background border-b border-border px-4 py-3 flex items-center justify-between'>
         <span className='text-base font-bold tracking-tight text-primary'>FairGig</span>
         <div className='flex items-center gap-3'>
           <button
@@ -128,8 +128,8 @@ export default function WorkerNav({ user }: { user: WorkerNavUser }) {
       </header>
 
       {/* Mobile spacers */}
-      <div className='lg:hidden h-14' />
-      <div className='lg:hidden h-20' />
+      <div className='md:hidden h-14' />
+      <div className='md:hidden h-20' />
     </>
   );
 }
