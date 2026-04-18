@@ -2,11 +2,13 @@ import { auth } from '@/lib/auth';
 import { createMiddleware } from 'hono/factory';
 import { headers } from 'next/headers';
 
+type UserRole = 'WORKER' | 'VERIFIER' | 'ADVOCATE';
+
 type SessionUser = {
   id: string;
   email: string;
   name: string;
-  role: string;
+  role: UserRole;
 };
 
 type AuthEnv = {
@@ -31,12 +33,17 @@ export const authMiddleware = createMiddleware<AuthEnv>(async (c, next) => {
     }
 
     const user = session.user;
+    const role = user.role;
+
+    if (role !== 'WORKER' && role !== 'VERIFIER' && role !== 'ADVOCATE') {
+      return c.json({ error: 'Unauthorized' }, 401);
+    }
 
     c.set('user', {
       id: user.id,
       email: user.email,
       name: user.name,
-      role: user.role ?? 'USER',
+      role,
     });
 
     await next();

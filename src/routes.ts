@@ -22,6 +22,8 @@ export const protectedRoutes = [
   '/worker/certificate',
   '/worker/profile',
   '/worker/settings',
+  '/worker/onboarding/profile',
+  '/worker/onboarding/role-selection',
   '/verifier/queue',
   '/verifier/dashboard',
   '/advocate/dashboard',
@@ -39,6 +41,7 @@ export const workerRoutes = [
   '/worker/profile',
   '/worker/settings',
   '/worker/onboarding/profile',
+  '/worker/onboarding/role-selection',
 ];
 
 export const verifierRoutes = ['/verifier/queue', '/verifier/dashboard'];
