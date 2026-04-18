@@ -1,17 +1,59 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Maximize2, Minimize2 } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { useCurrentUser } from '@/hooks/use-current-user';
 
 const VIDEO_URL =
   'https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260210_031346_d87182fb-b0af-4273-84d1-c6fd17d6bf0f.mp4';
 const HERO_POSTER_URL =
   'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1920&q=80';
 
+type HeaderUser = {
+  name?: string | null;
+  fullName?: string | null;
+  email?: string | null;
+  image?: string | null;
+  role?: string | null;
+};
+
+const getInitials = (user?: HeaderUser) => {
+  const source = user?.fullName || user?.name || user?.email || 'User';
+  const parts = source.trim().split(/\s+/).slice(0, 2);
+  return parts.map((part) => part.charAt(0).toUpperCase()).join('');
+};
+
 const HeroSection = () => {
   const [fullBleed, setFullBleed] = useState(true);
+  const { user, session, refetch } = useCurrentUser();
+  const resolvedUser = user as HeaderUser | undefined;
+
+  useEffect(() => {
+    if (!session) {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      void refetch();
+    }, 15000);
+
+    return () => window.clearInterval(intervalId);
+  }, [session, refetch]);
+
+  const profilePath = useMemo(() => {
+    if (!resolvedUser?.role) {
+      return '/auth/sign-in';
+    }
+
+    if (resolvedUser.role === 'WORKER') {
+      return '/worker/profile';
+    }
+
+    return `/${resolvedUser.role.toLowerCase()}/dashboard`;
+  }, [resolvedUser?.role]);
 
   return (
     <section
@@ -77,12 +119,30 @@ const HeroSection = () => {
           </nav>
 
           <div className='flex items-center gap-2'>
-            <Link
-              href='/auth/sign-in'
-              className='rounded-xl border border-white/30 bg-white/10 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-white/20 md:text-sm'
-            >
-              Sign In
-            </Link>
+            {resolvedUser ? (
+              <Link
+                href={profilePath}
+                aria-label='Open your profile'
+                className='inline-flex items-center rounded-xl border border-white/30 bg-white/10 p-1.5 transition hover:bg-white/20'
+              >
+                <Avatar size='sm' className='ring-1 ring-white/30'>
+                  <AvatarImage
+                    src={resolvedUser.image ?? undefined}
+                    alt={resolvedUser.fullName || resolvedUser.name || 'User avatar'}
+                  />
+                  <AvatarFallback className='bg-white/15 text-xs font-semibold text-white'>
+                    {getInitials(resolvedUser)}
+                  </AvatarFallback>
+                </Avatar>
+              </Link>
+            ) : (
+              <Link
+                href='/auth/sign-in'
+                className='rounded-xl border border-white/30 bg-white/10 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-white/20 md:text-sm'
+              >
+                Sign In
+              </Link>
+            )}
             <Link
               href='/auth/sign-up'
               className='rounded-xl bg-white px-3 py-1.5 text-xs font-semibold text-black transition hover:bg-white/90 md:text-sm'
