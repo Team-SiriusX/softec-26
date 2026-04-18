@@ -23,6 +23,7 @@ from detection.explainer import (
     explain_commission_creep,
     explain_deduction_spike,
     explain_income_cliff,
+    explain_income_drop_mom,
 )
 
 PKR_MINIMUM_HOURLY = 37000 / 208
@@ -190,6 +191,68 @@ def check_income_cliff(shifts: list[ShiftRecord]) -> AnomalyDetail | None:
             'rolling_mad': round(mad, 2),
             'contextual_threshold': round(threshold, 2),
             'drop_pct': round(drop_pct, 2),
+        },
+        explanation=explanation,
+    )
+
+
+def check_income_drop_mom(shifts: list[ShiftRecord]) -> AnomalyDetail | None:
+    """Detect month-on-month net income drops over 20%."""
+
+    ordered = _sorted_shifts(shifts)
+    if len(ordered) < 6:
+        return None
+
+    monthly_net: dict[str, float] = defaultdict(float)
+    monthly_shift_ids: dict[str, list[str]] = defaultdict(list)
+
+    for shift in ordered:
+        month_key = shift.date[:7]
+        monthly_net[month_key] += float(shift.net_received)
+        monthly_shift_ids[month_key].append(shift.shift_id)
+
+    months = sorted(monthly_net.keys())
+    if len(months) < 2:
+        return None
+
+    current_month = months[-1]
+    previous_month = months[-2]
+
+    current_total = monthly_net[current_month]
+    previous_total = monthly_net[previous_month]
+
+    if previous_total <= 0:
+        return None
+
+    drop_pct = ((previous_total - current_total) / previous_total) * 100
+    if drop_pct <= 20:
+        return None
+
+    severity = 'medium'
+    if drop_pct >= 35:
+        severity = 'high'
+    if drop_pct >= 50:
+        severity = 'critical'
+
+    explanation = explain_income_drop_mom(
+        current_month_label=current_month,
+        previous_month_label=previous_month,
+        current_month_net=current_total,
+        previous_month_net=previous_total,
+        drop_pct=drop_pct,
+    )
+
+    return AnomalyDetail(
+        type='income_drop_mom',
+        severity=severity,
+        affected_shifts=monthly_shift_ids[current_month],
+        data={
+            'current_month': current_month,
+            'previous_month': previous_month,
+            'current_month_net': round(current_total, 2),
+            'previous_month_net': round(previous_total, 2),
+            'drop_pct': round(drop_pct, 2),
+            'threshold_pct': 20,
         },
         explanation=explanation,
     )

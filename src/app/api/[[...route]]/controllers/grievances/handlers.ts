@@ -1,5 +1,6 @@
 import db from '@/lib/db';
 import { Context } from 'hono';
+import type { ContentfulStatusCode } from 'hono/utils/http-status';
 
 type SessionUser = {
   id: string;
@@ -12,6 +13,8 @@ const GRIEVANCE_SERVICE_URL =
   process.env.GRIEVANCE_SERVICE_URL || 'http://localhost:8003';
 
 const ML_SERVICE_URL = process.env.ML_SERVICE_URL || 'http://localhost:8002';
+
+const toStatus = (status: number) => status as ContentfulStatusCode;
 
 async function callGrievanceService(
   path: string,
@@ -47,7 +50,7 @@ export async function listGrievances(c: Context) {
 
   try {
     const res = await callGrievanceService(`/grievances${suffix}`);
-    return c.json(await res.json(), res.status);
+    return c.json(await res.json(), toStatus(res.status));
   } catch {
     return c.json(
       {
@@ -57,6 +60,15 @@ export async function listGrievances(c: Context) {
       },
       503,
     );
+  }
+}
+
+export async function getGrievancePlatforms(c: Context) {
+  try {
+    const res = await callGrievanceService('/platforms');
+    return c.json(await res.json(), toStatus(res.status));
+  } catch {
+    return c.json([], 503);
   }
 }
 
@@ -73,7 +85,7 @@ export async function getForClustering(c: Context) {
 
   try {
     const res = await callGrievanceService(`/grievances/for-clustering${suffix}`);
-    return c.json(await res.json(), res.status);
+    return c.json(await res.json(), toStatus(res.status));
   } catch {
     return c.json(
       {
@@ -94,7 +106,7 @@ export async function getGrievance(c: Context) {
     if (res.status === 404) {
       return c.json({ error: 'Grievance not found' }, 404);
     }
-    return c.json(await res.json(), res.status);
+    return c.json(await res.json(), toStatus(res.status));
   } catch {
     return c.json({ error: 'grievance_service_unavailable' }, 503);
   }
@@ -143,7 +155,7 @@ export async function updateGrievance(c: Context) {
       return c.json({ error: 'Grievance not found' }, 404);
     }
 
-    return c.json(await res.json(), res.status);
+    return c.json(await res.json(), toStatus(res.status));
   } catch {
     return c.json({ error: 'grievance_service_unavailable' }, 503);
   }
@@ -161,7 +173,7 @@ export async function deleteGrievance(c: Context) {
       return c.json({ error: 'Grievance not found' }, 404);
     }
 
-    return c.json(await res.json(), res.status);
+    return c.json(await res.json(), toStatus(res.status));
   } catch {
     return c.json({ error: 'grievance_service_unavailable' }, 503);
   }
@@ -191,6 +203,10 @@ export async function removeTag(c: Context) {
   const id = c.req.param('id');
   const tag = c.req.param('tag');
 
+  if (!tag) {
+    return c.json({ error: 'Tag is required' }, 400);
+  }
+
   try {
     const res = await callGrievanceService(
       `/grievances/${id}/tags/${encodeURIComponent(tag)}`,
@@ -203,7 +219,7 @@ export async function removeTag(c: Context) {
       return c.json({ error: 'Tag not found' }, 404);
     }
 
-    return c.json(await res.json(), res.status);
+    return c.json(await res.json(), toStatus(res.status));
   } catch {
     return c.json({ error: 'grievance_service_unavailable' }, 503);
   }
@@ -228,18 +244,31 @@ export async function escalateGrievance(c: Context) {
       return c.json(await res.json(), 409);
     }
 
-    return c.json(await res.json(), res.status);
+    return c.json(await res.json(), toStatus(res.status));
   } catch {
     return c.json({ error: 'grievance_service_unavailable' }, 503);
   }
 }
 
 export async function resolveGrievance(c: Context) {
+  const user = c.var.user as SessionUser | undefined;
+  if (!user) {
+    return c.json({ error: 'Unauthorized' }, 401);
+  }
+
   const id = c.req.param('id');
 
   try {
+    const body = await c.req
+      .json<{ note?: string }>()
+      .catch(() => ({}) as { note?: string });
+
     const res = await callGrievanceService(`/grievances/${id}/resolve`, {
       method: 'PATCH',
+      body: JSON.stringify({
+        note: body.note,
+        advocateId: user.id,
+      }),
     });
 
     if (res.status === 404) {
@@ -250,7 +279,7 @@ export async function resolveGrievance(c: Context) {
       return c.json(await res.json(), 409);
     }
 
-    return c.json(await res.json(), res.status);
+    return c.json(await res.json(), toStatus(res.status));
   } catch {
     return c.json({ error: 'grievance_service_unavailable' }, 503);
   }
@@ -259,7 +288,7 @@ export async function resolveGrievance(c: Context) {
 export async function getGrievanceStats(c: Context) {
   try {
     const res = await callGrievanceService('/grievances/stats');
-    return c.json(await res.json(), res.status);
+    return c.json(await res.json(), toStatus(res.status));
   } catch {
     return c.json(
       {
@@ -297,7 +326,7 @@ export async function clusterGrievances(c: Context) {
       return c.json({ error: 'ML service unavailable', clusters: [] }, 503);
     }
 
-    return c.json(await mlRes.json(), mlRes.status);
+    return c.json(await mlRes.json(), toStatus(mlRes.status));
   } catch {
     return c.json({ error: 'ML service unavailable', clusters: [] }, 503);
   }
@@ -326,7 +355,7 @@ export async function getGrievanceTrends(c: Context) {
       return c.json({ error: 'ML service unavailable' }, 503);
     }
 
-    return c.json(await mlRes.json(), mlRes.status);
+    return c.json(await mlRes.json(), toStatus(mlRes.status));
   } catch {
     return c.json({ error: 'ML service unavailable' }, 503);
   }

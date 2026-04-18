@@ -95,8 +95,8 @@ This service is intentionally stateless. It does not write to the application da
 ## Quick Start
 
 ```bash
-pip install -r requirements.txt
 cd anomaly-service
+pip install -r requirements.txt
 uvicorn main:app --reload --port 8001
 ```
 
@@ -186,6 +186,90 @@ Response schema (`AnalyzeResponse`):
 | `affected_shifts` | `string[]` | Shift IDs implicated by the detector. |
 | `data` | object | Numeric evidence payload for downstream inspection/debugging. |
 | `explanation` | string | Worker-facing explanation text (baseline or enriched). |
+
+### POST /detect
+
+Purpose: Judge-callable compact endpoint for Phase 7 checks.
+
+Detection logic in this endpoint:
+
+- Statistical modified z-score on deduction rates (`deduction_spike`)
+- Rolling month-on-month net income drop detection (`income_drop_mom`), flagged when drop is greater than 20%
+
+Request schema:
+
+- Same payload as `/analyze` (`worker_id` + `earnings[]` shift records).
+
+Response shape:
+
+| Field | Type | Description |
+|---|---|---|
+| `worker_id` | string | Echoed worker identifier. |
+| `analyzed_shifts` | int | Number of shifts processed. |
+| `flags` | `DetectFlag[]` | Flagged anomalies with severity and plain-language explanation. |
+
+`DetectFlag` fields:
+
+| Field | Type | Description |
+|---|---|---|
+| `type` | string | Flag identifier. |
+| `severity` | string | `low`, `medium`, `high`, or `critical`. |
+| `explanation` | string | Human-readable explanation for the worker/judge. |
+| `affected_shifts` | `string[]` | Shift IDs involved in the anomaly. |
+| `data` | object | Numeric evidence for traceability. |
+
+Example request:
+
+```json
+{
+  "worker_id": "worker_demo_01",
+  "earnings": [
+    {
+      "shift_id": "s1",
+      "date": "2026-03-02",
+      "platform": "Bykea",
+      "hours_worked": 8,
+      "gross_earned": 2500,
+      "platform_deduction": 500,
+      "net_received": 2000
+    },
+    {
+      "shift_id": "s2",
+      "date": "2026-04-02",
+      "platform": "Bykea",
+      "hours_worked": 8,
+      "gross_earned": 2400,
+      "platform_deduction": 820,
+      "net_received": 1580
+    }
+  ]
+}
+```
+
+Example response:
+
+```json
+{
+  "worker_id": "worker_demo_01",
+  "analyzed_shifts": 2,
+  "flags": [
+    {
+      "type": "income_drop_mom",
+      "severity": "medium",
+      "explanation": "Your take-home income dropped from PKR 45000 in 2026-03 to PKR 35000 in 2026-04, a 22.2% month-on-month decline. This is above the 20% caution threshold and may indicate unusual payout changes.",
+      "affected_shifts": ["s2"],
+      "data": {
+        "current_month": "2026-04",
+        "previous_month": "2026-03",
+        "current_month_net": 35000,
+        "previous_month_net": 45000,
+        "drop_pct": 22.2,
+        "threshold_pct": 20
+      }
+    }
+  ]
+}
+```
 
 ## Detection Pipeline (Implemented)
 

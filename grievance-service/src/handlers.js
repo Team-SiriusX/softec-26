@@ -4,6 +4,7 @@ import {
   updateGrievanceSchema,
   addTagSchema,
   escalateSchema,
+  resolveSchema,
   listQuerySchema,
   grievanceCategoryValues,
   grievanceStatusValues
@@ -54,6 +55,19 @@ export const healthCheck = async (c) => {
     version: '1.0.0',
     timestamp: new Date().toISOString()
   })
+}
+
+export const listPlatforms = async (c) => {
+  try {
+    const platforms = await db.platform.findMany({
+      select: { id: true, name: true, slug: true },
+      orderBy: { name: 'asc' }
+    })
+
+    return c.json(platforms)
+  } catch (err) {
+    return internalError(c, 'Failed to list platforms', err)
+  }
 }
 
 export const listGrievances = async (c) => {
@@ -380,7 +394,7 @@ export const updateGrievance = async (c) => {
       }
     }
 
-    if (!payload.description && !payload.status) {
+    if (!payload.description && !payload.status && typeof payload.clusterId === 'undefined') {
       return c.json({ error: 'Validation failed', details: [{ message: 'No update fields provided' }] }, 400)
     }
 
@@ -389,6 +403,7 @@ export const updateGrievance = async (c) => {
       data: {
         ...(payload.description ? { description: payload.description, title: makeTitleFromDescription(payload.description) } : {}),
         ...(payload.status ? { status: payload.status } : {}),
+        ...(typeof payload.clusterId !== 'undefined' ? { clusterId: payload.clusterId } : {}),
         updatedAt: new Date()
       },
       include: {
@@ -571,6 +586,25 @@ export const escalateGrievance = async (c) => {
 export const resolveGrievance = async (c) => {
   const { id } = c.req.param()
 
+  let body = {}
+  try {
+    const contentLength = c.req.header('content-length')
+    if (contentLength && Number(contentLength) > 0) {
+      body = await c.req.json()
+    }
+  } catch {
+    return c.json({ error: 'Validation failed', details: [{ message: 'Invalid JSON body' }] }, 400)
+  }
+
+  const parsed = resolveSchema.safeParse(body)
+  if (!parsed.success) {
+    return validationError(c, parsed.error)
+  }
+
+  if (parsed.data.note && !parsed.data.advocateId) {
+    return c.json({ error: 'Validation failed', details: [{ path: ['advocateId'], message: 'advocateId is required when note is provided' }] }, 400)
+  }
+
   try {
     const grievance = await db.grievance.findUnique({ where: { id } })
 
@@ -582,12 +616,28 @@ export const resolveGrievance = async (c) => {
       return c.json({ error: 'Already resolved' }, 409)
     }
 
-    const updated = await db.grievance.update({
-      where: { id },
-      data: {
-        status: 'RESOLVED',
-        updatedAt: new Date()
+    const updated = await db.$transaction(async (tx) => {
+      const next = await tx.grievance.update({
+        where: { id },
+        data: {
+          status: 'RESOLVED',
+          updatedAt: new Date()
+        }
+      })
+
+      if (parsed.data.note && parsed.data.advocateId) {
+        await tx.grievanceEscalation.create({
+          data: {
+            id: uuidv4(),
+            grievanceId: id,
+            advocateId: parsed.data.advocateId,
+            note: parsed.data.note,
+            escalatedAt: new Date()
+          }
+        })
       }
+
+      return next
     })
 
     return c.json(updated)

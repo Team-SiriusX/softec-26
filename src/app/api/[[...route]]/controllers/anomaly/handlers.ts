@@ -70,9 +70,13 @@ export const analyzeWorkerAnomalyHandler = async (c: Context) => {
 
   const serviceUrl =
     process.env.ANOMALY_SERVICE_URL ?? 'http://localhost:8001/analyze';
-  const analyzeEndpoint = serviceUrl.endsWith('/analyze')
-    ? serviceUrl
-    : `${serviceUrl.replace(/\/$/, '')}/analyze`;
+  const normalizeServiceBase = (url: string) =>
+    url
+      .replace(/\/analyze\/?$/, '')
+      .replace(/\/detect\/?$/, '')
+      .replace(/\/$/, '');
+
+  const analyzeEndpoint = `${normalizeServiceBase(serviceUrl)}/analyze`;
 
   try {
     const response = await fetch(analyzeEndpoint, {
@@ -158,6 +162,79 @@ export const analyzeWorkerAnomalyHandler = async (c: Context) => {
     return c.json(data);
   } catch {
     return c.json({ anomalies: [], error: 'anomaly_service_unavailable' });
+  }
+};
+
+export const detectWorkerAnomalyHandler = async (c: Context) => {
+  const { workerId } = await c.req.json<{ workerId: string }>();
+
+  const ninetyDaysAgo = new Date();
+  ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+
+  const shifts = await db.shiftLog.findMany({
+    where: {
+      workerId,
+      shiftDate: {
+        gte: ninetyDaysAgo,
+      },
+    },
+    include: {
+      platform: true,
+    },
+    orderBy: {
+      shiftDate: 'asc',
+    },
+  });
+
+  const payload: AnalyzeRequestPayload = {
+    worker_id: workerId,
+    earnings: shifts.map((shift) => ({
+      shift_id: shift.id,
+      date: shift.shiftDate.toISOString().split('T')[0],
+      platform: shift.platform.name,
+      hours_worked: Number(shift.hoursWorked),
+      gross_earned: Number(shift.grossEarned),
+      platform_deduction: Number(shift.platformDeductions),
+      net_received: Number(shift.netReceived),
+    })),
+  };
+
+  const serviceUrl =
+    process.env.ANOMALY_SERVICE_URL ?? 'http://localhost:8001/analyze';
+  const detectEndpoint = serviceUrl
+    .replace(/\/analyze\/?$/, '')
+    .replace(/\/detect\/?$/, '')
+    .replace(/\/$/, '')
+    .concat('/detect');
+
+  try {
+    const response = await fetch(detectEndpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      return c.json({ flags: [], anomalies: [], error: 'anomaly_service_unavailable' });
+    }
+
+    const data = (await response.json()) as {
+      flags?: AnalyzeServiceAnomaly[];
+      worker_id?: string;
+      analyzed_shifts?: number;
+    };
+
+    // Keep anomalies alias for backwards compatibility on worker UI.
+    return c.json({
+      workerId: data.worker_id ?? workerId,
+      analyzedShifts: data.analyzed_shifts ?? shifts.length,
+      flags: data.flags ?? [],
+      anomalies: data.flags ?? [],
+    });
+  } catch {
+    return c.json({ flags: [], anomalies: [], error: 'anomaly_service_unavailable' });
   }
 };
 

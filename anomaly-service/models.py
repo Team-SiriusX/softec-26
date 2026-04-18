@@ -40,6 +40,20 @@ class AnalyzeResponse(BaseModel):
     summary: str
 
 
+class DetectFlag(BaseModel):
+    type: str
+    severity: str
+    explanation: str
+    affected_shifts: list[str]
+    data: dict
+
+
+class DetectResponse(BaseModel):
+    worker_id: str
+    analyzed_shifts: int
+    flags: list[DetectFlag]
+
+
 class BatchWorkerInput(BaseModel):
     worker_id: str
     earnings: list[ShiftRecord]

@@ -21,6 +21,12 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - **Controllers**: Logic should be placed in [src/app/api/[[...route]]/controllers/](src/app/api/[[...route]]/controllers/).
 - **RPC Client**: Use the Hono client from [src/lib/hono.ts](src/lib/hono.ts) for typesafe API calls.
 - **Middleware**: Custom Hono middleware lives in [src/app/api/[[...route]]/middleware/](src/app/api/[[...route]]/middleware/).
+- **External Service Integration**: 
+    - Agents must create Hono.js endpoints within the Next.js API layer to interface with external services.
+    - Architecture follows an inter-server REST API pattern.
+    - Supported services: `ml-service`, `grievance-service`, `certificate-service`, and `anomaly-service`.
+    - Use environment variables for service URLs (e.g., `ML_SERVICE_URL`, `GRIEVANCE_SERVICE_URL`).
+    - Standardize error handling and timeouts when calling these services.
 
 ### Database (Prisma)
 

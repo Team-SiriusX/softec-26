@@ -52,7 +52,7 @@ export function DashboardShell({ category, zone }: DashboardShellProps) {
     queryKey: [QUERY_KEYS.ANOMALY, user?.id],
     queryFn: async () => {
       if (!user?.id) return { anomalies: [] };
-      const res = await client.api.anomaly.analyze.$post({
+      const res = await client.api.anomaly.detect.$post({
         json: { workerId: user.id },
       });
       if (!res.ok) return { anomalies: [] };

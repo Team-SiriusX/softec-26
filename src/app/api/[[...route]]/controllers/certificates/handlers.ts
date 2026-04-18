@@ -216,7 +216,7 @@ export const createCertificateHandler = async (c: Context) => {
   };
 
   const rendererBaseUrl =
-    process.env.CERTIFICATE_RENDERER_URL ?? 'http://localhost:8004';
+    process.env.CERTIFICATE_SERVICE_URL ?? 'http://localhost:8004';
   const rendererEndpoint = `${rendererBaseUrl.replace(/\/$/, '')}/render`;
 
   let htmlSnapshot = defaultCertificateHtml(renderPayload);

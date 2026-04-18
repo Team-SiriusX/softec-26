@@ -1,13 +1,15 @@
 'use client';
 
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button';
 import { AlertTriangle, X } from 'lucide-react';
+import Link from 'next/link';
 import { useState } from 'react';
+import { cn } from '@/lib/utils';
 
 interface Anomaly {
   type: string;
-  severity: 'low' | 'medium' | 'high';
+  severity: 'low' | 'medium' | 'high' | 'critical';
   explanation: string;
 }
 
@@ -19,6 +21,7 @@ const severityColor = {
   low: 'border-amber-300 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800',
   medium: 'border-orange-400 bg-orange-50 dark:bg-orange-950/20 dark:border-orange-700',
   high: 'border-destructive bg-destructive/5',
+  critical: 'border-destructive bg-destructive/5',
 };
 
 export function AnomalyAlertCard({ anomalies }: AnomalyAlertCardProps) {
@@ -28,7 +31,7 @@ export function AnomalyAlertCard({ anomalies }: AnomalyAlertCardProps) {
 
   const topAnomaly = anomalies.reduce(
     (prev, curr) => {
-      const order = { high: 3, medium: 2, low: 1 };
+      const order = { critical: 4, high: 3, medium: 2, low: 1 };
       return order[curr.severity] > order[prev.severity] ? curr : prev;
     },
     anomalies[0],
@@ -52,9 +55,12 @@ export function AnomalyAlertCard({ anomalies }: AnomalyAlertCardProps) {
           </p>
         )}
         <div className='mt-2'>
-          <Button size='sm' variant='outline' className='h-8 text-xs'>
-            <a href='/community/board?source=anomaly'>Report as grievance →</a>
-          </Button>
+          <Link
+            href='/community/board?source=anomaly'
+            className={cn(buttonVariants({ size: 'sm', variant: 'outline' }), 'h-8 text-xs')}
+          >
+            Report as grievance →
+          </Link>
         </div>
       </div>
       <button

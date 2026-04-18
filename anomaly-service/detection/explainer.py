@@ -38,6 +38,21 @@ def explain_income_cliff(
     )
 
 
+def explain_income_drop_mom(
+    current_month_label: str,
+    previous_month_label: str,
+    current_month_net: float,
+    previous_month_net: float,
+    drop_pct: float,
+) -> str:
+    return (
+        f"Your take-home income dropped from PKR {previous_month_net:.0f} in "
+        f"{previous_month_label} to PKR {current_month_net:.0f} in "
+        f"{current_month_label}, a {drop_pct:.1f}% month-on-month decline. "
+        "This is above the 20% caution threshold and may indicate unusual payout changes."
+    )
+
+
 def explain_below_minimum_wage(
     effective_hourly: float,
     legal_minimum_hourly: float,

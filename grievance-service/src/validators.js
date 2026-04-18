@@ -26,7 +26,8 @@ export const createGrievanceSchema = z.object({
 
 export const updateGrievanceSchema = z.object({
   description: z.string().min(10).max(2000).optional(),
-  status: z.enum(grievanceStatusValues).optional()
+  status: z.enum(grievanceStatusValues).optional(),
+  clusterId: z.string().min(2).max(80).nullable().optional()
 })
 
 export const addTagSchema = z.object({
@@ -36,6 +37,11 @@ export const addTagSchema = z.object({
 export const escalateSchema = z.object({
   advocateId: z.string().min(1),
   note: z.string().min(5).max(500)
+})
+
+export const resolveSchema = z.object({
+  advocateId: z.string().min(1).optional(),
+  note: z.string().min(5).max(500).optional()
 })
 
 export const listQuerySchema = z.object({

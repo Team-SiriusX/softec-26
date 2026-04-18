@@ -10,6 +10,9 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import { IncomeHeatmap } from './_components/income-heatmap';
+import { PlatformCommissionChart } from './_components/platform-commission-chart';
+import { VulnerabilityFlagTable } from './_components/vulnerability-flag-table';
 import { cn } from '@/lib/utils';
 
 const actions = [
@@ -32,16 +35,28 @@ const actions = [
     icon: Siren,
   },
   {
+    title: 'Vulnerability Detail',
+    description: 'Review worker-level risk flags with anonymized identifiers.',
+    href: '/advocate/vulnerability-flags',
+    icon: ShieldAlert,
+  },
+  {
     title: 'Exploitative Platform Ranking',
     description: 'See weighted injustice rankings for current period.',
     href: '/advocate/analytics#exploitation-score',
     icon: ShieldAlert,
   },
+  {
+    title: 'Commission Tracker',
+    description: 'Inspect platform commission distributions over time by zone.',
+    href: '/advocate/commission-tracker',
+    icon: BarChart3,
+  },
 ];
 
 export default function AdvocateDashboardPage() {
   return (
-    <main className='min-h-full bg-[radial-gradient(circle_at_92%_2%,_rgba(245,158,11,0.12),_transparent_44%)] px-4 py-8 md:px-8'>
+    <main className='min-h-full bg-[radial-gradient(circle_at_92%_2%,rgba(245,158,11,0.12),transparent_44%)] px-4 py-8 md:px-8'>
       <div className='mx-auto flex w-full max-w-6xl flex-col gap-6'>
         <Card className='border-border/60 bg-card/90'>
           <CardHeader className='gap-3'>
@@ -68,7 +83,7 @@ export default function AdvocateDashboardPage() {
           </CardContent>
         </Card>
 
-        <section className='grid gap-4 md:grid-cols-2'>
+        <section className='grid gap-4 md:grid-cols-2 lg:grid-cols-3'>
           {actions.map((action) => {
             const Icon = action.icon;
 
@@ -96,6 +111,15 @@ export default function AdvocateDashboardPage() {
               </Card>
             );
           })}
+        </section>
+
+        <section className='grid gap-6 xl:grid-cols-2'>
+          <PlatformCommissionChart />
+          <IncomeHeatmap />
+        </section>
+
+        <section>
+          <VulnerabilityFlagTable />
         </section>
       </div>
     </main>

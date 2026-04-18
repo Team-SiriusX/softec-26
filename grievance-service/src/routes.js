@@ -13,6 +13,9 @@ grievanceRoutes.get('/grievances/stats', handlers.getStats)
 // ML clustering bridge endpoint
 grievanceRoutes.get('/grievances/for-clustering', handlers.getForClustering)
 
+// Shared metadata
+grievanceRoutes.get('/platforms', handlers.listPlatforms)
+
 // Core CRUD
 grievanceRoutes.get('/grievances', handlers.listGrievances)
 grievanceRoutes.post('/grievances', handlers.createGrievance)

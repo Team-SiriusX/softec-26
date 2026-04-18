@@ -27,6 +27,8 @@ export const protectedRoutes = [
   '/advocate/dashboard',
   '/advocate/analytics',
   '/advocate/grievances',
+  '/advocate/vulnerability-flags',
+  '/advocate/commission-tracker',
 ];
 
 export const workerRoutes = [
@@ -45,6 +47,8 @@ export const advocateRoutes = [
   '/advocate/dashboard',
   '/advocate/analytics',
   '/advocate/grievances',
+  '/advocate/vulnerability-flags',
+  '/advocate/commission-tracker',
 ];
 
 export const SIGN_IN_PAGE_PATH = '/auth/sign-in';

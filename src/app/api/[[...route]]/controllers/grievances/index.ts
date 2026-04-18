@@ -9,6 +9,7 @@ import {
   escalateGrievance,
   getForClustering,
   getGrievance,
+  getGrievancePlatforms,
   getGrievanceStats,
   getGrievanceTrends,
   listGrievances,
@@ -18,14 +19,15 @@ import {
 } from './handlers';
 
 const app = new Hono()
-  .use('/*', authMiddleware)
   .get('/stats', getGrievanceStats)
+  .get('/platforms', getGrievancePlatforms)
   .get('/for-cluster', getForClustering)
+  .get('/', listGrievances)
+  .get('/:id', getGrievance)
+  .use('/*', authMiddleware)
   .post('/cluster', clusterGrievances)
   .post('/trends', getGrievanceTrends)
-  .get('/', listGrievances)
   .post('/', createGrievance)
-  .get('/:id', getGrievance)
   .patch('/:id', updateGrievance)
   .delete('/:id', deleteGrievance)
   .post('/:id/tags', addTag)

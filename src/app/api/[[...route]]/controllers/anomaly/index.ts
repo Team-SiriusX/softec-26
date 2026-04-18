@@ -5,11 +5,22 @@ import * as z from 'zod';
 
 import {
   analyzeBatchHandler,
+  detectWorkerAnomalyHandler,
   analyzeWorkerAnomalyHandler,
   getCityMedianHandler,
 } from './handlers';
 
 const app = new Hono()
+  .post(
+    '/detect',
+    zValidator(
+      'json',
+      z.object({
+        workerId: z.string(),
+      }),
+    ),
+    detectWorkerAnomalyHandler,
+  )
   .post(
     '/analyze',
     zValidator(

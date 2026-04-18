@@ -49,8 +49,10 @@ import {
 } from '@/components/ui/chart';
 import { Skeleton } from '@/components/ui/skeleton';
 import { QUERY_KEYS } from '@/constants/query-keys';
+import { useCurrentUser } from '@/hooks/use-current-user';
 import { client } from '@/lib/hono';
 import { cn } from '@/lib/utils';
+import { AnomalyAlertCard } from './_components/anomaly-alert-card';
 
 type EarningsTrendResponse = {
   summary: {
@@ -122,6 +124,19 @@ type VerificationDonutResponse = {
   points: Array<{
     status: 'CONFIRMED' | 'PENDING' | 'FLAGGED' | 'UNVERIFIABLE';
     count: number;
+  }>;
+};
+
+type WorkerDetectResponse = {
+  anomalies?: Array<{
+    type: string;
+    severity: 'low' | 'medium' | 'high' | 'critical';
+    explanation: string;
+  }>;
+  flags?: Array<{
+    type: string;
+    severity: 'low' | 'medium' | 'high' | 'critical';
+    explanation: string;
   }>;
 };
 
@@ -265,6 +280,7 @@ function ChartCard({
 }
 
 export default function WorkerAnalyticsPage() {
+  const { user } = useCurrentUser();
   const queryClient = useQueryClient();
   const [windowWeeks, setWindowWeeks] = useState<WorkerWindowWeeks>(24);
   const breakdownMonths = Math.min(12, Math.max(3, Math.ceil(windowWeeks / 4)));
@@ -376,6 +392,19 @@ export default function WorkerAnalyticsPage() {
       });
 
       return parseResponseOrThrow<VerificationDonutResponse>(response);
+    },
+    staleTime: 60_000,
+  });
+
+  const anomalyQuery = useQuery({
+    queryKey: [QUERY_KEYS.ANOMALY, user?.id],
+    enabled: Boolean(user?.id),
+    queryFn: async () => {
+      const response = await client.api.anomaly.detect.$post({
+        json: { workerId: user?.id ?? '' },
+      });
+
+      return parseResponseOrThrow<WorkerDetectResponse>(response);
     },
     staleTime: 60_000,
   });
@@ -575,6 +604,8 @@ export default function WorkerAnalyticsPage() {
     commissionSeries.rows.length < 4 ||
     hourlyRiverWithBand.length < 4;
 
+  const anomalies = anomalyQuery.data?.anomalies ?? anomalyQuery.data?.flags ?? [];
+
   const keyStats = [
     {
       title: 'Latest Gap To Median',
@@ -638,6 +669,12 @@ export default function WorkerAnalyticsPage() {
         </section>
 
         <section className='grid gap-4 md:grid-cols-3'>
+          {anomalies.length > 0 ? (
+            <div className='md:col-span-3'>
+              <AnomalyAlertCard anomalies={anomalies} />
+            </div>
+          ) : null}
+
           <Card className='border-border/60 bg-card/90 md:col-span-3'>
             <CardContent className='flex flex-wrap items-center gap-3 pt-6'>
               <p className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>

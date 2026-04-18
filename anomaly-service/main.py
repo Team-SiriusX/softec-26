@@ -20,6 +20,8 @@ from models import (
     BatchAnalyzeRequest,
     BatchAnalyzeResponse,
     BatchWorkerResult,
+    DetectFlag,
+    DetectResponse,
     PlatformSummary,
 )
 from enrichment.ai_enricher import enrich_anomalies
@@ -27,6 +29,7 @@ from detection.rules import (
     check_below_minimum_wage,
     check_commission_creep,
     check_deduction_spike,
+    check_income_drop_mom,
     check_income_cliff,
 )
 
@@ -124,6 +127,44 @@ async def analyze(
         risk_level=risk_level,
         anomalies=anomalies,
         summary=summary,
+    )
+
+
+@app.post('/detect', response_model=DetectResponse)
+async def detect(request: AnalyzeRequest):
+    """Judge-callable endpoint with Phase 7 required detection logic.
+
+    Logic used:
+    - Modified z-score based deduction spike detection
+    - Month-on-month net income drop detection (>20%)
+    """
+
+    shifts = sorted(request.earnings, key=lambda s: isoparse(s.date).date())
+    if len(shifts) == 0:
+        return DetectResponse(worker_id=request.worker_id, analyzed_shifts=0, flags=[])
+
+    findings: list[AnomalyDetail] = []
+
+    for detector in (check_deduction_spike, check_income_drop_mom):
+        result = detector(shifts)
+        if result is not None:
+            findings.append(result)
+
+    flags = [
+        DetectFlag(
+            type=anomaly.type,
+            severity=anomaly.severity,
+            explanation=anomaly.explanation,
+            affected_shifts=anomaly.affected_shifts,
+            data=anomaly.data,
+        )
+        for anomaly in findings
+    ]
+
+    return DetectResponse(
+        worker_id=request.worker_id,
+        analyzed_shifts=len(shifts),
+        flags=flags,
     )
 
 
