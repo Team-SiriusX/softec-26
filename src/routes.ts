@@ -12,7 +12,7 @@ export const onboardingRoutes = [
   '/worker/onboarding/role-selection',
 ];
 
-export const publicRoutes = ['/', '/sample', '/chat', '/community/board'];
+export const publicRoutes = ['/', '/sample', '/chat', '/community/board', '/certificate/verify'];
 
 export const protectedRoutes = [
   '/worker/dashboard',

@@ -9,9 +9,17 @@ from models import (
     CertificateRequest, 
     CertificateResponse,
     CertificateData,
-    ShiftSummary
+    ShiftSummary,
+    VerifiedCertificate,
+    CertificateVerificationResponse,
 )
-from database import get_connection, fetch_worker, fetch_shifts_for_certificate
+from database import (
+    get_connection,
+    fetch_worker,
+    fetch_shifts_for_certificate,
+    save_certificate,
+    fetch_certificate_by_id,
+)
 from calculator import compute_certificate_data
 from renderer import render_certificate_html
 
@@ -71,6 +79,7 @@ async def generate_certificate(request: CertificateRequest):
         )
         
         html = render_certificate_html(data)
+        await save_certificate(conn, request.worker_id, data, html)
         
         return CertificateResponse(
             certificate_id=data.certificate_id,
@@ -82,6 +91,66 @@ async def generate_certificate(request: CertificateRequest):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Certificate generation failed: {str(e)}")
+    finally:
+        await conn.close()
+
+
+@app.get("/certificate/verify/{certificate_id}", response_model=CertificateVerificationResponse)
+async def verify_certificate(certificate_id: str):
+    """Verify a previously generated certificate id against persisted records."""
+    conn = await get_connection()
+    try:
+        record = await fetch_certificate_by_id(conn, certificate_id)
+        if not record:
+            return CertificateVerificationResponse(
+                is_valid=False,
+                message="Certificate not found",
+                certificate=None,
+            )
+
+        now = datetime.utcnow()
+        expires_at = record.get("expires_at")
+        is_expired = bool(expires_at and expires_at < now)
+
+        status = str(record.get("status") or "")
+        is_status_valid = status == "GENERATED"
+        is_valid = is_status_valid and not is_expired
+
+        if not is_status_valid:
+            message = f"Certificate status is {status}"
+        elif is_expired:
+            message = "Certificate has expired"
+        else:
+            message = "Certificate is valid"
+
+        from_date = record.get("from_date")
+        to_date = record.get("to_date")
+        generated_at = record.get("generated_at")
+
+        certificate = VerifiedCertificate(
+            certificate_id=str(record.get("certificate_id")),
+            worker_id=str(record.get("worker_id")),
+            worker_name=record.get("worker_name"),
+            from_date=from_date.isoformat() if hasattr(from_date, "isoformat") else str(from_date),
+            to_date=to_date.isoformat() if hasattr(to_date, "isoformat") else str(to_date),
+            total_verified=float(record.get("total_verified") or 0.0),
+            shift_count=int(record.get("shift_count") or 0),
+            platforms=list(record.get("platforms_list") or []),
+            status=status,
+            generated_at=generated_at.isoformat()
+            if hasattr(generated_at, "isoformat")
+            else str(generated_at),
+            expires_at=expires_at.isoformat() if hasattr(expires_at, "isoformat") else None,
+            is_expired=is_expired,
+        )
+
+        return CertificateVerificationResponse(
+            is_valid=is_valid,
+            message=message,
+            certificate=certificate,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Certificate verification failed: {str(e)}")
     finally:
         await conn.close()
 
