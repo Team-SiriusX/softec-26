@@ -9,5 +9,16 @@ export const authRoutes = [
 
 export const publicRoutes = ['/', '/sample', '/chat'];
 
+export const protectedRoutes = [
+  '/worker/dashboard',
+  '/worker/log-shift',
+  '/worker/certificate',
+  '/worker/profile',
+  '/verifier/queue',
+  '/advocate/dashboard',
+  '/advocate/grievances',
+  '/community/board',
+];
+
 export const SIGN_IN_PAGE_PATH = '/auth/sign-in';
 export const DEFAULT_LOGIN_REDIRECT = '/';

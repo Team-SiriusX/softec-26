@@ -1,0 +1,7 @@
+# FairGig scaffold — implement logic here
+fastapi==0.115.0
+uvicorn[standard]==0.30.0
+numpy==1.26.4
+scipy==1.13.1
+pydantic==2.7.0
+python-dateutil==2.9.0
