@@ -17,6 +17,14 @@ type PublicAuthor = {
   role: string;
 };
 
+type CommunityMediaKind = 'IMAGE' | 'VIDEO' | 'DOCUMENT';
+
+type PostMediaInput = {
+  url: string;
+  fileKey?: string;
+  mediaType?: CommunityMediaKind;
+};
+
 const ANONYMOUS_AUTHOR: PublicAuthor = {
   id: 'anonymous',
   fullName: 'Anonymous User',
@@ -25,6 +33,7 @@ const ANONYMOUS_AUTHOR: PublicAuthor = {
 
 const REPORT_THRESHOLD_FOR_AI_QUEUE = 3;
 const AI_PASS_THRESHOLD = 0.65;
+const MAX_MEDIA_ITEMS_PER_POST = 8;
 
 const listInclude = {
   author: {
@@ -52,7 +61,7 @@ const listInclude = {
     orderBy: {
       createdAt: 'asc' as const,
     },
-    take: 4,
+    take: MAX_MEDIA_ITEMS_PER_POST,
   },
   comments: {
     select: {
@@ -280,6 +289,51 @@ function computeMockTrustScore(post: {
   return clamp(raw, 0.01, 0.99);
 }
 
+function normalizeMediaInput(media: PostMediaInput[] | undefined): Array<{
+  url: string;
+  fileKey?: string;
+  mediaType: CommunityMediaKind;
+}> {
+  if (!media?.length) {
+    return [];
+  }
+
+  const seen = new Set<string>();
+  const normalized: Array<{
+    url: string;
+    fileKey?: string;
+    mediaType: CommunityMediaKind;
+  }> = [];
+
+  for (const item of media) {
+    const url = item.url.trim();
+    if (!url) {
+      continue;
+    }
+
+    const fileKey = item.fileKey?.trim() || undefined;
+    const mediaType = item.mediaType ?? 'IMAGE';
+    const dedupeKey = fileKey ? `file:${fileKey}` : `url:${url}`;
+
+    if (seen.has(dedupeKey)) {
+      continue;
+    }
+
+    seen.add(dedupeKey);
+    normalized.push({
+      url,
+      fileKey,
+      mediaType,
+    });
+
+    if (normalized.length >= MAX_MEDIA_ITEMS_PER_POST) {
+      break;
+    }
+  }
+
+  return normalized;
+}
+
 async function ensurePendingQueueItem(params: {
   postId: string;
   reason: 'USER_REQUEST' | 'MULTIPLE_REPORTS' | 'TRUST_SCORE_LOW';
@@ -412,6 +466,50 @@ export const listPosts = async (c: Context) => {
   });
 };
 
+// ─── GET /api/community/posts/mine ─────────────────────────────────────────
+export const listMyPosts = async (c: Context) => {
+  const user = getUser(c);
+
+  if (!user) {
+    return c.json({ error: 'Unauthorized' }, 401);
+  }
+
+  if (!isWorker(user)) {
+    return c.json({ error: 'Only workers can access personal community posts' }, 403);
+  }
+
+  const query = (c.req as unknown as { valid: (target: 'query') => unknown }).valid('query') as {
+    limit: number;
+    offset: number;
+  };
+
+  const where: Prisma.CommunityPostWhereInput = {
+    authorId: user.id,
+  };
+
+  const [posts, total] = await Promise.all([
+    db.communityPost.findMany({
+      where,
+      include: listInclude,
+      orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }],
+      skip: query.offset,
+      take: query.limit,
+    }),
+    db.communityPost.count({ where }),
+  ]);
+
+  return c.json({
+    data: posts.map(serializeListPost),
+    meta: {
+      sort: 'new' as const,
+      limit: query.limit,
+      offset: query.offset,
+      total,
+      hasMore: query.offset + query.limit < total,
+    },
+  });
+};
+
 // ─── GET /api/community/posts/:id ───────────────────────────────────────────
 export const getPost = async (c: Context) => {
   const id = c.req.param('id');
@@ -449,12 +547,10 @@ export const createPost = async (c: Context) => {
     body: string;
     platformId?: string;
     isAnonymous?: boolean;
-    media?: Array<{
-      url: string;
-      fileKey?: string;
-      mediaType?: string;
-    }>;
+    media?: PostMediaInput[];
   };
+
+  const normalizedMedia = normalizeMediaInput(body.media);
 
   if (body.platformId) {
     const platformExists = await db.platform.findUnique({
@@ -474,12 +570,12 @@ export const createPost = async (c: Context) => {
       title: body.title.trim(),
       body: body.body.trim(),
       isAnonymous: Boolean(body.isAnonymous),
-      media: body.media?.length
+      media: normalizedMedia.length
         ? {
-            create: body.media.map((item) => ({
+            create: normalizedMedia.map((item) => ({
               url: item.url,
               fileKey: item.fileKey,
-              mediaType: item.mediaType ?? 'IMAGE',
+              mediaType: item.mediaType,
             })),
           }
         : undefined,
@@ -488,6 +584,227 @@ export const createPost = async (c: Context) => {
   });
 
   return c.json({ data: serializeDetailPost(created) }, 201);
+};
+
+// ─── PATCH /api/community/posts/:id ────────────────────────────────────────
+export const updatePost = async (c: Context) => {
+  const user = getUser(c);
+
+  if (!user) {
+    return c.json({ error: 'Unauthorized' }, 401);
+  }
+
+  if (!isWorker(user)) {
+    return c.json({ error: 'Only workers can edit community posts' }, 403);
+  }
+
+  const postId = c.req.param('id');
+
+  if (!postId) {
+    return c.json({ error: 'Post id is required' }, 400);
+  }
+
+  const body = (c.req as unknown as { valid: (target: 'json') => unknown }).valid('json') as {
+    title?: string;
+    body?: string;
+    platformId?: string | null;
+    isAnonymous?: boolean;
+    media?: PostMediaInput[];
+  };
+
+  const platformIdProvided = 'platformId' in body;
+  const anonymityProvided = 'isAnonymous' in body;
+  const mediaProvided = 'media' in body;
+
+  if (platformIdProvided && body.platformId) {
+    const platformExists = await db.platform.findUnique({
+      where: { id: body.platformId },
+      select: { id: true },
+    });
+
+    if (!platformExists) {
+      return c.json({ error: 'Platform not found' }, 404);
+    }
+  }
+
+  const post = await db.communityPost.findUnique({
+    where: { id: postId },
+    select: {
+      id: true,
+      authorId: true,
+      title: true,
+      body: true,
+      platformId: true,
+      isAnonymous: true,
+    },
+  });
+
+  if (!post) {
+    return c.json({ error: 'Post not found' }, 404);
+  }
+
+  if (post.authorId !== user.id) {
+    return c.json({ error: 'Only the post author can edit this post' }, 403);
+  }
+
+  const nextTitle = body.title?.trim();
+  const nextBody = body.body?.trim();
+  const nextPlatformId = platformIdProvided ? body.platformId ?? null : post.platformId;
+  const nextAnonymous = anonymityProvided ? Boolean(body.isAnonymous) : post.isAnonymous;
+  const normalizedMedia = mediaProvided ? normalizeMediaInput(body.media) : undefined;
+
+  const didTitleChange = nextTitle !== undefined && nextTitle !== post.title;
+  const didBodyChange = nextBody !== undefined && nextBody !== post.body;
+  const didPlatformChange = platformIdProvided && nextPlatformId !== post.platformId;
+  const didAnonymityChange = anonymityProvided && nextAnonymous !== post.isAnonymous;
+  const didMediaChange = mediaProvided;
+
+  if (
+    !didTitleChange &&
+    !didBodyChange &&
+    !didPlatformChange &&
+    !didAnonymityChange &&
+    !didMediaChange
+  ) {
+    const unchanged = await db.communityPost.findUnique({
+      where: { id: postId },
+      include: detailInclude,
+    });
+
+    if (!unchanged) {
+      return c.json({ error: 'Post not found' }, 404);
+    }
+
+    return c.json({ data: serializeDetailPost(unchanged) });
+  }
+
+  const contentChanged =
+    didTitleChange ||
+    didBodyChange ||
+    didPlatformChange ||
+    didMediaChange;
+
+  const updated = await db.$transaction(async (tx) => {
+    if (mediaProvided) {
+      await tx.communityPostMedia.deleteMany({
+        where: { postId },
+      });
+    }
+
+    const updateData: Prisma.CommunityPostUpdateInput = {};
+
+    if (nextTitle !== undefined) {
+      updateData.title = nextTitle;
+    }
+
+    if (nextBody !== undefined) {
+      updateData.body = nextBody;
+    }
+
+    if (platformIdProvided) {
+      updateData.platform = nextPlatformId
+        ? {
+            connect: {
+              id: nextPlatformId,
+            },
+          }
+        : {
+            disconnect: true,
+          };
+    }
+
+    if (anonymityProvided) {
+      updateData.isAnonymous = nextAnonymous;
+    }
+
+    if (mediaProvided && normalizedMedia && normalizedMedia.length > 0) {
+      updateData.media = {
+        create: normalizedMedia.map((item) => ({
+          url: item.url,
+          fileKey: item.fileKey,
+          mediaType: item.mediaType,
+        })),
+      };
+    }
+
+    if (contentChanged) {
+      updateData.verificationStatus = 'UNVERIFIED';
+      updateData.trustScore = null;
+      updateData.verificationRequestedAt = null;
+    }
+
+    const nextPost = await tx.communityPost.update({
+      where: { id: postId },
+      data: updateData,
+      include: detailInclude,
+    });
+
+    if (contentChanged) {
+      await tx.communityPostReviewQueue.updateMany({
+        where: {
+          postId,
+          status: 'PENDING',
+        },
+        data: {
+          status: 'RESOLVED',
+          resolvedAt: new Date(),
+          note: 'Auto-closed because the post content was edited by the author',
+        },
+      });
+    }
+
+    return nextPost;
+  });
+
+  return c.json({ data: serializeDetailPost(updated) });
+};
+
+// ─── DELETE /api/community/posts/:id ───────────────────────────────────────
+export const deletePost = async (c: Context) => {
+  const user = getUser(c);
+
+  if (!user) {
+    return c.json({ error: 'Unauthorized' }, 401);
+  }
+
+  if (!isWorker(user)) {
+    return c.json({ error: 'Only workers can delete community posts' }, 403);
+  }
+
+  const postId = c.req.param('id');
+
+  if (!postId) {
+    return c.json({ error: 'Post id is required' }, 400);
+  }
+
+  const post = await db.communityPost.findUnique({
+    where: { id: postId },
+    select: {
+      id: true,
+      authorId: true,
+    },
+  });
+
+  if (!post) {
+    return c.json({ error: 'Post not found' }, 404);
+  }
+
+  if (post.authorId !== user.id) {
+    return c.json({ error: 'Only the post author can delete this post' }, 403);
+  }
+
+  await db.$transaction(async (tx) => {
+    await tx.communityPost.delete({
+      where: { id: postId },
+    });
+  });
+
+  return c.json({
+    data: {
+      id: postId,
+      deleted: true,
+    },
+  });
 };
 
 // ─── POST /api/community/posts/:id/upvote ───────────────────────────────────

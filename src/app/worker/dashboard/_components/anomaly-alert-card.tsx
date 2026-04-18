@@ -56,10 +56,10 @@ export function AnomalyAlertCard({ anomalies }: AnomalyAlertCardProps) {
         )}
         <div className='mt-2'>
           <Link
-            href='/community/board?source=anomaly'
+            href='/worker/community-feed?source=anomaly'
             className={cn(buttonVariants({ size: 'sm', variant: 'outline' }), 'h-8 text-xs')}
           >
-            Report as grievance →
+            Open Community Feed →
           </Link>
         </div>
       </div>

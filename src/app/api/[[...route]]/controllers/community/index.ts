@@ -6,8 +6,10 @@ import * as z from 'zod';
 import {
   createComment,
   createPost,
+  deletePost,
   getModerationQueue,
   getPost,
+  listMyPosts,
   listPlatforms,
   listPosts,
   reportPost,
@@ -16,6 +18,7 @@ import {
   runMockAiReview,
   submitHumanReview,
   toggleUpvote,
+  updatePost,
 } from './handlers';
 
 const listPostsQuerySchema = z.object({
@@ -25,22 +28,36 @@ const listPostsQuerySchema = z.object({
   offset: z.coerce.number().min(0).default(0),
 });
 
+const listMyPostsQuerySchema = z.object({
+  limit: z.coerce.number().min(1).max(100).default(20),
+  offset: z.coerce.number().min(0).default(0),
+});
+
+const communityMediaSchema = z.object({
+  url: z.string().url(),
+  fileKey: z.string().min(1).optional(),
+  mediaType: z.enum(['IMAGE', 'VIDEO', 'DOCUMENT']).optional(),
+});
+
 const createPostSchema = z.object({
   title: z.string().trim().min(8).max(160),
   body: z.string().trim().min(20).max(4000),
   platformId: z.string().optional(),
   isAnonymous: z.boolean().optional().default(false),
-  media: z
-    .array(
-      z.object({
-        url: z.string().url(),
-        fileKey: z.string().min(1).optional(),
-        mediaType: z.string().min(3).max(24).optional(),
-      }),
-    )
-    .max(4)
-    .optional(),
+  media: z.array(communityMediaSchema).max(8).optional(),
 });
+
+const updatePostSchema = z
+  .object({
+    title: z.string().trim().min(8).max(160).optional(),
+    body: z.string().trim().min(20).max(4000).optional(),
+    platformId: z.string().nullable().optional(),
+    isAnonymous: z.boolean().optional(),
+    media: z.array(communityMediaSchema).max(8).optional(),
+  })
+  .refine((value) => Object.keys(value).length > 0, {
+    message: 'At least one editable field is required',
+  });
 
 const createCommentSchema = z.object({
   content: z.string().trim().min(1).max(1000),
@@ -64,8 +81,16 @@ const humanReviewSchema = z.object({
 const app = new Hono()
   .get('/platforms', listPlatforms)
   .get('/posts', zValidator('query', listPostsQuerySchema), listPosts)
+  .get(
+    '/posts/mine',
+    authMiddleware,
+    zValidator('query', listMyPostsQuerySchema),
+    listMyPosts,
+  )
   .get('/posts/:id', getPost)
   .post('/posts', authMiddleware, zValidator('json', createPostSchema), createPost)
+  .patch('/posts/:id', authMiddleware, zValidator('json', updatePostSchema), updatePost)
+  .delete('/posts/:id', authMiddleware, deletePost)
   .post('/posts/:id/upvote', authMiddleware, toggleUpvote)
   .post(
     '/posts/:id/comments',
