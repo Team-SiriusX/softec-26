@@ -6,6 +6,7 @@ import { HeroSection } from '@/components/ui/glass-video-hero';
 import DemoOne from '@/components/ui/demo';
 import BarChartDemo from '@/components/ui/bar-chart-demo';
 import FeaturedSectionStatsDemo from '@/components/ui/featured-section-stats-demo';
+import { Footer2 } from '@/components/ui/footer-2';
 
 export default async function Home() {
   const user = await currentUser();
@@ -13,7 +14,7 @@ export default async function Home() {
   console.log({ user });
 
   return (
-    <main className='from-background to-accent/20 min-h-screen bg-linear-to-b'>
+    <main className='from-background to-accent/20 min-h-screen overflow-x-hidden bg-linear-to-b'>
       <HeroSection />
       <DemoOne />
       <BarChartDemo />
@@ -71,6 +72,8 @@ export default async function Home() {
           </p>
         )}
       </section>
+
+      <Footer2 />
     </main>
   );
 }
