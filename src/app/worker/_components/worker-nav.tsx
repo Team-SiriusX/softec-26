@@ -3,6 +3,7 @@
 import { cn } from '@/lib/utils';
 import {
   BarChart2,
+  ShieldAlert,
   FileText,
   LayoutDashboard,
   LogOut,
@@ -18,6 +19,7 @@ const navItems = [
   { href: '/worker/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/worker/log-shift', label: 'Log a Shift', icon: PenSquare },
   { href: '/worker/earnings', label: 'My Earnings', icon: BarChart2 },
+  { href: '/worker/anomaly-detection', label: 'Anomaly', icon: ShieldAlert },
   { href: '/worker/certificate', label: 'Certificate', icon: FileText },
   { href: '/worker/profile', label: 'Profile', icon: User },
 ] as const;
