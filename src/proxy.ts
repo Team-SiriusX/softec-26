@@ -116,6 +116,20 @@ const getFreshSessionUser = async (
 export async function proxy(request: NextRequest) {
   const { nextUrl } = request;
   const pathname = nextUrl.pathname;
+
+  const isApiRoute =
+    pathname.startsWith('/api/') || pathname.startsWith('/trpc/');
+
+  if (isApiRoute) {
+    return NextResponse.next();
+  }
+
+  const isPublicRoute = publicRoutes.includes(pathname);
+
+  if (isPublicRoute) {
+    return NextResponse.next();
+  }
+
   const hasSessionToken = Boolean(getSessionCookie(request));
 
   const rawCookieCache = await getCookieCache(request, {
@@ -144,23 +158,11 @@ export async function proxy(request: NextRequest) {
   }
 
   const isAuthRoute = authRoutes.includes(pathname);
-  const isPublicRoute = publicRoutes.includes(pathname);
   const isWorkerRoute = pathMatches(pathname, workerRoutes);
   const isVerifierRoute = pathMatches(pathname, verifierRoutes);
   const isAdvocateRoute = pathMatches(pathname, advocateRoutes);
   const isOnboardingRoute = pathMatches(pathname, onboardingRoutes);
   const isPendingApprovalRoute = pathname === PENDING_APPROVAL_PAGE_PATH;
-
-  const isApiRoute =
-    pathname.startsWith('/api/') || pathname.startsWith('/trpc/');
-
-  if (isApiRoute) {
-    return NextResponse.next();
-  }
-
-  if (isPublicRoute) {
-    return NextResponse.next();
-  }
 
   const requiresApprovalDecision =
     isAuthRoute || isPendingApprovalRoute || isVerifierRoute || isAdvocateRoute;
