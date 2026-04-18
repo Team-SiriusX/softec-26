@@ -1,4 +1,4 @@
-import db from '@/lib/db';
+import 'dotenv/config';
 import {
   CertificateStatus,
   GrievanceCategory,
@@ -7,6 +7,7 @@ import {
   VerificationStatus,
   WorkerCategory,
 } from '@/generated/prisma/enums';
+import db from '@/lib/db';
 
 // cspell:words Bykea bykea Foodpanda foodpanda Careem careem upserted
 
@@ -80,7 +81,9 @@ async function seedShiftLogs(userIds: string[], platformIds: string[]) {
         platformDeductions: platformDeductions.toFixed(2),
         netReceived: netReceived.toFixed(2),
         verificationStatus:
-          slot % 2 === 0 ? VerificationStatus.CONFIRMED : VerificationStatus.PENDING,
+          slot % 2 === 0
+            ? VerificationStatus.CONFIRMED
+            : VerificationStatus.PENDING,
         importedViaCsv: slot % 2 === 0,
         notes: `[seed] Shift ${slot + 1} for worker ${workerId}`,
       };
@@ -99,7 +102,10 @@ async function seedShiftLogs(userIds: string[], platformIds: string[]) {
   });
 }
 
-async function seedScreenshots(shiftLogs: Array<{ id: string }>, userIds: string[]) {
+async function seedScreenshots(
+  shiftLogs: Array<{ id: string }>,
+  userIds: string[],
+) {
   await db.screenshot.deleteMany({
     where: {
       fileKey: {
@@ -108,16 +114,19 @@ async function seedScreenshots(shiftLogs: Array<{ id: string }>, userIds: string
     },
   });
 
-  const screenshotRows = shiftLogs.slice(0, Math.min(shiftLogs.length, 8)).map((log, idx) => ({
-    shiftLogId: log.id,
-    verifierId: userIds[(idx + 1) % userIds.length],
-    fileUrl: `https://cdn.example.org/seed/screenshot-${idx + 1}.png`,
-    fileKey: `seed/screenshot-${idx + 1}.png`,
-    status:
-      idx % 2 === 0 ? ScreenshotStatus.CONFIRMED : ScreenshotStatus.PENDING,
-    verifierNotes: idx % 2 === 0 ? '[seed] Looks valid.' : '[seed] Pending review.',
-    reviewedAt: idx % 2 === 0 ? getIsoDateOffset(-idx) : null,
-  }));
+  const screenshotRows = shiftLogs
+    .slice(0, Math.min(shiftLogs.length, 8))
+    .map((log, idx) => ({
+      shiftLogId: log.id,
+      verifierId: userIds[(idx + 1) % userIds.length],
+      fileUrl: `https://cdn.example.org/seed/screenshot-${idx + 1}.png`,
+      fileKey: `seed/screenshot-${idx + 1}.png`,
+      status:
+        idx % 2 === 0 ? ScreenshotStatus.CONFIRMED : ScreenshotStatus.PENDING,
+      verifierNotes:
+        idx % 2 === 0 ? '[seed] Looks valid.' : '[seed] Pending review.',
+      reviewedAt: idx % 2 === 0 ? getIsoDateOffset(-idx) : null,
+    }));
 
   await db.screenshot.createMany({ data: screenshotRows });
 }
@@ -158,7 +167,11 @@ async function seedAnomalyFlags(
         where: {
           workerId_flagMonth: {
             workerId,
-            flagMonth: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+            flagMonth: new Date(
+              new Date().getFullYear(),
+              new Date().getMonth(),
+              1,
+            ),
           },
         },
         update: {
@@ -169,7 +182,11 @@ async function seedAnomalyFlags(
         },
         create: {
           workerId,
-          flagMonth: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+          flagMonth: new Date(
+            new Date().getFullYear(),
+            new Date().getMonth(),
+            1,
+          ),
           prevMonthNet: (54000 + idx * 1400).toFixed(2),
           currMonthNet: (42000 + idx * 1200).toFixed(2),
           dropPct: '0.2200',
@@ -243,7 +260,10 @@ async function seedGrievances(userIds: string[], platformIds: string[]) {
   });
 }
 
-async function seedIncomeCertificates(userIds: string[], platformNames: string[]) {
+async function seedIncomeCertificates(
+  userIds: string[],
+  platformNames: string[],
+) {
   await db.incomeCertificate.deleteMany({
     where: {
       htmlSnapshot: {
@@ -276,7 +296,11 @@ async function seedDailyStats(platformIds: string[]) {
             platformId,
             cityZone: 'Lahore',
             category: WorkerCategory.FOOD_DELIVERY,
-            statDate: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+            statDate: new Date(
+              new Date().getFullYear(),
+              new Date().getMonth(),
+              1,
+            ),
           },
         },
         update: {
@@ -290,7 +314,11 @@ async function seedDailyStats(platformIds: string[]) {
           platformId,
           cityZone: 'Lahore',
           category: WorkerCategory.FOOD_DELIVERY,
-          statDate: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+          statDate: new Date(
+            new Date().getFullYear(),
+            new Date().getMonth(),
+            1,
+          ),
           workerCount: 100 + idx * 10,
           medianNetEarned: (56000 + idx * 2500).toFixed(2),
           avgCommissionPct: '0.1850',

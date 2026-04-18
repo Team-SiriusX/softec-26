@@ -7,7 +7,9 @@ import { client } from '@/lib/hono';
 import { toast } from 'sonner';
 
 type ResponseType = InferResponseType<typeof client.api.certificates.$post>;
-type RequestType = InferRequestType<typeof client.api.certificates.$post>['json'];
+type RequestType = InferRequestType<
+  typeof client.api.certificates.$post
+>['json'];
 
 export const useCreateCertificate = () => {
   const queryClient = useQueryClient();

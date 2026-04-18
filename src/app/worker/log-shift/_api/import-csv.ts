@@ -7,7 +7,9 @@ import { client } from '@/lib/hono';
 import { toast } from 'sonner';
 
 type ResponseType = InferResponseType<typeof client.api.shifts.import.$post>;
-type RequestType = InferRequestType<typeof client.api.shifts.import.$post>['json'];
+type RequestType = InferRequestType<
+  typeof client.api.shifts.import.$post
+>['json'];
 
 export const useImportShiftsCsv = () => {
   const queryClient = useQueryClient();
