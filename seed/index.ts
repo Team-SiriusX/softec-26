@@ -1,5 +1,7 @@
 import 'dotenv/config';
+import { randomUUID } from 'node:crypto';
 import db from '@/lib/db';
+import { hashPassword } from 'better-auth/crypto';
 import {
   CertificateStatus,
   GrievanceCategory,
@@ -15,8 +17,11 @@ import {
 const SEED_TAG = '[seed-analytics]';
 const SEED_EMAIL_DOMAIN = 'seed.fairgig.local';
 const SEED_FILE_PREFIX = 'seed/analytics/';
-const TOTAL_WEEKS = 56;
-const SEED_SNAPSHOT_DAYS = 42;
+const TOTAL_WEEKS = 72;
+const SEED_SNAPSHOT_DAYS = 84;
+const DEMO_PASSWORD = '12345678';
+const DEMO_WORKER_EMAIL = 'test@gmail.com';
+const DEMO_ADVOCATE_EMAIL = `demo.advocate@${SEED_EMAIL_DOMAIN}`;
 
 type PlatformSeed = {
   name: string;
@@ -34,6 +39,7 @@ type SeedWorkerProfile = {
   volatility: number;
   joinDaysAgo: number;
   primaryPlatforms: string[];
+  password?: string;
 };
 
 type SeedUserProfile = {
@@ -42,6 +48,7 @@ type SeedUserProfile = {
   cityZone: string;
   role: Role;
   joinDaysAgo: number;
+  password?: string;
 };
 
 type SeedWorker = {
@@ -131,6 +138,17 @@ const PLATFORM_SEEDS: PlatformSeed[] = [
 ];
 
 const WORKER_PROFILES: SeedWorkerProfile[] = [
+  {
+    fullName: 'Test Worker',
+    email: DEMO_WORKER_EMAIL,
+    cityZone: 'Gulberg',
+    category: WorkerCategory.RIDE_HAILING,
+    baseHourly: 605,
+    volatility: 0.17,
+    joinDaysAgo: 540,
+    primaryPlatforms: ['uber', 'careem', 'indrive'],
+    password: DEMO_PASSWORD,
+  },
   {
     fullName: 'Aamir Riaz',
     email: `aamir.worker@${SEED_EMAIL_DOMAIN}`,
@@ -231,9 +249,117 @@ const WORKER_PROFILES: SeedWorkerProfile[] = [
     joinDaysAgo: 34,
     primaryPlatforms: ['bykea', 'foodpanda', 'indrive'],
   },
+  {
+    fullName: 'Zain Abbas',
+    email: `zain.worker@${SEED_EMAIL_DOMAIN}`,
+    cityZone: 'Faisal Town',
+    category: WorkerCategory.RIDE_HAILING,
+    baseHourly: 600,
+    volatility: 0.15,
+    joinDaysAgo: 430,
+    primaryPlatforms: ['uber', 'careem', 'bykea'],
+  },
+  {
+    fullName: 'Hamza Suleman',
+    email: `hamza.worker@${SEED_EMAIL_DOMAIN}`,
+    cityZone: 'Iqbal Town',
+    category: WorkerCategory.FOOD_DELIVERY,
+    baseHourly: 530,
+    volatility: 0.19,
+    joinDaysAgo: 390,
+    primaryPlatforms: ['foodpanda', 'bykea', 'careem'],
+  },
+  {
+    fullName: 'Shayan Rehman',
+    email: `shayan.worker@${SEED_EMAIL_DOMAIN}`,
+    cityZone: 'Wapda Town',
+    category: WorkerCategory.RIDE_HAILING,
+    baseHourly: 565,
+    volatility: 0.14,
+    joinDaysAgo: 350,
+    primaryPlatforms: ['careem', 'indrive', 'uber'],
+  },
+  {
+    fullName: 'Ayesha Fatima',
+    email: `ayesha.worker@${SEED_EMAIL_DOMAIN}`,
+    cityZone: 'Anarkali',
+    category: WorkerCategory.FOOD_DELIVERY,
+    baseHourly: 515,
+    volatility: 0.16,
+    joinDaysAgo: 328,
+    primaryPlatforms: ['foodpanda', 'bykea', 'indrive'],
+  },
+  {
+    fullName: 'Danish Tariq',
+    email: `danish.worker@${SEED_EMAIL_DOMAIN}`,
+    cityZone: 'Bahria Town',
+    category: WorkerCategory.RIDE_HAILING,
+    baseHourly: 620,
+    volatility: 0.13,
+    joinDaysAgo: 290,
+    primaryPlatforms: ['uber', 'careem', 'indrive'],
+  },
+  {
+    fullName: 'Mariam Yousaf',
+    email: `mariam.worker@${SEED_EMAIL_DOMAIN}`,
+    cityZone: 'Garden Town',
+    category: WorkerCategory.FOOD_DELIVERY,
+    baseHourly: 505,
+    volatility: 0.17,
+    joinDaysAgo: 250,
+    primaryPlatforms: ['foodpanda', 'bykea', 'careem'],
+  },
+  {
+    fullName: 'Taha Irfan',
+    email: `taha.worker@${SEED_EMAIL_DOMAIN}`,
+    cityZone: 'Model Town',
+    category: WorkerCategory.RIDE_HAILING,
+    baseHourly: 580,
+    volatility: 0.12,
+    joinDaysAgo: 210,
+    primaryPlatforms: ['indrive', 'careem', 'uber'],
+  },
+  {
+    fullName: 'Farah Noor',
+    email: `farah.worker@${SEED_EMAIL_DOMAIN}`,
+    cityZone: 'Cantt',
+    category: WorkerCategory.FOOD_DELIVERY,
+    baseHourly: 495,
+    volatility: 0.2,
+    joinDaysAgo: 170,
+    primaryPlatforms: ['foodpanda', 'bykea', 'uber'],
+  },
+  {
+    fullName: 'Kashif Mehmood',
+    email: `kashif.worker@${SEED_EMAIL_DOMAIN}`,
+    cityZone: 'Johar Town',
+    category: WorkerCategory.RIDE_HAILING,
+    baseHourly: 555,
+    volatility: 0.16,
+    joinDaysAgo: 130,
+    primaryPlatforms: ['careem', 'indrive', 'uber'],
+  },
+  {
+    fullName: 'Noor Ul Huda',
+    email: `noor.worker@${SEED_EMAIL_DOMAIN}`,
+    cityZone: 'DHA',
+    category: WorkerCategory.FOOD_DELIVERY,
+    baseHourly: 520,
+    volatility: 0.18,
+    joinDaysAgo: 96,
+    primaryPlatforms: ['foodpanda', 'bykea', 'careem'],
+  },
 ];
 
 const ADVOCATE_PROFILES: SeedUserProfile[] = [
+  {
+    fullName: 'Demo Advocate',
+    email: DEMO_ADVOCATE_EMAIL,
+    cityZone: 'Lahore',
+    role: Role.ADVOCATE,
+    joinDaysAgo: 365,
+    password: DEMO_PASSWORD,
+  },
   {
     fullName: 'Sara Malik',
     email: `sara.advocate@${SEED_EMAIL_DOMAIN}`,
@@ -247,6 +373,20 @@ const ADVOCATE_PROFILES: SeedUserProfile[] = [
     cityZone: 'Lahore',
     role: Role.ADVOCATE,
     joinDaysAgo: 180,
+  },
+  {
+    fullName: 'Nimra Ali',
+    email: `nimra.advocate@${SEED_EMAIL_DOMAIN}`,
+    cityZone: 'Lahore',
+    role: Role.ADVOCATE,
+    joinDaysAgo: 140,
+  },
+  {
+    fullName: 'Hashir Qureshi',
+    email: `hashir.advocate@${SEED_EMAIL_DOMAIN}`,
+    cityZone: 'Lahore',
+    role: Role.ADVOCATE,
+    joinDaysAgo: 100,
   },
 ];
 
@@ -377,6 +517,66 @@ function pickPrimaryPlatform(profile: SeedWorkerProfile, seed: number): string {
   return profile.primaryPlatforms[index] ?? profile.primaryPlatforms[0];
 }
 
+async function ensureCredentialAccount(userId: string, rawPassword: string): Promise<void> {
+  const passwordHash = await hashPassword(rawPassword);
+
+  await db.user.update({
+    where: { id: userId },
+    data: {
+      password: passwordHash,
+    },
+  });
+
+  const credentialAccounts = await db.account.findMany({
+    where: {
+      userId,
+      providerId: 'credential',
+    },
+    select: {
+      id: true,
+    },
+    orderBy: {
+      createdAt: 'asc',
+    },
+  });
+
+  if (credentialAccounts.length === 0) {
+    await db.account.create({
+      data: {
+        id: randomUUID(),
+        accountId: userId,
+        providerId: 'credential',
+        userId,
+        password: passwordHash,
+      },
+    });
+
+    return;
+  }
+
+  const [primaryAccount, ...duplicateAccounts] = credentialAccounts;
+
+  await db.account.update({
+    where: {
+      id: primaryAccount.id,
+    },
+    data: {
+      accountId: userId,
+      password: passwordHash,
+    },
+  });
+
+  if (duplicateAccounts.length > 0) {
+    await db.account.deleteMany({
+      where: {
+        id: {
+          in: duplicateAccounts.map((account) => account.id),
+        },
+      },
+    });
+  }
+}
+
 async function upsertPlatforms(): Promise<Map<string, SeedPlatform>> {
   const map = new Map<string, SeedPlatform>();
 
@@ -438,6 +638,10 @@ async function upsertWorkerUsers(): Promise<SeedWorker[]> {
       },
     });
 
+    if (profile.password) {
+      await ensureCredentialAccount(user.id, profile.password);
+    }
+
     workers.push({
       id: user.id,
       fullName: user.fullName,
@@ -479,6 +683,10 @@ async function upsertRoleUsers(profiles: SeedUserProfile[]): Promise<SeedUser[]>
         email: true,
       },
     });
+
+    if (profile.password) {
+      await ensureCredentialAccount(user.id, profile.password);
+    }
 
     users.push(user);
   }
@@ -586,19 +794,30 @@ function buildShiftBlueprints(
   const today = toDateOnlyUtc(new Date());
   const currentWeekStart = startOfUtcWeek(today);
   const rows: SeedShiftBlueprint[] = [];
-  const dayPattern = [0, 1, 3, 5, 6] as const;
+  const dayPattern = [0, 1, 2, 3, 4, 5, 6] as const;
 
   for (const [workerIndex, worker] of workers.entries()) {
     for (let weekOffset = TOTAL_WEEKS - 1; weekOffset >= 0; weekOffset -= 1) {
       const weekStart = addUtcDays(currentWeekStart, -weekOffset * 7);
-      const seasonalWave = 1 + Math.sin((weekOffset + workerIndex) / 3.2) * 0.09;
+      const seasonalWave = 1 + Math.sin((weekOffset + workerIndex) / 2.8) * 0.12;
       const stressPeriod =
         (workerIndex % 3 === 0 && weekOffset >= 8 && weekOffset <= 13) ||
         (workerIndex % 4 === 1 && weekOffset >= 20 && weekOffset <= 23)
-          ? 0.82
+          ? 0.76
           : 1;
 
-      const shiftsThisWeek = 3 + ((workerIndex + weekOffset) % 3);
+      const fuelSpikePeriod =
+        (weekOffset >= 14 && weekOffset <= 18) ||
+        (weekOffset >= 40 && weekOffset <= 44)
+          ? 0.86
+          : 1;
+
+      const festiveDemandWave = weekOffset % 16 <= 2 ? 1.08 : 1;
+
+      const shiftsThisWeek =
+        4 +
+        ((workerIndex + weekOffset) % 3) +
+        (randomUnit(workerIndex * 7_919 + weekOffset * 37) > 0.78 ? 1 : 0);
 
       for (let shiftIndex = 0; shiftIndex < shiftsThisWeek; shiftIndex += 1) {
         const shiftDate = addUtcDays(weekStart, dayPattern[shiftIndex] ?? 6);
@@ -638,6 +857,8 @@ function buildShiftBlueprints(
           platform.incomeBias *
           seasonalWave *
           stressPeriod *
+          fuelSpikePeriod *
+          festiveDemandWave *
           workerNoise *
           marketNoise;
 
@@ -649,14 +870,16 @@ function buildShiftBlueprints(
           platform.slug === 'foodpanda' && weekOffset >= 5 && weekOffset <= 10
             ? 0.045
             : 0;
+        const policyShock = weekOffset % 15 === 0 ? 0.03 : 0;
 
         const commissionRate = clamp(
           platform.baseCommission +
             bykeaShock +
             foodpandaShock +
+            policyShock +
             (randomUnit(platformRandomSeed + 51) - 0.5) * 0.06,
           0.12,
-          0.38,
+          0.42,
         );
 
         const platformDeductions = grossEarned * commissionRate;
@@ -665,15 +888,15 @@ function buildShiftBlueprints(
         const verificationRoll = randomUnit(platformRandomSeed + 61);
         let verificationStatus: VerificationStatus = VerificationStatus.CONFIRMED;
 
-        if (verificationRoll > 0.9) {
+        if (verificationRoll > 0.84) {
           verificationStatus = VerificationStatus.PENDING;
         }
 
-        if (verificationRoll > 0.97 || commissionRate >= 0.33) {
+        if (verificationRoll > 0.93 || commissionRate >= 0.31) {
           verificationStatus = VerificationStatus.FLAGGED;
         }
 
-        if (verificationRoll < 0.02) {
+        if (verificationRoll < 0.03) {
           verificationStatus = VerificationStatus.UNVERIFIABLE;
         }
 
@@ -686,7 +909,7 @@ function buildShiftBlueprints(
           platformDeductions: Number(platformDeductions.toFixed(2)),
           netReceived: Number(netReceived.toFixed(2)),
           verificationStatus,
-          importedViaCsv: randomUnit(platformRandomSeed + 71) > 0.83,
+          importedViaCsv: randomUnit(platformRandomSeed + 71) > 0.76,
           notes: `${SEED_TAG} worker=${worker.id} week=${weekOffset} shift=${shiftIndex}`,
         });
       }
@@ -744,16 +967,35 @@ async function seedScreenshots(
   }
 
   const rows = shiftLogs
-    .filter((_, index) => index % 7 === 0)
+    .filter(
+      (log, index) =>
+        index % 3 === 0 ||
+        log.verificationStatus === VerificationStatus.FLAGGED ||
+        log.verificationStatus === VerificationStatus.UNVERIFIABLE,
+    )
     .map((log, index) => {
-      const statusCycle = [
-        ScreenshotStatus.CONFIRMED,
-        ScreenshotStatus.PENDING,
-        ScreenshotStatus.FLAGGED,
-        ScreenshotStatus.UNVERIFIABLE,
-      ] as const;
+      const reviewRoll = randomUnit(index * 101 + log.shiftDate.getUTCDate());
+      let status: ScreenshotStatus = ScreenshotStatus.CONFIRMED;
 
-      const status = statusCycle[index % statusCycle.length];
+      if (reviewRoll > 0.78) {
+        status = ScreenshotStatus.PENDING;
+      }
+
+      if (
+        reviewRoll > 0.9 ||
+        log.verificationStatus === VerificationStatus.FLAGGED
+      ) {
+        status = ScreenshotStatus.FLAGGED;
+      }
+
+      if (
+        reviewRoll < 0.04 ||
+        log.verificationStatus === VerificationStatus.UNVERIFIABLE
+      ) {
+        status = ScreenshotStatus.UNVERIFIABLE;
+      }
+
+      const reviewedAfterDays = 1 + (index % 3);
 
       return {
         shiftLogId: log.id,
@@ -770,7 +1012,7 @@ async function seedScreenshots(
         reviewedAt:
           status === ScreenshotStatus.PENDING
             ? null
-            : addUtcDays(log.shiftDate, 1),
+            : addUtcDays(log.shiftDate, reviewedAfterDays),
       };
     });
 
@@ -791,7 +1033,13 @@ async function seedAnomalyFlags(shiftLogs: SeedShiftRecord[]): Promise<number> {
       const deductions = toNumber(log.platformDeductions);
       const deductionRate = gross <= 0 ? 0 : deductions / gross;
 
-      return deductionRate >= 0.29 || randomUnit(index * 19 + 7) > 0.965;
+      return (
+        deductionRate >= 0.27 ||
+        log.verificationStatus === VerificationStatus.FLAGGED ||
+        (log.verificationStatus === VerificationStatus.UNVERIFIABLE &&
+          deductionRate >= 0.22) ||
+        randomUnit(index * 19 + 7) > 0.94
+      );
     })
     .map((log, index) => {
       const gross = toNumber(log.grossEarned);
@@ -799,14 +1047,28 @@ async function seedAnomalyFlags(shiftLogs: SeedShiftRecord[]): Promise<number> {
       const deductionRate = gross <= 0 ? 0 : deductions / gross;
 
       const severe = deductionRate >= 0.33;
-      const flagType = severe ? 'seed_commission_spike' : 'seed_income_drop';
+      const flagType = severe
+        ? 'seed_commission_spike'
+        : log.verificationStatus === VerificationStatus.UNVERIFIABLE
+          ? 'seed_verification_gap'
+          : randomUnit(index * 31 + 3) > 0.55
+            ? 'seed_income_drop'
+            : 'seed_unusual_pattern';
 
       return {
         workerId: log.workerId,
         shiftLogId: log.id,
         flagType,
-        severity: severe ? 'high' : deductionRate >= 0.27 ? 'medium' : 'low',
-        explanation: `${SEED_TAG} Commission and payout pattern diverged from recent baseline.`,
+        severity:
+          severe || log.verificationStatus === VerificationStatus.UNVERIFIABLE
+            ? 'high'
+            : deductionRate >= 0.25
+              ? 'medium'
+              : 'low',
+        explanation:
+          log.verificationStatus === VerificationStatus.UNVERIFIABLE
+            ? `${SEED_TAG} Verification evidence missing while deductions remained elevated.`
+            : `${SEED_TAG} Commission and payout pattern diverged from recent baseline.`,
         zScore: toFixedNumeric(1.1 + deductionRate * 6 + randomUnit(index + 41), 4),
       };
     });
@@ -932,87 +1194,101 @@ async function seedGrievances(
     return { grievances: 0, tags: 0, escalations: 0 };
   }
 
-  const created = [] as Array<{
-    id: string;
-    category: string;
-  }>;
+  return db.$transaction(async (tx) => {
+    const created = [] as Array<{
+      id: string;
+      category: string;
+    }>;
 
-  for (let weekOffset = 34; weekOffset >= 0; weekOffset -= 1) {
-    const weekStart = addUtcDays(currentWeekStart, -weekOffset * 7);
-    const issuesThisWeek = 2 + (weekOffset % 3);
+    for (let weekOffset = TOTAL_WEEKS - 1; weekOffset >= 0; weekOffset -= 1) {
+      const weekStart = addUtcDays(currentWeekStart, -weekOffset * 7);
+      const issuesThisWeek = 3 + ((weekOffset + workers.length) % 4);
 
-    for (let issueIndex = 0; issueIndex < issuesThisWeek; issueIndex += 1) {
-      const worker = workers[(weekOffset + issueIndex) % workers.length];
-      const platform = platforms[(weekOffset * 2 + issueIndex) % platforms.length];
-      const category =
-        GRIEVANCE_CATEGORIES[(weekOffset + issueIndex) % GRIEVANCE_CATEGORIES.length];
+      for (let issueIndex = 0; issueIndex < issuesThisWeek; issueIndex += 1) {
+        const worker = workers[(weekOffset + issueIndex) % workers.length];
+        const platform = platforms[(weekOffset * 2 + issueIndex) % platforms.length];
+        const category =
+          GRIEVANCE_CATEGORIES[(weekOffset + issueIndex) % GRIEVANCE_CATEGORIES.length];
 
-      const createdAt = addUtcDays(weekStart, (issueIndex * 2) % 6);
-      const status =
-        weekOffset % 7 === 0
-          ? GrievanceStatus.ESCALATED
-          : weekOffset % 2 === 0
-            ? GrievanceStatus.OPEN
-            : GrievanceStatus.TAGGED;
+        const createdAt = addUtcDays(weekStart, (issueIndex * 2) % 6);
+        const statusRoll = (weekOffset * 13 + issueIndex * 7) % 10;
+        const status =
+          statusRoll >= 8
+            ? GrievanceStatus.ESCALATED
+            : statusRoll >= 5
+              ? GrievanceStatus.TAGGED
+              : statusRoll >= 2
+                ? GrievanceStatus.OPEN
+                : GrievanceStatus.RESOLVED;
 
-      const record = await db.grievance.create({
-        data: {
-          workerId: worker.id,
-          platformId: platform.id,
-          category,
-          title: `${SEED_TAG} ${category} signal ${weekOffset}-${issueIndex}`,
-          description: `${SEED_TAG} ${worker.cityZone} workers reported ${category.toLowerCase().replaceAll('_', ' ')} on ${platform.name}.`,
-          status,
-          isAnonymous: issueIndex % 5 === 0,
-          clusterId: `seed-cluster-${category.toLowerCase()}`,
-          createdAt,
-        },
-        select: {
-          id: true,
-          category: true,
-        },
-      });
+        const record = await tx.grievance.create({
+          data: {
+            workerId: worker.id,
+            platformId: platform.id,
+            category,
+            title: `${SEED_TAG} ${category} signal ${weekOffset}-${issueIndex}`,
+            description: `${SEED_TAG} ${worker.cityZone} workers reported ${category.toLowerCase().replaceAll('_', ' ')} on ${platform.name}.`,
+            status,
+            isAnonymous: issueIndex % 4 === 0,
+            clusterId: `seed-cluster-${category.toLowerCase()}-${platform.slug}`,
+            createdAt,
+          },
+          select: {
+            id: true,
+            category: true,
+          },
+        });
 
-      created.push(record);
+        created.push(record);
+      }
     }
-  }
 
-  const tagRows = created.flatMap((grievance, index) => {
-    const tags = CATEGORY_TAGS[grievance.category] ?? CATEGORY_TAGS.OTHER;
+    const tagRows = created.flatMap((grievance, index) => {
+      const tags = CATEGORY_TAGS[grievance.category] ?? CATEGORY_TAGS.OTHER;
+      const selectedTags = tags.slice(0, 2);
 
-    return tags.slice(0, 2).map((tag, tagIndex) => ({
-      grievanceId: grievance.id,
-      advocateId: advocates[(index + tagIndex) % advocates.length]?.id ?? fallbackAdvocate,
-      tag,
-    }));
+      if (index % 5 === 0) {
+        selectedTags.push('seed-priority-high');
+      }
+
+      return selectedTags.map((tag, tagIndex) => ({
+        grievanceId: grievance.id,
+        advocateId:
+          advocates[(index + tagIndex) % advocates.length]?.id ?? fallbackAdvocate,
+        tag,
+      }));
+    });
+
+    const escalationRows = created
+      .filter((_, index) => index % 2 === 0)
+      .map((grievance, index) => ({
+        grievanceId: grievance.id,
+        advocateId: advocates[index % advocates.length]?.id ?? fallbackAdvocate,
+        note: `${SEED_TAG} Escalated for collective legal evidence review.`,
+      }));
+
+    if (tagRows.length > 0) {
+      await tx.grievanceTag.createMany({
+        data: tagRows,
+        skipDuplicates: true,
+      });
+    }
+
+    if (escalationRows.length > 0) {
+      await tx.grievanceEscalation.createMany({
+        data: escalationRows,
+      });
+    }
+
+    return {
+      grievances: created.length,
+      tags: tagRows.length,
+      escalations: escalationRows.length,
+    };
+  }, {
+    maxWait: 30_000,
+    timeout: 120_000,
   });
-
-  const escalationRows = created
-    .filter((_, index) => index % 3 === 0)
-    .map((grievance, index) => ({
-      grievanceId: grievance.id,
-      advocateId: advocates[index % advocates.length]?.id ?? fallbackAdvocate,
-      note: `${SEED_TAG} Escalated for collective legal evidence review.`,
-    }));
-
-  if (tagRows.length > 0) {
-    await db.grievanceTag.createMany({
-      data: tagRows,
-      skipDuplicates: true,
-    });
-  }
-
-  if (escalationRows.length > 0) {
-    await db.grievanceEscalation.createMany({
-      data: escalationRows,
-    });
-  }
-
-  return {
-    grievances: created.length,
-    tags: tagRows.length,
-    escalations: escalationRows.length,
-  };
 }
 
 async function seedIncomeCertificates(
@@ -1023,7 +1299,7 @@ async function seedIncomeCertificates(
   const fromDate = addUtcDays(toDateOnlyUtc(new Date()), -30);
   const toDate = addUtcDays(toDateOnlyUtc(new Date()), -1);
 
-  const rows = workers.slice(0, 6).map((worker, index) => {
+  const rows = workers.slice(0, 10).map((worker, index) => {
     const workerShifts = shifts.filter((shift) => {
       return (
         shift.workerId === worker.id &&
@@ -1238,6 +1514,22 @@ async function main() {
   console.log(`- Grievance escalations created: ${grievanceSummary.escalations}`);
   console.log(`- Income certificates created: ${certificateCount}`);
   console.log(`- Daily platform stats upserted: ${dailyStatCount}`);
+
+  const credentialProfiles = [
+    ...WORKER_PROFILES,
+    ...ADVOCATE_PROFILES,
+    ...VERIFIER_PROFILES,
+  ].filter((profile) => Boolean(profile.password));
+
+  if (credentialProfiles.length > 0) {
+    console.log('- Demo credentials:');
+    for (const profile of credentialProfiles) {
+      console.log(`  - ${profile.email} / ${profile.password}`);
+    }
+  }
+
+  console.log(`- Primary worker login: ${DEMO_WORKER_EMAIL} / ${DEMO_PASSWORD}`);
+  console.log(`- Primary advocate login: ${DEMO_ADVOCATE_EMAIL} / ${DEMO_PASSWORD}`);
 }
 
 main()
