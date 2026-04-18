@@ -76,7 +76,10 @@ def determine_optimal_k(matrix) -> tuple[int, float]:
         if n < 4:
             return (1, 0.0)
 
-        max_k = min(8, n - 1)
+        # Cap at n//3 so each cluster holds at least ~3 members on average.
+        # min(8,...) alone over-splits small datasets (e.g. 15 grievances → k=8
+        # yields singleton clusters and silhouette collapse).
+        max_k = min(6, max(2, n // 3))
         best_k = 2
         best_score = -1.0
 
