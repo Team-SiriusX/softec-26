@@ -3,14 +3,70 @@
 import { BarChart, Bar, BarXAxis, Grid, ChartTooltip } from "@/components/ui/bar-chart";
 
 const fairGigVisualizerData = [
-  { frame: "Q1", confidence: 62, momentum: 55 },
-  { frame: "Q2", confidence: 67, momentum: 59 },
-  { frame: "Q3", confidence: 63, momentum: 71 },
-  { frame: "Q4", confidence: 74, momentum: 66 },
-  { frame: "Q5", confidence: 69, momentum: 78 },
-  { frame: "Q6", confidence: 81, momentum: 73 },
-  { frame: "Q7", confidence: 76, momentum: 84 },
-  { frame: "Q8", confidence: 88, momentum: 80 },
+  {
+    frame: "Q1",
+    confidence: 62,
+    momentum: 55,
+    verifiedEarningsRecords: 18400,
+    certificatesChecked: 9200,
+    grievancesAutoFlagged: 112,
+  },
+  {
+    frame: "Q2",
+    confidence: 67,
+    momentum: 59,
+    verifiedEarningsRecords: 20150,
+    certificatesChecked: 10340,
+    grievancesAutoFlagged: 129,
+  },
+  {
+    frame: "Q3",
+    confidence: 63,
+    momentum: 71,
+    verifiedEarningsRecords: 22460,
+    certificatesChecked: 11890,
+    grievancesAutoFlagged: 141,
+  },
+  {
+    frame: "Q4",
+    confidence: 74,
+    momentum: 66,
+    verifiedEarningsRecords: 23810,
+    certificatesChecked: 12600,
+    grievancesAutoFlagged: 136,
+  },
+  {
+    frame: "Q5",
+    confidence: 69,
+    momentum: 78,
+    verifiedEarningsRecords: 25700,
+    certificatesChecked: 13920,
+    grievancesAutoFlagged: 152,
+  },
+  {
+    frame: "Q6",
+    confidence: 81,
+    momentum: 73,
+    verifiedEarningsRecords: 27140,
+    certificatesChecked: 14830,
+    grievancesAutoFlagged: 147,
+  },
+  {
+    frame: "Q7",
+    confidence: 76,
+    momentum: 84,
+    verifiedEarningsRecords: 29480,
+    certificatesChecked: 16210,
+    grievancesAutoFlagged: 168,
+  },
+  {
+    frame: "Q8",
+    confidence: 88,
+    momentum: 80,
+    verifiedEarningsRecords: 31220,
+    certificatesChecked: 17160,
+    grievancesAutoFlagged: 159,
+  },
 ];
 
 const topStickers = [
@@ -140,18 +196,34 @@ export default function BarChartDemo() {
               rows={(point) => [
                 {
                   color: "#1d4ed8",
-                  label: "Confidence",
-                  value: Number(point.confidence ?? 0),
+                  label: "Trust Confidence",
+                  value: `${Number(point.confidence ?? 0)} / 100`,
                 },
                 {
                   color: "#0d9488",
-                  label: "Momentum",
-                  value: Number(point.momentum ?? 0),
+                  label: "Verification Momentum",
+                  value: `${Number(point.momentum ?? 0)} / 100`,
+                },
+                {
+                  color: "#1e293b",
+                  label: "Verified Earnings Records",
+                  value: Number(point.verifiedEarningsRecords ?? 0).toLocaleString(),
+                },
+                {
+                  color: "#0891b2",
+                  label: "Certificates Checked",
+                  value: Number(point.certificatesChecked ?? 0).toLocaleString(),
+                },
+                {
+                  color: "#b45309",
+                  label: "Grievances Auto-Flagged",
+                  value: Number(point.grievancesAutoFlagged ?? 0).toLocaleString(),
                 },
               ]}
             >
               <p className="text-chart-tooltip-muted text-xs">
-                Refined motion mode enabled.
+                FairGig signal stack: wage-proof verification, advocate-ready
+                certificates, and early grievance risk detection.
               </p>
             </ChartTooltip>
           </BarChart>
