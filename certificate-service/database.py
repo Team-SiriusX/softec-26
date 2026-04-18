@@ -1,22 +1,21 @@
 import os
 import asyncpg
+from datetime import date
 from typing import Optional
 from dotenv import load_dotenv
 
 root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 env_local_path = os.path.join(root_dir, ".env.local")
 env_path = os.path.join(root_dir, ".env")
-if os.path.exists(env_local_path):
-    load_dotenv(env_local_path)
-elif os.path.exists(env_path):
+if os.path.exists(env_path):
     load_dotenv(env_path)
-else:
-    load_dotenv()
+if os.path.exists(env_local_path):
+    load_dotenv(env_local_path, override=True)
 
 DATABASE_URL = os.getenv(
     "DATABASE_URL", 
     "postgresql://user:password@localhost:5432/fairgig"
-)
+).strip('"').strip("'")
 
 async def get_connection():
     """Get asyncpg connection."""
@@ -47,6 +46,10 @@ async def fetch_shifts_for_certificate(
     """
     Fetch shift logs for worker in date range.
     """
+    # asyncpg requires datetime.date objects, not raw ISO strings
+    from_dt = date.fromisoformat(from_date)
+    to_dt = date.fromisoformat(to_date)
+
     query = """
         SELECT 
             sl.id,
@@ -61,8 +64,8 @@ async def fetch_shifts_for_certificate(
         FROM shift_logs sl
         JOIN platforms p ON sl.platform_id = p.id
         WHERE sl.worker_id = $1
-          AND sl.shift_date >= $2::date
-          AND sl.shift_date <= $3::date
+          AND sl.shift_date >= $2
+          AND sl.shift_date <= $3
     """
     
     if not include_unverified:
@@ -72,5 +75,5 @@ async def fetch_shifts_for_certificate(
         
     query += " ORDER BY sl.shift_date ASC"
     
-    rows = await conn.fetch(query, worker_id, from_date, to_date)
+    rows = await conn.fetch(query, worker_id, from_dt, to_dt)
     return [dict(row) for row in rows]

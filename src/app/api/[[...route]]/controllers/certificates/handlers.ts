@@ -2,7 +2,7 @@ import { Context } from 'hono';
 import { auth } from '@/lib/auth';
 import { headers } from 'next/headers';
 
-const CERT_SERVICE_URL = process.env.CERTIFICATE_SERVICE_URL || 'http://localhost:8004';
+const CERT_SERVICE_URL = process.env.CERTIFICATE_SERVICE_URL || 'http://127.0.0.1:8004';
 
 export async function generateCertificate(c: Context) {
   const session = await auth.api.getSession({

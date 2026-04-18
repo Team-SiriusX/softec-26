@@ -9,12 +9,11 @@ const rootDir = path.resolve(__dirname, '../../');
 const envLocalPath = path.join(rootDir, '.env.local');
 const envPath = path.join(rootDir, '.env');
 
-if (fs.existsSync(envLocalPath)) {
-  dotenv.config({ path: envLocalPath });
-} else if (fs.existsSync(envPath)) {
+if (fs.existsSync(envPath)) {
   dotenv.config({ path: envPath });
-} else {
-  dotenv.config();
+}
+if (fs.existsSync(envLocalPath)) {
+  dotenv.config({ path: envLocalPath, override: true });
 }
 import { serve } from '@hono/node-server'
 import app from './app.js'
