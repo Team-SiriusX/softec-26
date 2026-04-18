@@ -56,6 +56,11 @@ interface ShiftDetailSheetProps {
   onClose: () => void;
 }
 
+type ShiftScreenshot = {
+  fileUrl?: string;
+  verifierNotes?: string;
+};
+
 function DetailRow({
   label,
   value,
@@ -75,6 +80,15 @@ export function ShiftDetailSheet({ shiftId, onClose }: ShiftDetailSheetProps) {
   const { data, isLoading } = useGetShift(shiftId ?? '');
   const shiftResponse = data as { data?: Record<string, any> } | undefined;
   const shift = shiftResponse?.data;
+
+  const screenshots: ShiftScreenshot[] = Array.isArray(shift?.screenshots)
+    ? (shift.screenshots as ShiftScreenshot[])
+    : shift?.screenshot
+      ? [shift.screenshot as ShiftScreenshot]
+      : [];
+
+  const hasScreenshots = screenshots.length > 0;
+  const firstReviewerNote = screenshots.find((item) => !!item.verifierNotes)?.verifierNotes;
 
   const status = (shift?.verificationStatus as keyof typeof STATUS_CONFIG) ?? 'PENDING';
   const statusCfg = STATUS_CONFIG[status];
@@ -179,30 +193,36 @@ export function ShiftDetailSheet({ shiftId, onClose }: ShiftDetailSheetProps) {
 
               {/* Verifier note (shown on flagged/unverifiable) */}
               {(status === 'FLAGGED' || status === 'UNVERIFIABLE') &&
-                shift.screenshot &&
-                (shift.screenshot as { verifierNotes?: string }).verifierNotes && (
+                firstReviewerNote && (
                   <div className='mt-2 p-3 rounded-lg bg-muted text-sm'>
                     <p className='font-medium text-xs uppercase tracking-wider text-muted-foreground mb-1'>
                       Reviewer note
                     </p>
-                    <p>{(shift.screenshot as { verifierNotes: string }).verifierNotes}</p>
+                    <p>{firstReviewerNote}</p>
                   </div>
                 )}
 
-              {/* Screenshot thumbnail */}
-              {shift.screenshot && (shift.screenshot as { fileUrl?: string }).fileUrl && (
+              {/* Uploaded screenshots */}
+              {hasScreenshots && (
                 <div className='mt-3'>
-                  <p className='text-xs text-muted-foreground mb-1'>Screenshot</p>
+                  <p className='text-xs text-muted-foreground mb-1'>Screenshots ({screenshots.length})</p>
 
-                  <a
-                    href={(shift.screenshot as { fileUrl: string }).fileUrl}
-                    target='_blank'
-                    rel='noopener noreferrer'
-                    className='inline-flex items-center gap-1 text-xs text-primary hover:underline'
-                  >
-                    <ExternalLink className='size-3' aria-hidden='true' />
-                    View uploaded screenshot
-                  </a>
+                  <div className='space-y-1'>
+                    {screenshots.map((screenshot, index) =>
+                      screenshot.fileUrl ? (
+                        <a
+                          key={`${screenshot.fileUrl}-${index}`}
+                          href={screenshot.fileUrl}
+                          target='_blank'
+                          rel='noopener noreferrer'
+                          className='inline-flex items-center gap-1 text-xs text-primary hover:underline'
+                        >
+                          <ExternalLink className='size-3' aria-hidden='true' />
+                          View uploaded screenshot {index + 1}
+                        </a>
+                      ) : null,
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -213,11 +233,11 @@ export function ShiftDetailSheet({ shiftId, onClose }: ShiftDetailSheetProps) {
                   className={`${buttonVariants({ size: 'sm', variant: 'outline' })} mt-3 gap-2`}
                 >
                   <Upload className='size-3.5' aria-hidden='true' />
-                  {shift.screenshot ? 'Update shift entry' : 'Upload screenshot in log flow'}
+                  {hasScreenshots ? 'Update shift entry' : 'Upload screenshots in log flow'}
                 </Link>
               )}
 
-              {(status === 'FLAGGED' || status === 'UNVERIFIABLE' || status === 'PENDING' || !shift.screenshot) && (
+              {(status === 'FLAGGED' || status === 'UNVERIFIABLE' || status === 'PENDING' || !hasScreenshots) && (
                 <p className='mt-2 text-xs text-muted-foreground'>
                   A community reviewer will check this. It may take 24–48 hours.
                 </p>

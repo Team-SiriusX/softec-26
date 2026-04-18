@@ -186,7 +186,7 @@ model ShiftLog {
   worker   User     @relation(fields: [workerId], references: [id], onDelete: Cascade)
   platform Platform @relation(fields: [platformId], references: [id])
 
-  screenshot   Screenshot?
+  screenshots  Screenshot[]
   anomalyFlags AnomalyFlag[]
 
   // Derived: effective hourly rate = netReceived / hoursWorked (computed at query time)
@@ -200,7 +200,7 @@ model ShiftLog {
 
 model Screenshot {
   id            String           @id @default(uuid())
-  shiftLogId    String           @unique @map("shift_log_id")
+  shiftLogId    String           @map("shift_log_id")
   verifierId    String?          @map("verifier_id")
   fileUrl       String           @map("file_url")
   fileKey       String           @map("file_key") // storage key (S3 / local)
@@ -212,6 +212,8 @@ model Screenshot {
   shiftLog ShiftLog @relation(fields: [shiftLogId], references: [id], onDelete: Cascade)
   verifier User?    @relation("VerifierScreenshots", fields: [verifierId], references: [id])
 
+  @@index([shiftLogId])
+  @@unique([shiftLogId, fileKey])
   @@index([status])
   @@index([verifierId])
   @@map("screenshots")

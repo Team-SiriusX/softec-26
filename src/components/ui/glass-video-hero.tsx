@@ -19,16 +19,6 @@ const HeroSection = () => {
         fullBleed ? 'min-h-screen' : 'py-32 lg:py-40'
       }`}
     >
-      <button
-        onClick={() => setFullBleed(!fullBleed)}
-        aria-label={
-          fullBleed ? 'Switch to fit-to-content' : 'Switch to full-bleed'
-        }
-        className='absolute top-24 right-4 z-20 rounded-[10px] border border-[rgba(164,132,215,0.5)] bg-[rgba(85,80,110,0.4)] p-2.5 text-foreground backdrop-blur-xl transition-all hover:bg-[rgba(85,80,110,0.6)] focus:outline-none focus-visible:ring-2 focus-visible:ring-primary md:top-6 md:right-6'
-      >
-        {fullBleed ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
-      </button>
-
       <video
         autoPlay
         loop
@@ -104,12 +94,12 @@ const HeroSection = () => {
       </header>
 
       <div
-        className={`relative z-10 flex flex-col items-center justify-center px-6 pb-12 text-center pt-32 md:pt-36 ${
+        className={`relative z-10 flex flex-col items-center justify-center px-6 pt-32 pb-12 text-center md:pt-36 ${
           fullBleed ? 'min-h-screen' : 'min-h-[72vh]'
         }`}
       >
         <div className='inline-flex h-[38px] items-center gap-2.5 rounded-[10px] border border-[rgba(164,132,215,0.5)] bg-[rgba(85,80,110,0.4)] px-3.5 shadow-[0_0_20px_rgba(123,57,252,0.15),inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-xl'>
-          <span className='rounded-[6px] bg-primary px-2.5 py-1 font-cabin text-xs font-medium text-primary-foreground shadow-[0_0_8px_rgba(123,57,252,0.4)]'>
+          <span className='bg-primary font-cabin text-primary-foreground rounded-[6px] px-2.5 py-1 text-xs font-medium shadow-[0_0_8px_rgba(123,57,252,0.4)]'>
             New
           </span>
           <span className='font-cabin text-sm font-medium tracking-wide text-white'>
@@ -117,11 +107,11 @@ const HeroSection = () => {
           </span>
         </div>
 
-        <h1 className='mt-7 max-w-4xl font-instrument text-[clamp(2.3rem,6.6vw,5rem)] leading-[1.02] tracking-[-0.02em] text-white'>
+        <h1 className='font-instrument mt-7 max-w-4xl text-[clamp(2.3rem,6.6vw,5rem)] leading-[1.02] tracking-[-0.02em] text-white'>
           Evidence you can defend.
         </h1>
 
-        <p className='mt-5 max-w-[680px] font-inter text-[clamp(0.98rem,1.9vw,1.2rem)] font-normal leading-relaxed text-white/85'>
+        <p className='font-inter mt-5 max-w-[680px] text-[clamp(0.98rem,1.9vw,1.2rem)] leading-relaxed font-normal text-white/85'>
           FairGig transforms earnings, deductions, and grievances into
           verifiable records for workers and advocates.
         </p>
@@ -129,13 +119,13 @@ const HeroSection = () => {
         <div className='mt-7 flex flex-col items-center gap-3.5 sm:flex-row'>
           <Link
             href='/auth/sign-up'
-            className='rounded-[10px] bg-primary px-8 py-3.5 font-cabin text-base font-medium text-primary-foreground shadow-lg shadow-primary/25 transition-all hover:brightness-110'
+            className='bg-primary font-cabin text-primary-foreground shadow-primary/25 rounded-[10px] px-8 py-3.5 text-base font-medium shadow-lg transition-all hover:brightness-110'
           >
             Create Account
           </Link>
           <Link
             href='/certificate/verify'
-            className='rounded-[10px] bg-secondary px-8 py-3.5 font-cabin text-base font-medium text-secondary-foreground transition-all hover:brightness-125'
+            className='bg-secondary font-cabin text-secondary-foreground rounded-[10px] px-8 py-3.5 text-base font-medium transition-all hover:brightness-125'
           >
             Verify Certificate
           </Link>

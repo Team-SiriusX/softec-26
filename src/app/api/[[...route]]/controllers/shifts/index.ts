@@ -20,6 +20,15 @@ const createShiftSchema = z.object({
   platformDeductions: z.number().min(0),
   netReceived: z.number(),
   notes: z.string().optional(),
+  screenshots: z
+    .array(
+      z.object({
+        fileUrl: z.string().url(),
+        fileKey: z.string().min(1),
+      }),
+    )
+    .max(6)
+    .optional(),
 });
 
 const importCsvSchema = z.object({

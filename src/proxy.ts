@@ -32,6 +32,13 @@ type SessionCookieCache = {
   updatedAt: number;
 };
 
+type FreshSessionPayload = {
+  session?: {
+    id?: string;
+  };
+  user?: CookieCacheUser;
+} | null;
+
 const roleSet = new Set<UserRole>(['WORKER', 'VERIFIER', 'ADVOCATE']);
 const approvalSet = new Set<ApprovalStatus>(['PENDING', 'APPROVED', 'REJECTED']);
 
@@ -65,6 +72,40 @@ const requiresAdvocateApproval = (role: UserRole | null): role is 'VERIFIER' | '
   return role === 'VERIFIER' || role === 'ADVOCATE';
 };
 
+const getFreshApprovalGateUser = async (
+  request: NextRequest,
+): Promise<{ role: UserRole | null; approvalStatus: ApprovalStatus | null } | null> => {
+  try {
+    const response = await fetch(
+      new URL('/api/auth/get-session?disableCookieCache=true&disableRefresh=true', request.url),
+      {
+        method: 'GET',
+        headers: {
+          cookie: request.headers.get('cookie') ?? '',
+        },
+        cache: 'no-store',
+      },
+    );
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const payload = (await response.json()) as FreshSessionPayload;
+
+    if (!payload?.session?.id || !payload.user?.id) {
+      return null;
+    }
+
+    return {
+      role: normalizeRole(payload.user.role),
+      approvalStatus: normalizeApprovalStatus(payload.user.approvalStatus),
+    };
+  } catch {
+    return null;
+  }
+};
+
 export async function proxy(request: NextRequest) {
   const { nextUrl } = request;
   const pathname = nextUrl.pathname;
@@ -79,8 +120,8 @@ export async function proxy(request: NextRequest) {
   const isAuthenticated = Boolean(
     cachedSession?.session?.id && cachedSession?.user?.id,
   );
-  const userRole = normalizeRole(cachedSession?.user?.role);
-  const userApprovalStatus = normalizeApprovalStatus(
+  let userRole = normalizeRole(cachedSession?.user?.role);
+  let userApprovalStatus = normalizeApprovalStatus(
     cachedSession?.user?.approvalStatus,
   );
 
@@ -97,6 +138,27 @@ export async function proxy(request: NextRequest) {
 
   if (isApiRoute) {
     return NextResponse.next();
+  }
+
+  if (isPublicRoute) {
+    return NextResponse.next();
+  }
+
+  const requiresApprovalDecision =
+    isAuthRoute || isPendingApprovalRoute || isVerifierRoute || isAdvocateRoute;
+
+  if (
+    requiresApprovalDecision &&
+    isAuthenticated &&
+    requiresAdvocateApproval(userRole) &&
+    userApprovalStatus !== 'APPROVED'
+  ) {
+    const freshApprovalGateUser = await getFreshApprovalGateUser(request);
+
+    if (freshApprovalGateUser) {
+      userRole = freshApprovalGateUser.role;
+      userApprovalStatus = freshApprovalGateUser.approvalStatus;
+    }
   }
 
   if (isAuthRoute) {
@@ -118,10 +180,6 @@ export async function proxy(request: NextRequest) {
         new URL(redirectPath, request.url),
       );
     }
-    return NextResponse.next();
-  }
-
-  if (isPublicRoute) {
     return NextResponse.next();
   }
 

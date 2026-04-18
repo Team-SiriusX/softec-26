@@ -2,9 +2,10 @@
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
+import { toast } from 'sonner';
 
 import { useCreateShift } from '../_api/create-shift';
 import { useAnomalyDetect } from '../../dashboard/_api/use-anomaly-detect';
@@ -13,7 +14,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Loader2 } from 'lucide-react';
+import { UploadDropzone } from '@/lib/uploadthing';
+import { Loader2, X } from 'lucide-react';
 
 const shiftSchema = z
   .object({
@@ -44,11 +46,20 @@ const shiftSchema = z
 
 type ShiftFormValues = z.infer<typeof shiftSchema>;
 
+type UploadedScreenshot = {
+  fileUrl: string;
+  fileKey: string;
+};
+
+const MAX_SCREENSHOTS = 6;
+
 export function ShiftForm() {
   const router = useRouter();
   const { user } = useCurrentUser();
   const createShift = useCreateShift();
   const detectAnomaly = useAnomalyDetect();
+  const [uploadedScreenshots, setUploadedScreenshots] = useState<UploadedScreenshot[]>([]);
+  const [isUploadingScreenshots, setIsUploadingScreenshots] = useState(false);
 
   const form = useForm<ShiftFormValues>({
     resolver: zodResolver(shiftSchema),
@@ -94,15 +105,28 @@ export function ShiftForm() {
     Math.abs(manualNet - autoNet) / (autoNet || 1) > 0.05;
 
   const onSubmit = async (values: ShiftFormValues) => {
-    createShift.mutate(values, {
-      onSuccess: () => {
-        // Fire-and-forget anomaly detect in background
-        if (user?.id) {
-          detectAnomaly.mutate(user.id);
-        }
-        router.push('/worker/dashboard');
+    const screenshotsPayload = uploadedScreenshots.map((screenshot) => ({
+      fileUrl: screenshot.fileUrl,
+      fileKey: screenshot.fileKey,
+    }));
+
+    createShift.mutate(
+      {
+        ...values,
+        ...(screenshotsPayload.length > 0
+          ? { screenshots: screenshotsPayload }
+          : {}),
       },
-    });
+      {
+        onSuccess: () => {
+          // Fire-and-forget anomaly detect in background
+          if (user?.id) {
+            detectAnomaly.mutate(user.id);
+          }
+          router.push('/worker/dashboard');
+        },
+      },
+    );
   };
 
   return (
@@ -249,7 +273,77 @@ export function ShiftForm() {
         )}
       </div>
 
-      {/* Notes (optional) */}
+      {/* Screenshots (optional) */}
+      <div className='space-y-2'>
+        <Label>
+          Earnings screenshots{' '}
+          <span className='text-xs text-muted-foreground font-normal'>(optional, up to {MAX_SCREENSHOTS})</span>
+        </Label>
+        <p className='text-xs text-muted-foreground'>
+          Upload one or more screenshots so verifiers can confirm this shift.
+        </p>
+
+        <UploadDropzone
+          endpoint='screenshotUploader'
+          onUploadBegin={() => {
+            setIsUploadingScreenshots(true);
+          }}
+          onClientUploadComplete={(files) => {
+            const uploaded = files.map((file) => ({
+              fileUrl: file.serverData?.fileUrl ?? file.url,
+              fileKey: file.serverData?.fileKey ?? file.key,
+            }));
+
+            setUploadedScreenshots((prev) => {
+              const merged = [...prev, ...uploaded];
+              const deduped = merged.filter((item, index, self) => {
+                return self.findIndex((entry) => entry.fileKey === item.fileKey) === index;
+              });
+              return deduped.slice(0, MAX_SCREENSHOTS);
+            });
+
+            setIsUploadingScreenshots(false);
+            toast.success(files.length > 1 ? `${files.length} screenshots uploaded` : 'Screenshot uploaded');
+          }}
+          onUploadError={(error) => {
+            setIsUploadingScreenshots(false);
+            toast.error(error.message);
+          }}
+        />
+
+        {uploadedScreenshots.length > 0 ? (
+          <div className='grid grid-cols-2 gap-2'>
+            {uploadedScreenshots.map((screenshot, index) => (
+              <div
+                key={screenshot.fileKey}
+                className='relative overflow-hidden rounded-xl border border-border/60'
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={screenshot.fileUrl}
+                  alt={`Uploaded screenshot ${index + 1}`}
+                  className='h-24 w-full object-cover'
+                />
+                <Button
+                  type='button'
+                  size='icon'
+                  variant='secondary'
+                  className='absolute right-1 top-1 size-7'
+                  onClick={() => {
+                    setUploadedScreenshots((prev) => {
+                      return prev.filter((item) => item.fileKey !== screenshot.fileKey);
+                    });
+                  }}
+                >
+                  <X className='size-4' aria-hidden='true' />
+                  <span className='sr-only'>Remove screenshot</span>
+                </Button>
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </div>
+
       <div className='space-y-1.5'>
         <Label htmlFor='notes'>Notes <span className='text-xs text-muted-foreground font-normal'>(optional)</span></Label>
         <Textarea
@@ -263,10 +357,12 @@ export function ShiftForm() {
       {/* Submit */}
       <Button
         type='submit'
-        disabled={createShift.isPending}
+        disabled={createShift.isPending || isUploadingScreenshots}
         className='w-full min-h-11'
       >
-        {createShift.isPending ? (
+        {isUploadingScreenshots ? (
+          'Uploading screenshots…'
+        ) : createShift.isPending ? (
           <>
             <Loader2 className='size-4 mr-2 animate-spin' aria-hidden='true' />
             Saving shift…

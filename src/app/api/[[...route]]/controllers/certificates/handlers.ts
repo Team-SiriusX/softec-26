@@ -57,6 +57,7 @@ export async function previewCertificate(c: Context) {
   const fromDate = c.req.query('from_date');
   const toDate = c.req.query('to_date');
   const includeUnverified = c.req.query('include_unverified') === 'true';
+  const autoPrint = c.req.query('auto_print') === 'true';
 
   if (!fromDate || !toDate) {
     return new Response('from_date and to_date required', { status: 400 });
@@ -68,6 +69,7 @@ export async function previewCertificate(c: Context) {
       from_date: fromDate,
       to_date: toDate,
       include_unverified: String(includeUnverified),
+      auto_print: String(autoPrint),
     });
 
     const res = await fetch(`${CERT_SERVICE_URL}/certificate/preview?${params}`, {

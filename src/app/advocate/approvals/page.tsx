@@ -22,6 +22,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { client } from '@/lib/hono';
 import { cn } from '@/lib/utils';
 
 type PendingApprovalUser = {
@@ -47,10 +48,7 @@ type UpdateApprovalInput = {
 const approvalsQueryKey = ['admin', 'pending-approvals'] as const;
 
 async function fetchPendingApprovals(): Promise<PendingApprovalsResponse> {
-  const response = await fetch('/api/admin/approvals/pending', {
-    method: 'GET',
-    cache: 'no-store',
-  });
+  const response = await client.api.admin.approvals.pending.$get();
 
   if (!response.ok) {
     const payload = (await response.json().catch(() => null)) as
@@ -63,12 +61,9 @@ async function fetchPendingApprovals(): Promise<PendingApprovalsResponse> {
 }
 
 async function updateApprovalStatus(input: UpdateApprovalInput): Promise<void> {
-  const response = await fetch(`/api/admin/approvals/${input.userId}`, {
-    method: 'PATCH',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ status: input.status }),
+  const response = await client.api.admin.approvals[':userId'].$patch({
+    param: { userId: input.userId },
+    json: { status: input.status },
   });
 
   if (!response.ok) {

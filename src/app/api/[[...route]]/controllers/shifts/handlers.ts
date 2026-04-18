@@ -55,6 +55,19 @@ const getPrismaIssueMessage = (error: unknown): string => {
   return 'database write failed';
 };
 
+type ShiftScreenshotSummary = {
+  status: 'PENDING' | 'CONFIRMED' | 'FLAGGED' | 'UNVERIFIABLE';
+  fileUrl: string;
+  fileKey: string;
+  verifierNotes: string | null;
+  uploadedAt: Date;
+};
+
+const withLegacyScreenshot = <T extends { screenshots: ShiftScreenshotSummary[] }>(shift: T) => ({
+  ...shift,
+  screenshot: shift.screenshots[0] ?? null,
+});
+
 const resolvePlatformId = async (
   rawPlatformName: string,
   cache?: Map<string, string>,
@@ -177,14 +190,23 @@ export const getShiftsHandler = async (c: Context) => {
     },
     include: {
       platform: true,
-      screenshot: { select: { status: true, fileUrl: true, verifierNotes: true } },
+      screenshots: {
+        orderBy: { uploadedAt: 'desc' },
+        select: {
+          status: true,
+          fileUrl: true,
+          fileKey: true,
+          verifierNotes: true,
+          uploadedAt: true,
+        },
+      },
     },
     orderBy: { shiftDate: 'desc' },
     take: 200,
   });
 
   const enriched = shifts.map((s) => ({
-    ...s,
+    ...withLegacyScreenshot(s),
     effectiveHourlyRate:
       Number(s.hoursWorked) > 0
         ? Number(s.netReceived) / Number(s.hoursWorked)
@@ -209,8 +231,15 @@ export const getShiftByIdHandler = async (c: Context) => {
     where: { id, workerId },
     include: {
       platform: true,
-      screenshot: {
-        select: { status: true, fileUrl: true, verifierNotes: true, uploadedAt: true },
+      screenshots: {
+        orderBy: { uploadedAt: 'desc' },
+        select: {
+          status: true,
+          fileUrl: true,
+          fileKey: true,
+          verifierNotes: true,
+          uploadedAt: true,
+        },
       },
     },
   });
@@ -219,7 +248,7 @@ export const getShiftByIdHandler = async (c: Context) => {
 
   return c.json({
     data: {
-      ...shift,
+      ...withLegacyScreenshot(shift),
       effectiveHourlyRate:
         Number(shift.hoursWorked) > 0
           ? Number(shift.netReceived) / Number(shift.hoursWorked)
@@ -246,6 +275,10 @@ export const createShiftHandler = async (c: Context) => {
     platformDeductions: number;
     netReceived: number;
     notes?: string;
+    screenshots?: Array<{
+      fileUrl: string;
+      fileKey: string;
+    }>;
   }>();
 
   const shiftDate = parseSafeIsoDate(body.shiftDate);
@@ -255,6 +288,10 @@ export const createShiftHandler = async (c: Context) => {
   }
 
   const platformId = await resolvePlatformId(body.platform);
+
+  const screenshots = Array.from(
+    new Map((body.screenshots ?? []).map((screenshot) => [screenshot.fileKey, screenshot])).values(),
+  ).slice(0, 6);
 
   const shift = await db.shiftLog.create({
     data: {
@@ -267,14 +304,37 @@ export const createShiftHandler = async (c: Context) => {
       netReceived: body.netReceived,
       notes: body.notes,
       verificationStatus: 'PENDING',
+      ...(screenshots.length > 0
+        ? {
+            screenshots: {
+              create: screenshots.map((screenshot) => ({
+                fileUrl: screenshot.fileUrl,
+                fileKey: screenshot.fileKey,
+                status: 'PENDING' as const,
+              })),
+            },
+          }
+        : {}),
     },
-    include: { platform: true },
+    include: {
+      platform: true,
+      screenshots: {
+        orderBy: { uploadedAt: 'desc' },
+        select: {
+          status: true,
+          fileUrl: true,
+          fileKey: true,
+          verifierNotes: true,
+          uploadedAt: true,
+        },
+      },
+    },
   });
 
   return c.json(
     {
       data: {
-        ...shift,
+        ...withLegacyScreenshot(shift),
         effectiveHourlyRate:
           Number(shift.hoursWorked) > 0
             ? Number(shift.netReceived) / Number(shift.hoursWorked)
@@ -413,7 +473,7 @@ export const updateShiftHandler = async (c: Context) => {
 
   const existing = await db.shiftLog.findFirst({
     where: { id, workerId },
-    include: { screenshot: true },
+    include: { screenshots: true },
   });
 
   if (!existing) {
@@ -466,24 +526,34 @@ export const updateShiftHandler = async (c: Context) => {
     },
     include: {
       platform: true,
-      screenshot: { select: { status: true, fileUrl: true, verifierNotes: true } },
+      screenshots: {
+        orderBy: { uploadedAt: 'desc' },
+        select: {
+          status: true,
+          fileUrl: true,
+          fileKey: true,
+          verifierNotes: true,
+          uploadedAt: true,
+        },
+      },
     },
   });
 
-  if (financialFieldsChanged && existing.screenshot) {
-    await db.screenshot.update({
+  if (financialFieldsChanged && existing.screenshots.length > 0) {
+    await db.screenshot.updateMany({
       where: { shiftLogId: id },
       data: {
         status: 'PENDING',
         verifierNotes: null,
         reviewedAt: null,
+        verifierId: null,
       },
     });
   }
 
   return c.json({
     data: {
-      ...updated,
+      ...withLegacyScreenshot(updated),
       effectiveHourlyRate:
         Number(updated.hoursWorked) > 0
           ? Number(updated.netReceived) / Number(updated.hoursWorked)

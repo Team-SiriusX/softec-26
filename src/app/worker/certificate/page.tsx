@@ -7,6 +7,7 @@ import {
   Building,
   CheckCircle,
   AlertCircle,
+  FileDown,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -46,6 +47,8 @@ export default function CertificatePage() {
   const [toDate, setToDate] = useState<string>('');
   const [includeUnverified, setIncludeUnverified] = useState<boolean>(false);
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
+  const [isExportingPdf, setIsExportingPdf] = useState<boolean>(false);
+  const [printedAt, setPrintedAt] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [lastGenerated, setLastGenerated] = useState<string | null>(null);
 
@@ -58,6 +61,8 @@ export default function CertificatePage() {
     // today as YYYY-MM-DD
     const dateToday = new Date();
     setToDate(dateToday.toISOString().split('T')[0]);
+
+    setPrintedAt(dateToday.toLocaleString());
   }, []);
 
   async function handleGenerate() {
@@ -96,13 +101,34 @@ export default function CertificatePage() {
     }
   }
 
-  function handlePreview() {
+  function buildPreviewParams(autoPrint: boolean = false) {
     const params = new URLSearchParams({
       from_date: fromDate,
       to_date: toDate,
       include_unverified: String(includeUnverified),
+      auto_print: String(autoPrint),
     });
+    return params;
+  }
+
+  function handlePreview() {
+    const params = buildPreviewParams();
     window.open(`/api/certificates/preview?${params}`, '_blank');
+  }
+
+  function handleExportPdf() {
+    setError(null);
+    setIsExportingPdf(true);
+    try {
+      const params = buildPreviewParams(true);
+      const previewWindow = window.open(`/api/certificates/preview?${params}`, '_blank');
+
+      if (!previewWindow) {
+        setError('Please allow pop-ups to export your certificate as PDF.');
+      }
+    } finally {
+      setIsExportingPdf(false);
+    }
   }
 
   function handleSamplePreview() {
@@ -110,10 +136,10 @@ export default function CertificatePage() {
   }
 
   return (
-    <div className='container mx-auto max-w-4xl space-y-8 py-8'>
+    <div className='container mx-auto max-w-4xl space-y-8 py-8 print:max-w-none print:space-y-4 print:py-0'>
       {/* SECTION 1 — Page header */}
       <div>
-        <div className='flex items-center space-x-3 border-b pb-4 text-slate-900'>
+        <div className='flex items-center space-x-3 border-b pb-4 text-slate-900 print:border-0 print:pb-0'>
           <FileText className='h-8 w-8 text-blue-500' />
           <div>
             <h1 className='text-3xl font-bold tracking-tight'>
@@ -127,9 +153,24 @@ export default function CertificatePage() {
         </div>
       </div>
 
+      <div className='hidden rounded-lg border border-slate-200 bg-white p-6 print:block'>
+        <h2 className='text-lg font-semibold text-slate-900'>Certificate Export Summary</h2>
+        <p className='mt-1 text-sm text-slate-600'>
+            Printed from FairGig on {printedAt || 'this session'}.
+        </p>
+        <dl className='mt-4 grid grid-cols-2 gap-x-6 gap-y-2 text-sm text-slate-700'>
+          <dt className='font-medium text-slate-900'>From Date</dt>
+          <dd>{fromDate || 'Not selected'}</dd>
+          <dt className='font-medium text-slate-900'>To Date</dt>
+          <dd>{toDate || 'Not selected'}</dd>
+          <dt className='font-medium text-slate-900'>Include Pending Shifts</dt>
+          <dd>{includeUnverified ? 'Yes' : 'No'}</dd>
+        </dl>
+      </div>
+
       {/* Error & Success States */}
       {error && (
-        <Alert variant='destructive'>
+        <Alert variant='destructive' className='print:hidden'>
           <AlertCircle className='h-4 w-4' />
           <AlertTitle>Error</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
@@ -137,7 +178,7 @@ export default function CertificatePage() {
       )}
 
       {lastGenerated && (
-        <Alert className='border-green-200 bg-green-50 text-green-900'>
+        <Alert className='border-green-200 bg-green-50 text-green-900 print:hidden'>
           <CheckCircle className='h-4 w-4 text-green-600' />
           <AlertTitle>Success</AlertTitle>
           <AlertDescription>
@@ -148,7 +189,7 @@ export default function CertificatePage() {
       )}
 
       {/* SECTION 2 & 4 Container */}
-      <div className='grid gap-8 md:grid-cols-3'>
+      <div className='grid gap-8 print:hidden md:grid-cols-3'>
         {/* SECTION 2 — Certificate generator form card */}
         <div className='md:col-span-2'>
           <Card>
@@ -199,6 +240,14 @@ export default function CertificatePage() {
                 Preview Certificate
               </Button>
               <Button
+                variant='secondary'
+                onClick={handleExportPdf}
+                disabled={isExportingPdf}
+              >
+                <FileDown className='mr-2 h-4 w-4' />
+                {isExportingPdf ? 'Opening Print Dialog...' : 'Export as PDF'}
+              </Button>
+              <Button
                 onClick={handleGenerate}
                 disabled={isGenerating}
                 className='bg-blue-600 hover:bg-blue-700'
@@ -235,7 +284,7 @@ export default function CertificatePage() {
       </div>
 
       {/* SECTION 5 — How to print callout */}
-      <div className='rounded-lg border border-blue-100 bg-blue-50 p-5'>
+      <div className='rounded-lg border border-blue-100 bg-blue-50 p-5 print:hidden'>
         <div className='flex'>
           <div className='shrink-0'>
             <FileText className='h-5 w-5 text-blue-400' />
@@ -244,9 +293,10 @@ export default function CertificatePage() {
             <h3 className='text-sm font-medium text-blue-800'>How to print:</h3>
             <div className='mt-2 text-sm text-blue-700'>
               <p>
-                Click 'Preview Certificate', then use the Print button on the
-                certificate page, or press Ctrl+P (Cmd+P on Mac). Select 'Save
-                as PDF' to create a file.
+                Click 'Export as PDF' to open your print-ready certificate and
+                trigger the browser print dialog. Choose 'Save as PDF' as the
+                destination. You can also use 'Preview Certificate' and press
+                Ctrl+P (Cmd+P on Mac).
               </p>
             </div>
           </div>
@@ -254,7 +304,7 @@ export default function CertificatePage() {
       </div>
 
       {/* SECTION 3 — Info cards row */}
-      <div className='grid gap-6 md:grid-cols-3'>
+      <div className='grid gap-6 print:hidden md:grid-cols-3'>
         <Card className='border-slate-100 bg-slate-50'>
           <CardHeader className='pb-3 text-center'>
             <div className='mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 p-2'>

@@ -1,6 +1,28 @@
 import db from '@/lib/db';
 import { Context } from 'hono';
 
+const deriveShiftVerificationStatus = (
+  screenshotStatuses: Array<'PENDING' | 'CONFIRMED' | 'FLAGGED' | 'UNVERIFIABLE'>,
+): 'PENDING' | 'CONFIRMED' | 'FLAGGED' | 'UNVERIFIABLE' => {
+  if (screenshotStatuses.length === 0) {
+    return 'PENDING';
+  }
+
+  if (screenshotStatuses.includes('FLAGGED')) {
+    return 'FLAGGED';
+  }
+
+  if (screenshotStatuses.includes('UNVERIFIABLE')) {
+    return 'UNVERIFIABLE';
+  }
+
+  if (screenshotStatuses.includes('PENDING')) {
+    return 'PENDING';
+  }
+
+  return 'CONFIRMED';
+};
+
 export const getScreenshotsHandler = async (c: Context) => {
   const user = c.var.user as { id: string; role: string } | undefined;
   if (!user) {
@@ -80,7 +102,12 @@ export const createScreenshotHandler = async (c: Context) => {
   }
 
   const screenshot = await db.screenshot.upsert({
-    where: { shiftLogId: body.shiftLogId },
+    where: {
+      shiftLogId_fileKey: {
+        shiftLogId: body.shiftLogId,
+        fileKey: body.fileKey,
+      },
+    },
     update: {
       fileUrl: body.fileUrl,
       fileKey: body.fileKey,
@@ -132,8 +159,8 @@ export const updateVerificationHandler = async (c: Context) => {
     return c.json({ error: 'Screenshot not found' }, 404);
   }
 
-  const [updatedScreenshot] = await db.$transaction([
-    db.screenshot.update({
+  const updatedScreenshot = await db.$transaction(async (tx) => {
+    const nextScreenshot = await tx.screenshot.update({
       where: { id },
       data: {
         status: body.status,
@@ -147,14 +174,24 @@ export const updateVerificationHandler = async (c: Context) => {
           select: { id: true, fullName: true, role: true },
         },
       },
-    }),
-    db.shiftLog.update({
+    });
+
+    const siblingStatuses = await tx.screenshot.findMany({
+      where: { shiftLogId: screenshot.shiftLogId },
+      select: { status: true },
+    });
+
+    await tx.shiftLog.update({
       where: { id: screenshot.shiftLogId },
       data: {
-        verificationStatus: body.status,
+        verificationStatus: deriveShiftVerificationStatus(
+          siblingStatuses.map((item) => item.status),
+        ),
       },
-    }),
-  ]);
+    });
+
+    return nextScreenshot;
+  });
 
   return c.json({ data: updatedScreenshot });
 };
