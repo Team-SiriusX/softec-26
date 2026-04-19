@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/card';
 import { IncomeHeatmap } from './_components/income-heatmap';
 import { PlatformCommissionChart } from './_components/platform-commission-chart';
+import { SupportTicketQueue } from './_components/support-ticket-queue';
 import { VulnerabilityFlagTable } from './_components/vulnerability-flag-table';
 import { cn } from '@/lib/utils';
 
@@ -23,9 +24,9 @@ const actions = [
     icon: BarChart3,
   },
   {
-    title: 'Review Grievances',
-    description: 'Inspect category clusters, evidence quality, and status.',
-    href: '/advocate/grievances',
+    title: 'Review Support Tickets',
+    description: 'Inspect submitted tickets, evidence quality, and status.',
+    href: '/advocate/support',
     icon: Speech,
   },
   {
@@ -123,6 +124,10 @@ export default function AdvocateDashboardPage() {
               </Card>
             );
           })}
+        </section>
+
+        <section>
+          <SupportTicketQueue />
         </section>
 
         <section className='grid gap-6 xl:grid-cols-2'>

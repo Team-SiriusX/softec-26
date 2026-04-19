@@ -1,0 +1,53 @@
+# Start all services in separate PowerShell windows
+
+$ProjectRoot = Get-Item $PSScriptRoot | Select-Object -ExpandProperty Parent | Select-Object -ExpandProperty FullName
+
+Write-Host "Starting all services from: $ProjectRoot" -ForegroundColor Cyan
+
+# grievance-service
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "
+  `$host.UI.RawUI.WindowTitle = 'grievance-service';
+  Set-Location '$ProjectRoot\grievance-service';
+  pnpm start --port 8005
+"
+
+Start-Sleep -Seconds 1
+
+# ml-service
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "
+  `$host.UI.RawUI.WindowTitle = 'ml-service';
+  Set-Location '$ProjectRoot\ml-service';
+  .\.venv\Scripts\activate;
+  uvicorn main:app --reload
+"
+
+Start-Sleep -Seconds 1
+
+# certificate-service
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "
+  `$host.UI.RawUI.WindowTitle = 'certificate-service';
+  Set-Location '$ProjectRoot\certificate-service';
+  .\.venv\Scripts\activate;
+  uvicorn main:app --reload
+"
+
+Start-Sleep -Seconds 1
+
+# anomaly-service
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "
+  `$host.UI.RawUI.WindowTitle = 'anomaly-service';
+  Set-Location '$ProjectRoot\anomaly-service';
+  .\.venv\Scripts\activate;
+  uvicorn main:app --reload
+"
+
+Start-Sleep -Seconds 1
+
+# root frontend
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "
+  `$host.UI.RawUI.WindowTitle = 'root-frontend';
+  Set-Location '$ProjectRoot';
+  pnpm run start
+"
+
+Write-Host "All services launched." -ForegroundColor Green

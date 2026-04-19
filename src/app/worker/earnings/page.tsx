@@ -67,9 +67,11 @@ export default function WorkerEarningsPage() {
   const trendQuery = useQuery({
     queryKey: [QUERY_KEYS.ANALYTICS, 'worker', 'earnings-trend', 12],
     queryFn: async () => {
-      const response = await client.api.analytics.worker[':workerId']['earnings-trend'].$get({
+      const response = await client.api.analytics.worker[':workerId'][
+        'earnings-trend'
+      ].$get({
         param: { workerId: 'me' },
-        query: { weeks: "12" },
+        query: { weeks: 12 },
       });
 
       return parseResponseOrThrow<EarningsTrendResponse>(response);
@@ -90,11 +92,13 @@ export default function WorkerEarningsPage() {
   const { data, isLoading } = useGetShifts(queryFilters);
   const shifts = data?.data ?? [];
 
-  const latestTrendPoint = trendQuery.data?.points?.[trendQuery.data.points.length - 1];
+  const latestTrendPoint =
+    trendQuery.data?.points?.[trendQuery.data.points.length - 1];
   const latestGap = trendQuery.data?.summary.latestGapToMedian ?? 0;
   const avgGap = trendQuery.data?.summary.avgGapToMedian ?? 0;
   const latestGapTone = latestGap >= 0 ? 'secondary' : 'destructive';
-  const latestGapLabel = latestGap >= 0 ? 'Above city median' : 'Below city median';
+  const latestGapLabel =
+    latestGap >= 0 ? 'Above city median' : 'Below city median';
 
   const verifiedCount = shifts.filter(
     (shift) => shift.verificationStatus === 'CONFIRMED',
@@ -105,7 +109,7 @@ export default function WorkerEarningsPage() {
       <div className='flex flex-wrap items-start justify-between gap-3'>
         <div>
           <h1 className='text-2xl font-bold tracking-tight'>My Earnings</h1>
-          <p className='mt-1 text-sm text-muted-foreground'>
+          <p className='text-muted-foreground mt-1 text-sm'>
             View your shift history, status badges, and income trends over time.
           </p>
         </div>
@@ -145,7 +149,8 @@ export default function WorkerEarningsPage() {
         <CardHeader>
           <CardTitle className='text-base'>Income Analytics</CardTitle>
           <CardDescription>
-            Weekly and monthly trends for earnings, hourly rate, and platform deductions.
+            Weekly and monthly trends for earnings, hourly rate, and platform
+            deductions.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -157,7 +162,8 @@ export default function WorkerEarningsPage() {
         <CardHeader>
           <CardTitle className='text-base'>City Median Benchmark</CardTitle>
           <CardDescription>
-            Compare your net earnings against anonymized city-wide worker medians.
+            Compare your net earnings against anonymized city-wide worker
+            medians.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -168,30 +174,30 @@ export default function WorkerEarningsPage() {
               <Skeleton className='h-20 rounded-xl' />
             </div>
           ) : trendQuery.isError || !latestTrendPoint ? (
-            <p className='rounded-xl border border-dashed border-border/70 p-4 text-sm text-muted-foreground'>
+            <p className='border-border/70 text-muted-foreground rounded-xl border border-dashed p-4 text-sm'>
               We could not load city median comparison right now.
             </p>
           ) : (
             <div className='space-y-4'>
               <div className='grid gap-3 sm:grid-cols-3'>
-                <div className='rounded-xl border border-border/70 bg-muted/20 p-4'>
-                  <p className='text-xs uppercase tracking-[0.16em] text-muted-foreground'>
+                <div className='border-border/70 bg-muted/20 rounded-xl border p-4'>
+                  <p className='text-muted-foreground text-xs tracking-[0.16em] uppercase'>
                     Latest Week You
                   </p>
                   <p className='mt-1 text-lg font-semibold'>
                     {moneyFormatter.format(latestTrendPoint.workerNet)}
                   </p>
                 </div>
-                <div className='rounded-xl border border-border/70 bg-muted/20 p-4'>
-                  <p className='text-xs uppercase tracking-[0.16em] text-muted-foreground'>
+                <div className='border-border/70 bg-muted/20 rounded-xl border p-4'>
+                  <p className='text-muted-foreground text-xs tracking-[0.16em] uppercase'>
                     City Median
                   </p>
                   <p className='mt-1 text-lg font-semibold'>
                     {moneyFormatter.format(latestTrendPoint.cityMedianNet)}
                   </p>
                 </div>
-                <div className='rounded-xl border border-border/70 bg-muted/20 p-4'>
-                  <p className='text-xs uppercase tracking-[0.16em] text-muted-foreground'>
+                <div className='border-border/70 bg-muted/20 rounded-xl border p-4'>
+                  <p className='text-muted-foreground text-xs tracking-[0.16em] uppercase'>
                     Gap
                   </p>
                   <p className='mt-1 text-lg font-semibold'>
@@ -204,9 +210,11 @@ export default function WorkerEarningsPage() {
                 </div>
               </div>
 
-              <p className='text-sm text-muted-foreground'>
-                12-week average gap: <span className='font-medium text-foreground'>
-                  {avgGap >= 0 ? '+' : '-'}{moneyFormatter.format(Math.abs(avgGap))}
+              <p className='text-muted-foreground text-sm'>
+                12-week average gap:{' '}
+                <span className='text-foreground font-medium'>
+                  {avgGap >= 0 ? '+' : '-'}
+                  {moneyFormatter.format(Math.abs(avgGap))}
                 </span>
               </p>
             </div>
@@ -214,7 +222,10 @@ export default function WorkerEarningsPage() {
         </CardContent>
       </Card>
 
-      <ShiftDetailSheet shiftId={selectedShiftId} onClose={() => setSelectedShiftId(null)} />
+      <ShiftDetailSheet
+        shiftId={selectedShiftId}
+        onClose={() => setSelectedShiftId(null)}
+      />
     </div>
   );
 }

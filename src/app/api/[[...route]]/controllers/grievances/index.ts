@@ -19,6 +19,7 @@ import {
 } from './handlers';
 
 const app = new Hono()
+  .use('/', authMiddleware)
   .use('/*', authMiddleware)
   .get('/stats', getGrievanceStats)
   .get('/platforms', getGrievancePlatforms)

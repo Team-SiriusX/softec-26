@@ -825,10 +825,10 @@ export default function AdvocateAnalyticsPage() {
                   Back To Dashboard
                 </Link>
                 <Link
-                  href='/advocate/grievances'
+                  href='/advocate/support'
                   className={cn(buttonVariants({ variant: 'default' }))}
                 >
-                  Review Grievances
+                  Review Support Tickets
                   <ArrowRight className='size-4' />
                 </Link>
               </div>

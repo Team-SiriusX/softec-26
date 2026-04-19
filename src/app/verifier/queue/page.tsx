@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { type MouseEvent, useMemo, useState } from 'react';
+import { type MouseEvent, Suspense, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
   AlertTriangle,
@@ -109,7 +109,7 @@ function averageWaitHours(uploadedAtValues: Array<string | Date>): number {
   return totalMs / uploadedAtValues.length / (1000 * 60 * 60);
 }
 
-export default function VerifierQueuePage() {
+function VerifierQueueContent() {
   const searchParams = useSearchParams();
   const [page, setPage] = useState(1);
   const [activeFilter, setActiveFilter] = useState<QueueFilter>(
@@ -415,5 +415,40 @@ export default function VerifierQueuePage() {
         )}
       </section>
     </main>
+  );
+}
+
+export default function VerifierQueuePage() {
+  return (
+    <Suspense
+      fallback={
+        <main className='mx-auto w-full max-w-7xl space-y-6 p-6 lg:p-8'>
+          <div className='space-y-2'>
+            <Skeleton className='h-8 w-64' />
+            <Skeleton className='h-4 w-full' />
+          </div>
+          <div className='grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6'>
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Card key={i}>
+                <CardHeader className='pb-2'>
+                  <Skeleton className='h-4 w-20' />
+                </CardHeader>
+                <CardContent>
+                  <Skeleton className='h-8 w-16' />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+          <Skeleton className='h-12 w-full' />
+          <div className='space-y-4'>
+            {Array.from({ length: 3 }).map((_, i) => (
+              <Skeleton key={i} className='h-40 w-full' />
+            ))}
+          </div>
+        </main>
+      }
+    >
+      <VerifierQueueContent />
+    </Suspense>
   );
 }

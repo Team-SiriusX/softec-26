@@ -6,6 +6,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useCurrentUser } from '@/hooks/use-current-user';
+import { PENDING_APPROVAL_PAGE_PATH, roleDefaultDashboards } from '@/routes';
 
 const VIDEO_URL =
   'https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260210_031346_d87182fb-b0af-4273-84d1-c6fd17d6bf0f.mp4';
@@ -28,8 +29,9 @@ const getInitials = (user?: HeaderUser) => {
 
 const HeroSection = () => {
   const [fullBleed, setFullBleed] = useState(true);
-  const { user, session, refetch } = useCurrentUser();
+  const { user, session, isLoading, refetch } = useCurrentUser();
   const resolvedUser = user as HeaderUser | undefined;
+  const isAuthenticated = Boolean(session || resolvedUser);
 
   useEffect(() => {
     if (!session) {
@@ -45,14 +47,34 @@ const HeroSection = () => {
 
   const profilePath = useMemo(() => {
     if (!resolvedUser?.role) {
-      return '/auth/sign-in';
+      return PENDING_APPROVAL_PAGE_PATH;
     }
 
     if (resolvedUser.role === 'WORKER') {
-      return '/worker/profile';
+      return '/worker/dashboard';
     }
 
     return `/${resolvedUser.role.toLowerCase()}/dashboard`;
+  }, [resolvedUser?.role]);
+
+  const dashboardPath = useMemo(() => {
+    if (!resolvedUser?.role) {
+      return PENDING_APPROVAL_PAGE_PATH;
+    }
+
+    if (resolvedUser.role === 'WORKER') {
+      return roleDefaultDashboards.WORKER;
+    }
+
+    if (resolvedUser.role === 'VERIFIER') {
+      return roleDefaultDashboards.VERIFIER;
+    }
+
+    if (resolvedUser.role === 'ADVOCATE') {
+      return roleDefaultDashboards.ADVOCATE;
+    }
+
+    return PENDING_APPROVAL_PAGE_PATH;
   }, [resolvedUser?.role]);
 
   return (
@@ -119,7 +141,7 @@ const HeroSection = () => {
           </nav>
 
           <div className='flex items-center gap-2'>
-            {resolvedUser ? (
+            {isAuthenticated && resolvedUser ? (
               <Link
                 href={profilePath}
                 aria-label='Open your profile'
@@ -135,20 +157,31 @@ const HeroSection = () => {
                   </AvatarFallback>
                 </Avatar>
               </Link>
-            ) : (
+            ) : null}
+
+            {isAuthenticated ? (
               <Link
-                href='/auth/sign-in'
-                className='rounded-xl border border-white/30 bg-white/10 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-white/20 md:text-sm'
+                href={dashboardPath}
+                className='rounded-xl bg-white px-3 py-1.5 text-xs font-semibold text-black transition hover:bg-white/90 md:text-sm'
               >
-                Sign In
+                Dashboard
               </Link>
-            )}
-            <Link
-              href='/auth/sign-up'
-              className='rounded-xl bg-white px-3 py-1.5 text-xs font-semibold text-black transition hover:bg-white/90 md:text-sm'
-            >
-              Get Started
-            </Link>
+            ) : !isLoading ? (
+              <>
+                <Link
+                  href='/auth/sign-in'
+                  className='rounded-xl border border-white/30 bg-white/10 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-white/20 md:text-sm'
+                >
+                  Sign In
+                </Link>
+                <Link
+                  href='/auth/sign-up'
+                  className='rounded-xl bg-white px-3 py-1.5 text-xs font-semibold text-black transition hover:bg-white/90 md:text-sm'
+                >
+                  Get Started
+                </Link>
+              </>
+            ) : null}
           </div>
         </div>
       </header>
@@ -177,12 +210,21 @@ const HeroSection = () => {
         </p>
 
         <div className='mt-7 flex flex-col items-center gap-3.5 sm:flex-row'>
-          <Link
-            href='/auth/sign-up'
-            className='bg-primary font-cabin text-primary-foreground shadow-primary/25 rounded-[10px] px-8 py-3.5 text-base font-medium shadow-lg transition-all hover:brightness-110'
-          >
-            Create Account
-          </Link>
+          {isAuthenticated ? (
+            <Link
+              href={dashboardPath}
+              className='bg-primary font-cabin text-primary-foreground shadow-primary/25 rounded-[10px] px-8 py-3.5 text-base font-medium shadow-lg transition-all hover:brightness-110'
+            >
+              Go to Dashboard
+            </Link>
+          ) : !isLoading ? (
+            <Link
+              href='/auth/sign-up'
+              className='bg-primary font-cabin text-primary-foreground shadow-primary/25 rounded-[10px] px-8 py-3.5 text-base font-medium shadow-lg transition-all hover:brightness-110'
+            >
+              Create Account
+            </Link>
+          ) : null}
           <Link
             href='/certificate/verify'
             className='bg-secondary font-cabin text-secondary-foreground rounded-[10px] px-8 py-3.5 text-base font-medium transition-all hover:brightness-125'

@@ -23,7 +23,7 @@ const navItems = [
   { href: '/worker/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/worker/saathi', label: 'Saathi', icon: Bot },
   { href: '/worker/community-feed', label: 'Community Feed', icon: MessageSquare },
-  { href: '/worker/grievances', label: 'Grievances', icon: CircleAlert },
+  { href: '/worker/support', label: 'Support', icon: CircleAlert },
   { href: '/worker/log-shift', label: 'Log a Shift', icon: PenSquare },
   { href: '/worker/my-shift-logs', label: 'My Shift Logs', icon: ListOrdered },
   { href: '/worker/earnings', label: 'My Earnings', icon: BarChart2 },
@@ -68,7 +68,7 @@ export default function WorkerNav({ user }: { user: WorkerNavUser }) {
                 key={href}
                 href={href}
                 className={cn(
-                  'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors min-h-[44px]',
+                  'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors min-h-11',
                   active
                     ? 'bg-sidebar-primary text-sidebar-primary-foreground'
                     : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
@@ -86,7 +86,7 @@ export default function WorkerNav({ user }: { user: WorkerNavUser }) {
         <div className='p-4 border-t border-border'>
           <button
             onClick={handleSignOut}
-            className='flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium w-full text-left text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors min-h-[44px] cursor-pointer'
+            className='flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium w-full text-left text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors min-h-11 cursor-pointer'
           >
             <LogOut className='size-4 shrink-0' aria-hidden='true' />
             Sign out
@@ -103,7 +103,7 @@ export default function WorkerNav({ user }: { user: WorkerNavUser }) {
               key={href}
               href={href}
               className={cn(
-                'flex flex-col items-center gap-1 p-2 rounded-lg transition-colors min-h-[44px] min-w-[64px]',
+                'flex flex-col items-center gap-1 p-2 rounded-lg transition-colors min-h-11 min-w-16',
                 active ? 'text-primary' : 'text-muted-foreground hover:text-foreground',
               )}
               aria-current={active ? 'page' : undefined}

@@ -9,10 +9,31 @@ type SessionUser = {
 
 void db;
 
-const GRIEVANCE_SERVICE_URL =
-  process.env.GRIEVANCE_SERVICE_URL || 'http://localhost:8003';
+const trimTrailingSlash = (url: string) => url.replace(/\/+$/, '');
 
-const ML_SERVICE_URL = process.env.ML_SERVICE_URL || 'http://localhost:8002';
+const resolveServiceUrl = (...candidates: Array<string | undefined>): string | null => {
+  for (const candidate of candidates) {
+    if (!candidate) {
+      continue;
+    }
+
+    const trimmed = candidate.trim();
+    if (trimmed.length > 0) {
+      return trimTrailingSlash(trimmed);
+    }
+  }
+
+  return null;
+};
+
+const GRIEVANCE_SERVICE_URL =
+  resolveServiceUrl(
+    process.env.GRIEVANCE_SERVICE_URL,
+    process.env.GRIEVANCE_SERVICE_BASE_URL,
+    process.env.NEXT_PUBLIC_GRIEVANCE_SERVICE_URL,
+  ) ?? 'http://localhost:8003';
+
+const ML_SERVICE_URL = resolveServiceUrl(process.env.ML_SERVICE_URL) ?? 'http://localhost:8002';
 
 const toStatus = (status: number) => status as ContentfulStatusCode;
 

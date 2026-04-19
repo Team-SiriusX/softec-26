@@ -11,6 +11,7 @@ import certificates from './controllers/certificates';
 import community from './controllers/community';
 import grievances from './controllers/grievances';
 import screenshots from './controllers/screenshots';
+import support from './controllers/support';
 import shifts from './controllers/shifts';
 
 const app = new Hono<AnalyticsEnv>().basePath('/api');
@@ -33,6 +34,7 @@ export const routes = app
   .route('/shifts', shifts)
   .route('/screenshots', screenshots)
   .route('/grievances', grievances)
+  .route('/support', support)
   .route('/analytics', analytics)
   .route('/certificates', certificates)
   .route('/anomaly', anomaly)
