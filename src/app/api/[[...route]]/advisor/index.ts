@@ -50,6 +50,67 @@ const app = new Hono()
       clearTimeout(timeout);
       return c.json({ message: 'Advisor service unavailable' }, 503);
     }
+  })
+  .post('/voice/query', async (c) => {
+    const user = c.get('user');
+    let formData: FormData;
+    try {
+      formData = await c.req.formData();
+    } catch (error) {
+      console.error('Advisor voice formData parse failed:', error);
+      return c.json({ message: 'Invalid multipart payload' }, 400);
+    }
+
+    const fileEntry = formData.get('file');
+    const localeValue = formData.get('locale');
+    const locale = typeof localeValue === 'string' && localeValue === 'ur' ? 'ur' : 'en';
+
+    if (!fileEntry || typeof fileEntry === 'string') {
+      return c.json({ message: 'Audio file is required' }, 400);
+    }
+
+    const fileBlob = fileEntry as Blob;
+    const fileName =
+      'name' in fileEntry && typeof fileEntry.name === 'string' && fileEntry.name.length > 0
+        ? fileEntry.name
+        : 'voice.webm';
+
+    if (!fileBlob.type.startsWith('audio/')) {
+      return c.json({ message: 'Uploaded file must be an audio blob' }, 400);
+    }
+
+    const upstreamForm = new FormData();
+    upstreamForm.append('worker_id', user.id);
+    upstreamForm.append('locale', locale);
+    upstreamForm.append('file', fileBlob, fileName);
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 20_000);
+
+    try {
+      const response = await fetch(`${ADVISOR_SERVICE_URL}/advisor/voice/query`, {
+        method: 'POST',
+        body: upstreamForm,
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeout);
+
+      const contentType = response.headers.get('content-type') ?? '';
+      if (contentType.includes('application/json')) {
+        const payload = await response.json();
+        return c.json(payload, response.status as 200);
+      }
+
+      const text = await response.text();
+      return c.body(text, response.status as 200, {
+        'Content-Type': contentType || 'text/plain',
+      });
+    } catch (error) {
+      clearTimeout(timeout);
+      console.error('Advisor voice proxy failed:', error);
+      return c.json({ message: 'Advisor voice service unavailable' }, 503);
+    }
   });
 
 export default app;
