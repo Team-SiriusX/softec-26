@@ -61,6 +61,29 @@ enum GrievanceCategory {
   OTHER
 }
 
+enum SupportTicketStatus {
+  OPEN
+  IN_REVIEW
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum SupportTicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum SupportTicketCategory {
+  ACCOUNT_ACCESS
+  PAYMENT
+  TECHNICAL
+  SAFETY
+  OTHER
+}
+
 enum CommunityPostVerificationStatus {
   UNVERIFIED
   PENDING_AI_REVIEW
@@ -122,6 +145,8 @@ model User {
   screenshots            Screenshot[]               @relation("VerifierScreenshots")
   grievances             Grievance[]
   grievanceTags          GrievanceTag[]
+  submittedSupportTickets SupportTicket[]           @relation("SupportTicketWorker")
+  assignedSupportTickets  SupportTicket[]           @relation("SupportTicketAdvocate")
   communityPosts         CommunityPost[]            @relation("CommunityPostAuthor")
   communityComments      CommunityPostComment[]     @relation("CommunityCommentAuthor")
   communityVotes         CommunityPostVote[]
@@ -299,6 +324,29 @@ model GrievanceEscalation {
   grievance Grievance @relation(fields: [grievanceId], references: [id], onDelete: Cascade)
 
   @@map("grievance_escalations")
+}
+
+model SupportTicket {
+  id                String                @id @default(uuid())
+  workerId          String                @map("worker_id")
+  assignedAdvocateId String?              @map("assigned_advocate_id")
+  subject           String
+  description       String
+  category          SupportTicketCategory
+  priority          SupportTicketPriority @default(MEDIUM)
+  status            SupportTicketStatus   @default(OPEN)
+  advocateNote      String?               @map("advocate_note")
+  resolvedAt        DateTime?             @map("resolved_at")
+  createdAt         DateTime              @default(now()) @map("created_at")
+  updatedAt         DateTime              @updatedAt @map("updated_at")
+
+  worker           User  @relation("SupportTicketWorker", fields: [workerId], references: [id], onDelete: Cascade)
+  assignedAdvocate User? @relation("SupportTicketAdvocate", fields: [assignedAdvocateId], references: [id], onDelete: SetNull)
+
+  @@index([workerId, createdAt])
+  @@index([status, priority])
+  @@index([assignedAdvocateId, status])
+  @@map("support_tickets")
 }
 
 // ─────────────────────────────────────────────
