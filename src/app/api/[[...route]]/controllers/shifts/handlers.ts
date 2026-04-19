@@ -2,6 +2,8 @@ import db from '@/lib/db';
 import { Prisma } from '@/generated/prisma/client';
 import { Context } from 'hono';
 
+import { enqueueShiftValidation } from './shift-validation-queue';
+
 const platformSlugify = (name: string) =>
   name
     .toLowerCase()
@@ -63,10 +65,169 @@ type ShiftScreenshotSummary = {
   uploadedAt: Date;
 };
 
+type ShiftAiReviewSummary = {
+  summary: string | null;
+  reasons: string[];
+  model: string | null;
+  trustScore: number | null;
+  confidence: number | null;
+  generatedAt: string | null;
+  rawNote: string | null;
+};
+
+type PersistedShiftAiReviewPayload = {
+  version?: string;
+  verdict?: unknown;
+  trustScore?: unknown;
+  confidence?: unknown;
+  model?: unknown;
+  summary?: unknown;
+  reasons?: unknown;
+  mismatches?: unknown;
+  generatedAt?: unknown;
+};
+
 const withLegacyScreenshot = <T extends { screenshots: ShiftScreenshotSummary[] }>(shift: T) => ({
   ...shift,
   screenshot: shift.screenshots[0] ?? null,
 });
+
+const parseFiniteNumber = (value: unknown): number | null => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const normalizeReasonList = (value: unknown, max = 12): string[] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .filter((item): item is string => typeof item === 'string')
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .slice(0, max);
+};
+
+const parsePersistedAiReview = (rawNote: string): ShiftAiReviewSummary | null => {
+  try {
+    const parsed = JSON.parse(rawNote) as PersistedShiftAiReviewPayload;
+
+    if (!parsed || typeof parsed !== 'object') {
+      return null;
+    }
+
+    const baseReasons = normalizeReasonList(parsed.reasons);
+
+    const mismatchReasons = Array.isArray(parsed.mismatches)
+      ? parsed.mismatches
+          .filter((item): item is Record<string, unknown> => {
+            return Boolean(item && typeof item === 'object');
+          })
+          .map((item) => {
+            const field =
+              typeof item.field === 'string' && item.field.trim()
+                ? item.field.trim()
+                : 'unknown_field';
+
+            const claimed = parseFiniteNumber(item.claimed);
+            const extracted = parseFiniteNumber(item.extracted);
+            const deltaPct = parseFiniteNumber(item.deltaPct);
+            const tolerancePct = parseFiniteNumber(item.tolerancePct);
+
+            if (
+              claimed === null ||
+              extracted === null ||
+              deltaPct === null ||
+              tolerancePct === null
+            ) {
+              return null;
+            }
+
+            return `${field}: claimed ${claimed.toLocaleString('en-PK')} vs extracted ${extracted.toLocaleString('en-PK')} (${Math.round(deltaPct * 100)}% delta, tolerance ${Math.round(tolerancePct * 100)}%).`;
+          })
+          .filter((item): item is string => Boolean(item))
+      : [];
+
+    const summary =
+      typeof parsed.summary === 'string' && parsed.summary.trim()
+        ? parsed.summary.trim()
+        : null;
+
+    const uniqueReasons = Array.from(new Set([...mismatchReasons, ...baseReasons])).slice(
+      0,
+      12,
+    );
+
+    return {
+      summary,
+      reasons: uniqueReasons,
+      model:
+        typeof parsed.model === 'string' && parsed.model.trim()
+          ? parsed.model.trim()
+          : null,
+      trustScore: parseFiniteNumber(parsed.trustScore),
+      confidence: parseFiniteNumber(parsed.confidence),
+      generatedAt:
+        typeof parsed.generatedAt === 'string' && parsed.generatedAt.trim()
+          ? parsed.generatedAt.trim()
+          : null,
+      rawNote,
+    };
+  } catch {
+    return null;
+  }
+};
+
+const parseLegacyAiReview = (rawNote: string): ShiftAiReviewSummary | null => {
+  const note = rawNote.trim();
+  if (!note) {
+    return null;
+  }
+
+  const reasonsMatch = note.match(/Reasons:\s*([\s\S]*)$/i);
+  const reasons = reasonsMatch
+    ? reasonsMatch[1]
+        .split('|')
+        .map((item) => item.trim())
+        .filter(Boolean)
+        .slice(0, 12)
+    : [];
+
+  const withoutHeader = note.replace(/^AI OCR\s+[^.]*\.\s*/i, '').trim();
+  const summaryCandidate = withoutHeader
+    .split(/\bDifferences:\b|\bReasons:\b/i)[0]
+    ?.trim();
+
+  const summary = summaryCandidate && summaryCandidate.length > 0 ? summaryCandidate : null;
+
+  return {
+    summary,
+    reasons,
+    model: null,
+    trustScore: null,
+    confidence: null,
+    generatedAt: null,
+    rawNote,
+  };
+};
+
+const extractAiReviewFromScreenshots = (
+  screenshots: ShiftScreenshotSummary[],
+): ShiftAiReviewSummary | null => {
+  const latestWithNote = screenshots.find(
+    (screenshot) =>
+      typeof screenshot.verifierNotes === 'string' &&
+      screenshot.verifierNotes.trim().length > 0,
+  );
+
+  const note = latestWithNote?.verifierNotes?.trim();
+  if (!note) {
+    return null;
+  }
+
+  return parsePersistedAiReview(note) ?? parseLegacyAiReview(note);
+};
 
 const resolvePlatformId = async (
   rawPlatformName: string,
@@ -205,17 +366,22 @@ export const getShiftsHandler = async (c: Context) => {
     take: 200,
   });
 
-  const enriched = shifts.map((s) => ({
-    ...withLegacyScreenshot(s),
-    effectiveHourlyRate:
-      Number(s.hoursWorked) > 0
-        ? Number(s.netReceived) / Number(s.hoursWorked)
-        : 0,
-    deductionRatePct:
-      Number(s.grossEarned) > 0
-        ? (Number(s.platformDeductions) / Number(s.grossEarned)) * 100
-        : 0,
-  }));
+  const enriched = shifts.map((s) => {
+    const aiReview = extractAiReviewFromScreenshots(s.screenshots);
+
+    return {
+      ...withLegacyScreenshot(s),
+      aiReview,
+      effectiveHourlyRate:
+        Number(s.hoursWorked) > 0
+          ? Number(s.netReceived) / Number(s.hoursWorked)
+          : 0,
+      deductionRatePct:
+        Number(s.grossEarned) > 0
+          ? (Number(s.platformDeductions) / Number(s.grossEarned)) * 100
+          : 0,
+    };
+  });
 
   return c.json({ data: enriched });
 };
@@ -246,9 +412,12 @@ export const getShiftByIdHandler = async (c: Context) => {
 
   if (!shift) return c.json({ error: 'Not found' }, 404);
 
+  const aiReview = extractAiReviewFromScreenshots(shift.screenshots);
+
   return c.json({
     data: {
       ...withLegacyScreenshot(shift),
+      aiReview,
       effectiveHourlyRate:
         Number(shift.hoursWorked) > 0
           ? Number(shift.netReceived) / Number(shift.hoursWorked)
@@ -330,6 +499,8 @@ export const createShiftHandler = async (c: Context) => {
       },
     },
   });
+
+  enqueueShiftValidation(shift.id);
 
   return c.json(
     {
@@ -443,6 +614,7 @@ export const importCsvHandler = async (c: Context) => {
         },
       });
       created.push(shift.id);
+      enqueueShiftValidation(shift.id);
     } catch (error) {
       errors.push({
         row: rowNum,
@@ -460,110 +632,13 @@ export const updateShiftHandler = async (c: Context) => {
   const workerId = user?.id;
   if (!workerId) return c.json({ error: 'Unauthorized' }, 401);
 
-  const id = c.req.param('id');
-  const body = await c.req.json<{
-    platform?: string;
-    shiftDate?: string;
-    hoursWorked?: number;
-    grossEarned?: number;
-    platformDeductions?: number;
-    netReceived?: number;
-    notes?: string;
-  }>();
-
-  const existing = await db.shiftLog.findFirst({
-    where: { id, workerId },
-    include: { screenshots: true },
-  });
-
-  if (!existing) {
-    return c.json({ error: 'Not found' }, 404);
-  }
-
-  let platformId = existing.platformId;
-  if (body.platform && body.platform.trim().length > 0) {
-    platformId = await resolvePlatformId(body.platform);
-  }
-
-  const parsedShiftDate =
-    typeof body.shiftDate === 'string'
-      ? parseSafeIsoDate(body.shiftDate)
-      : null;
-
-  if (typeof body.shiftDate === 'string' && !parsedShiftDate) {
-    return c.json({ error: 'shiftDate must be YYYY-MM-DD' }, 400);
-  }
-
-  const financialFieldsChanged =
-    typeof body.hoursWorked === 'number' ||
-    typeof body.grossEarned === 'number' ||
-    typeof body.platformDeductions === 'number' ||
-    typeof body.netReceived === 'number' ||
-    typeof body.shiftDate === 'string' ||
-    typeof body.platform === 'string';
-
-  const updated = await db.shiftLog.update({
-    where: { id },
-    data: {
-      platformId,
-      ...(typeof body.shiftDate === 'string'
-        ? { shiftDate: parsedShiftDate! }
-        : {}),
-      ...(typeof body.hoursWorked === 'number'
-        ? { hoursWorked: body.hoursWorked }
-        : {}),
-      ...(typeof body.grossEarned === 'number'
-        ? { grossEarned: body.grossEarned }
-        : {}),
-      ...(typeof body.platformDeductions === 'number'
-        ? { platformDeductions: body.platformDeductions }
-        : {}),
-      ...(typeof body.netReceived === 'number'
-        ? { netReceived: body.netReceived }
-        : {}),
-      ...(typeof body.notes === 'string' ? { notes: body.notes } : {}),
-      ...(financialFieldsChanged ? { verificationStatus: 'PENDING' } : {}),
+  return c.json(
+    {
+      error:
+        'Shift logs are immutable. Delete the log and create a new one instead.',
     },
-    include: {
-      platform: true,
-      screenshots: {
-        orderBy: { uploadedAt: 'desc' },
-        select: {
-          status: true,
-          fileUrl: true,
-          fileKey: true,
-          verifierNotes: true,
-          uploadedAt: true,
-        },
-      },
-    },
-  });
-
-  if (financialFieldsChanged && existing.screenshots.length > 0) {
-    await db.screenshot.updateMany({
-      where: { shiftLogId: id },
-      data: {
-        status: 'PENDING',
-        verifierNotes: null,
-        reviewedAt: null,
-        verifierId: null,
-      },
-    });
-  }
-
-  return c.json({
-    data: {
-      ...withLegacyScreenshot(updated),
-      effectiveHourlyRate:
-        Number(updated.hoursWorked) > 0
-          ? Number(updated.netReceived) / Number(updated.hoursWorked)
-          : 0,
-      deductionRatePct:
-        Number(updated.grossEarned) > 0
-          ? (Number(updated.platformDeductions) / Number(updated.grossEarned)) * 100
-          : 0,
-    },
-  });
+    405,
+  );
 };
 
 // ─── DELETE /api/shifts/:id ──────────────────────────────────────────────────

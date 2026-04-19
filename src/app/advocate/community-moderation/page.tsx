@@ -17,6 +17,32 @@ import {
 } from '@/hooks/use-community';
 import { cn } from '@/lib/utils';
 
+function renderModerationMediaPreview(media: {
+  url: string;
+  mediaType: 'IMAGE' | 'VIDEO' | 'DOCUMENT';
+}) {
+  if (media.mediaType === 'VIDEO') {
+    return (
+      <video
+        src={media.url}
+        className='h-24 w-full object-cover'
+        controls
+        preload='metadata'
+      />
+    );
+  }
+
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={media.url}
+      alt='Post evidence media'
+      className='h-24 w-full object-cover'
+      loading='lazy'
+    />
+  );
+}
+
 export default function CommunityModerationPage() {
   const [notesByPostId, setNotesByPostId] = useState<Record<string, string>>({});
   const [aiReviewByPostId, setAiReviewByPostId] = useState<
@@ -100,6 +126,25 @@ export default function CommunityModerationPage() {
                 </CardHeader>
 
                 <CardContent className='space-y-3'>
+                  {item.post.media.length > 0 ? (
+                    <div className='grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4'>
+                      {item.post.media.map((media) => (
+                        <a
+                          key={media.id}
+                          href={media.url}
+                          target='_blank'
+                          rel='noreferrer'
+                          className='relative overflow-hidden rounded-xl border border-border/60'
+                        >
+                          {renderModerationMediaPreview(media)}
+                          <span className='absolute bottom-1 left-1 rounded bg-black/70 px-1.5 py-0.5 text-[10px] text-white'>
+                            {media.mediaType}
+                          </span>
+                        </a>
+                      ))}
+                    </div>
+                  ) : null}
+
                   <div className='grid gap-2 text-xs text-muted-foreground md:grid-cols-3'>
                     <p>
                       Triggered by:{' '}

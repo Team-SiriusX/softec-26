@@ -12,8 +12,30 @@ const client = new PrismaClient({
   adapter,
 });
 
+function resolveTrustedOrigins(): string[] {
+  const rawOrigins = process.env.BETTER_AUTH_TRUSTED_ORIGINS ?? '';
+  const envOrigins = rawOrigins
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
+  const primaryOrigin = process.env.BETTER_AUTH_URL?.trim();
+
+  return [
+    primaryOrigin,
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+    'http://localhost:3010',
+    'http://127.0.0.1:3010',
+    ...envOrigins,
+  ].filter((origin, index, all): origin is string => {
+    return Boolean(origin) && all.indexOf(origin) === index;
+  });
+}
+
 export const auth = betterAuth({
   database: prismaAdapter(client, { provider: 'postgresql' }),
+  trustedOrigins: resolveTrustedOrigins(),
   session: {
     cookieCache: {
       enabled: true,

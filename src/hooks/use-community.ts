@@ -90,11 +90,11 @@ type ModerationQueueItem = {
       name: string;
       slug: string;
     } | null;
-    mediaPreview: {
+    media: Array<{
       id: string;
       url: string;
-      mediaType: string;
-    } | null;
+      mediaType: 'IMAGE' | 'VIDEO' | 'DOCUMENT';
+    }>;
   };
 };
 

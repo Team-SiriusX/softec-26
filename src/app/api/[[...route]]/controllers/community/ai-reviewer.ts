@@ -1,5 +1,14 @@
 const OPENROUTER_ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions';
-const OPENROUTER_DEFAULT_MODEL = 'google/gemma-2-9b-it:free';
+const OPENROUTER_DEFAULT_MODEL = 'google/gemma-4-26b-a4b-it:free';
+const OPENROUTER_FALLBACK_MODELS = [
+  'google/gemma-4-26b-a4b-it:free',
+  'meta-llama/llama-3.1-8b-instruct:free',
+  'qwen/qwen-2.5-7b-instruct:free',
+  'google/gemma-2-9b-it:free',
+  'openai/gpt-4o-mini',
+  'google/gemini-2.0-flash-001',
+  'anthropic/claude-3.5-haiku',
+] as const;
 const COMMUNITY_AI_PASS_THRESHOLD = 0.65;
 const COMMUNITY_AI_PROMPT_VERSION = 'community-ai-review-v1';
 
@@ -300,14 +309,38 @@ async function runWithModel(params: {
     }),
   });
 
-  const payload = (await response.json()) as Record<string, unknown>;
+  const responseText = await response.text();
+  let payload: Record<string, unknown> = {};
+
+  if (responseText.trim()) {
+    try {
+      const parsed = JSON.parse(responseText) as unknown;
+      if (parsed && typeof parsed === 'object') {
+        payload = parsed as Record<string, unknown>;
+      }
+    } catch {
+      if (!response.ok) {
+        throw new Error(
+          `OpenRouter request failed (${response.status}) for model ${params.model}: ${responseText.slice(
+            0,
+            180,
+          )}`,
+        );
+      }
+
+      return null;
+    }
+  }
 
   if (!response.ok) {
     const message =
       payload.error && typeof payload.error === 'object'
         ? (payload.error as { message?: string }).message
         : undefined;
-    throw new Error(message?.trim() || `OpenRouter request failed (${response.status})`);
+    throw new Error(
+      message?.trim() ||
+        `OpenRouter request failed (${response.status}) for model ${params.model}`,
+    );
   }
 
   const choices = payload.choices;
@@ -350,29 +383,45 @@ export async function runCommunityAiReview(
 
   const includeRawResponse = Boolean(options?.includeRawResponse);
 
-  const primaryResult = await runWithModel({
-    model: preferredModel,
-    apiKey,
-    input,
-    includeRawResponse,
-  });
+  const envFallbackModels = (process.env.OPENROUTER_FALLBACK_MODELS ?? '')
+    .split(',')
+    .map((model) => model.trim())
+    .filter(Boolean);
 
-  if (primaryResult) {
-    return primaryResult;
-  }
+  const candidateModels = [
+    preferredModel,
+    ...envFallbackModels,
+    ...OPENROUTER_FALLBACK_MODELS,
+  ].filter((model, index, all) => all.indexOf(model) === index);
 
-  if (preferredModel !== OPENROUTER_DEFAULT_MODEL) {
-    const fallbackResult = await runWithModel({
-      model: OPENROUTER_DEFAULT_MODEL,
-      apiKey,
-      input,
-      includeRawResponse,
-    });
+  let lastError: string | null = null;
 
-    if (fallbackResult) {
-      return fallbackResult;
+  for (const model of candidateModels) {
+    try {
+      const result = await runWithModel({
+        model,
+        apiKey,
+        input,
+        includeRawResponse,
+      });
+
+      if (result) {
+        return result;
+      }
+    } catch (error) {
+      const message =
+        error instanceof Error && error.message.trim()
+          ? error.message
+          : `Failed with model ${model}`;
+      lastError = message;
+      continue;
     }
   }
 
-  throw new Error('AI review response was empty or invalid JSON.');
+  const attempted = candidateModels.join(', ');
+  throw new Error(
+    lastError
+      ? `AI review failed. Tried models: ${attempted}. Last error: ${lastError}`
+      : `AI review response was empty or invalid JSON. Tried models: ${attempted}`,
+  );
 }

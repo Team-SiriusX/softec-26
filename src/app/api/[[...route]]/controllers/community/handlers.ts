@@ -1347,7 +1347,10 @@ export const getModerationQueue = async (c: Context) => {
               url: true,
               mediaType: true,
             },
-            take: 1,
+            orderBy: {
+              createdAt: 'asc',
+            },
+            take: MAX_MEDIA_ITEMS_PER_POST,
           },
         },
       },
@@ -1383,7 +1386,7 @@ export const getModerationQueue = async (c: Context) => {
         commentCount: item.post.commentCount,
         reportCount: item.post.reportCount,
         platform: item.post.platform,
-        mediaPreview: item.post.media[0] ?? null,
+        media: item.post.media,
       },
     })),
   });

@@ -6,6 +6,13 @@ import db from "@/lib/db";
 
 const f = createUploadthing();
 
+function forbiddenUploadError(message: string): UploadThingError {
+  return new UploadThingError({
+    code: 'FORBIDDEN',
+    message,
+  });
+}
+
 function isWorkerRole(role: unknown): boolean {
   if (typeof role !== "string") {
     return false;
@@ -118,7 +125,7 @@ export const ourFileRouter = {
 
       // If you throw, the user will not be able to upload
       if (!user) {
-        throw new UploadThingError(
+        throw forbiddenUploadError(
           "Unauthorized: session not found. Please sign out, sign in again, and retry upload.",
         );
       }
@@ -161,7 +168,7 @@ export const ourFileRouter = {
       const user = await resolveUploadSessionUser(req);
 
       if (!user) {
-        throw new UploadThingError(
+        throw forbiddenUploadError(
           "Unauthorized: worker session not found. Please sign out, sign in again, and retry upload.",
         );
       }
@@ -169,7 +176,7 @@ export const ourFileRouter = {
       const resolvedRole = await resolveSessionRole(user as { id: string; role?: unknown });
 
       if (!isWorkerRole(resolvedRole)) {
-        throw new UploadThingError("Only worker accounts can upload community media");
+        throw forbiddenUploadError('Only worker accounts can upload community media');
       }
 
       return {

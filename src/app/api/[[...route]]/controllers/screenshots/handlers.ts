@@ -1,6 +1,8 @@
 import db from '@/lib/db';
 import { Context } from 'hono';
 
+import { enqueueShiftValidation } from '../shifts/shift-validation-queue';
+
 const deriveShiftVerificationStatus = (
   screenshotStatuses: Array<'PENDING' | 'CONFIRMED' | 'FLAGGED' | 'UNVERIFIABLE'>,
 ): 'PENDING' | 'CONFIRMED' | 'FLAGGED' | 'UNVERIFIABLE' => {
@@ -128,6 +130,8 @@ export const createScreenshotHandler = async (c: Context) => {
     where: { id: body.shiftLogId },
     data: { verificationStatus: 'PENDING' },
   });
+
+  enqueueShiftValidation(body.shiftLogId);
 
   return c.json({ data: screenshot }, 201);
 };
