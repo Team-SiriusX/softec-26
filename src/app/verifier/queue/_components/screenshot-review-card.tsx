@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { formatDistanceToNowStrict } from 'date-fns';
 import { ExternalLink } from 'lucide-react';
 
+import { Badge } from '@/components/ui/badge';
 import { useUpdateVerification } from '../_api/update-verification';
 import type { ScreenshotQueueItem } from '../_api/get-pending-screenshots';
 import {
@@ -15,6 +16,24 @@ interface ScreenshotReviewCardProps {
   screenshot: ScreenshotQueueItem;
 }
 
+type PersistedAiRemark = {
+  version: 'shift-ai-review-v1';
+  verdict: 'PENDING' | 'CONFIRMED' | 'FLAGGED' | 'UNVERIFIABLE';
+  trustScore: number;
+  confidence: number;
+  model: string;
+  summary: string;
+  reasons: string[];
+  mismatches: Array<{
+    field: string;
+    claimed: number;
+    extracted: number;
+    deltaPct: number;
+    tolerancePct: number;
+  }>;
+  generatedAt: string;
+};
+
 function formatCurrency(value: unknown): string {
   const numberValue = Number(value);
 
@@ -25,9 +44,77 @@ function formatCurrency(value: unknown): string {
   return numberValue.toLocaleString();
 }
 
+function formatPercent(value: number): string {
+  return `${Math.round(value * 100)}%`;
+}
+
+function parseAiRemark(rawNote: string | null): PersistedAiRemark | null {
+  if (!rawNote) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(rawNote) as Partial<PersistedAiRemark>;
+    if (parsed.version !== 'shift-ai-review-v1' || typeof parsed.summary !== 'string') {
+      return null;
+    }
+
+    const reasons = Array.isArray(parsed.reasons)
+      ? parsed.reasons.filter((item): item is string => typeof item === 'string')
+      : [];
+    const mismatches = Array.isArray(parsed.mismatches)
+      ? parsed.mismatches
+          .filter(
+            (item): item is PersistedAiRemark['mismatches'][number] =>
+              typeof item === 'object' &&
+              item !== null &&
+              typeof item.field === 'string' &&
+              Number.isFinite(Number(item.claimed)) &&
+              Number.isFinite(Number(item.extracted)) &&
+              Number.isFinite(Number(item.deltaPct)) &&
+              Number.isFinite(Number(item.tolerancePct)),
+          )
+          .map((item) => ({
+            field: item.field,
+            claimed: Number(item.claimed),
+            extracted: Number(item.extracted),
+            deltaPct: Number(item.deltaPct),
+            tolerancePct: Number(item.tolerancePct),
+          }))
+      : [];
+
+    return {
+      version: 'shift-ai-review-v1',
+      verdict: parsed.verdict ?? 'PENDING',
+      trustScore: Number(parsed.trustScore ?? 0),
+      confidence: Number(parsed.confidence ?? 0),
+      model: typeof parsed.model === 'string' ? parsed.model : 'unknown',
+      summary: parsed.summary,
+      reasons,
+      mismatches,
+      generatedAt:
+        typeof parsed.generatedAt === 'string' ? parsed.generatedAt : new Date().toISOString(),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function decisionFromStatus(status: ScreenshotQueueItem['status']): VerificationDecision {
+  if (status === 'CONFIRMED' || status === 'FLAGGED' || status === 'UNVERIFIABLE') {
+    return status;
+  }
+
+  return 'CONFIRMED';
+}
+
 export function ScreenshotReviewCard({ screenshot }: ScreenshotReviewCardProps) {
-  const [decision, setDecision] = useState<VerificationDecision>('CONFIRMED');
-  const [note, setNote] = useState('');
+  const aiRemark = parseAiRemark(screenshot.verifierNotes);
+  const manualReviewerNote = aiRemark ? null : screenshot.verifierNotes?.trim() || null;
+  const [decision, setDecision] = useState<VerificationDecision>(() =>
+    decisionFromStatus(screenshot.status),
+  );
+  const [note, setNote] = useState<string>(() => manualReviewerNote ?? '');
   const updateVerification = useUpdateVerification();
 
   const uploadedAt = screenshot.uploadedAt
@@ -87,6 +174,59 @@ export function ScreenshotReviewCard({ screenshot }: ScreenshotReviewCardProps) 
           </div>
         </div>
 
+        {aiRemark && (
+          <div className='space-y-2 rounded-xl border border-amber-300/30 bg-amber-50/40 p-3 dark:border-amber-500/30 dark:bg-amber-950/10'>
+            <div className='flex flex-wrap items-center gap-2'>
+              <p className='text-xs font-semibold uppercase tracking-wide text-muted-foreground'>
+                AI remarks
+              </p>
+              <Badge variant={aiRemark.verdict === 'FLAGGED' ? 'destructive' : 'outline'}>
+                {aiRemark.verdict}
+              </Badge>
+              <Badge variant='outline'>Trust {formatPercent(aiRemark.trustScore)}</Badge>
+              <Badge variant='outline'>Confidence {formatPercent(aiRemark.confidence)}</Badge>
+            </div>
+
+            <p className='text-sm text-foreground/90'>{aiRemark.summary}</p>
+
+            {aiRemark.reasons.length > 0 && (
+              <div className='space-y-1'>
+                {aiRemark.reasons.slice(0, 3).map((reason) => (
+                  <p key={reason} className='text-xs text-muted-foreground'>
+                    • {reason}
+                  </p>
+                ))}
+              </div>
+            )}
+
+            {aiRemark.mismatches.length > 0 && (
+              <div className='space-y-1'>
+                {aiRemark.mismatches.slice(0, 2).map((mismatch) => (
+                  <p
+                    key={`${mismatch.field}-${mismatch.claimed}-${mismatch.extracted}`}
+                    className='text-xs text-muted-foreground'
+                  >
+                    {mismatch.field}: claimed PKR {formatCurrency(mismatch.claimed)} vs
+                    extracted PKR {formatCurrency(mismatch.extracted)} ({formatPercent(mismatch.deltaPct)}
+                    {' '}delta)
+                  </p>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {manualReviewerNote && (
+          <div className='rounded-xl border bg-muted/20 p-3'>
+            <p className='text-xs font-semibold uppercase tracking-wide text-muted-foreground'>
+              Reviewer note
+            </p>
+            <p className='mt-2 text-sm whitespace-pre-wrap text-foreground/90'>
+              {manualReviewerNote}
+            </p>
+          </div>
+        )}
+
         <VerificationActionBar
           decision={decision}
           onDecisionChange={setDecision}
@@ -94,6 +234,7 @@ export function ScreenshotReviewCard({ screenshot }: ScreenshotReviewCardProps) 
           onNoteChange={setNote}
           onSubmit={handleSubmit}
           isSubmitting={updateVerification.isPending}
+          noteInputId={`verifier-note-${screenshot.id}`}
         />
       </div>
 

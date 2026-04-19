@@ -118,18 +118,18 @@ model User {
   updatedAt      DateTime        @updatedAt @map("updated_at")
 
   // Relations
-  shiftLogs     ShiftLog[]
-  screenshots   Screenshot[]        @relation("VerifierScreenshots")
-  grievances    Grievance[]
-  grievanceTags GrievanceTag[]
+  shiftLogs              ShiftLog[]
+  screenshots            Screenshot[]               @relation("VerifierScreenshots")
+  grievances             Grievance[]
+  grievanceTags          GrievanceTag[]
   communityPosts         CommunityPost[]            @relation("CommunityPostAuthor")
   communityComments      CommunityPostComment[]     @relation("CommunityCommentAuthor")
   communityVotes         CommunityPostVote[]
   communityReports       CommunityPostReport[]
   communityQueueTriggers CommunityPostReviewQueue[] @relation("CommunityQueueTriggeredBy")
-  certificates  IncomeCertificate[]
-  refreshTokens RefreshToken[]
-  anomalyFlags  AnomalyFlag[]
+  certificates           IncomeCertificate[]
+  refreshTokens          RefreshToken[]
+  anomalyFlags           AnomalyFlag[]
 
   image    String?
   sessions Session[]
@@ -218,8 +218,8 @@ model Screenshot {
   shiftLog ShiftLog @relation(fields: [shiftLogId], references: [id], onDelete: Cascade)
   verifier User?    @relation("VerifierScreenshots", fields: [verifierId], references: [id])
 
-  @@index([shiftLogId])
   @@unique([shiftLogId, fileKey])
+  @@index([shiftLogId])
   @@index([status])
   @@index([verifierId])
   @@map("screenshots")
@@ -321,8 +321,8 @@ model CommunityPost {
   createdAt               DateTime                        @default(now()) @map("created_at")
   updatedAt               DateTime                        @updatedAt @map("updated_at")
 
-  author      User                     @relation("CommunityPostAuthor", fields: [authorId], references: [id], onDelete: Cascade)
-  platform    Platform?                @relation(fields: [platformId], references: [id], onDelete: SetNull)
+  author      User                       @relation("CommunityPostAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  platform    Platform?                  @relation(fields: [platformId], references: [id], onDelete: SetNull)
   media       CommunityPostMedia[]
   comments    CommunityPostComment[]
   votes       CommunityPostVote[]
@@ -400,15 +400,15 @@ model CommunityPostReport {
 }
 
 model CommunityPostReviewQueue {
-  id                String                   @id @default(uuid())
-  postId            String                   @map("post_id")
-  triggeredByUserId String?                  @map("triggered_by_user_id")
+  id                String                     @id @default(uuid())
+  postId            String                     @map("post_id")
+  triggeredByUserId String?                    @map("triggered_by_user_id")
   reason            CommunityReviewQueueReason
   status            CommunityReviewQueueStatus @default(PENDING)
   note              String?
-  createdAt         DateTime                 @default(now()) @map("created_at")
-  updatedAt         DateTime                 @updatedAt @map("updated_at")
-  resolvedAt        DateTime?                @map("resolved_at")
+  createdAt         DateTime                   @default(now()) @map("created_at")
+  updatedAt         DateTime                   @updatedAt @map("updated_at")
+  resolvedAt        DateTime?                  @map("resolved_at")
 
   post        CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
   triggeredBy User?         @relation("CommunityQueueTriggeredBy", fields: [triggeredByUserId], references: [id], onDelete: SetNull)

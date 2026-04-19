@@ -14,6 +14,7 @@ interface VerificationActionBarProps {
   onDecisionChange: (value: VerificationDecision) => void;
   onNoteChange: (value: string) => void;
   onSubmit: () => void;
+  noteInputId?: string;
   isSubmitting?: boolean;
 }
 
@@ -23,6 +24,7 @@ export function VerificationActionBar({
   onDecisionChange,
   onNoteChange,
   onSubmit,
+  noteInputId = 'verifier-note',
   isSubmitting = false,
 }: VerificationActionBarProps) {
   const requiresNote = decision === 'FLAGGED' || decision === 'UNVERIFIABLE';
@@ -71,9 +73,9 @@ export function VerificationActionBar({
       </div>
 
       <div className='space-y-2'>
-        <Label htmlFor='verifier-note'>Reviewer note</Label>
+        <Label htmlFor={noteInputId}>Reviewer note</Label>
         <Textarea
-          id='verifier-note'
+          id={noteInputId}
           value={note}
           onChange={(event) => onNoteChange(event.target.value)}
           aria-invalid={noteIsInvalid}
