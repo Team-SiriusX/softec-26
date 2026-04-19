@@ -1,11 +1,15 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { type ReactNode, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangle,
   ArrowRight,
+  Bot,
+  Loader2,
+  Send,
   ShieldAlert,
   Siren,
   Sparkles,
@@ -39,6 +43,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import {
   ChartContainer,
   ChartLegend,
@@ -49,6 +54,7 @@ import {
 } from '@/components/ui/chart';
 import { Skeleton } from '@/components/ui/skeleton';
 import { QUERY_KEYS } from '@/constants/query-keys';
+import { type AiAction, streamAiChat } from '@/lib/ai-assistant';
 import { cn } from '@/lib/utils';
 
 type CommissionHeatmapResponse = {
@@ -319,10 +325,15 @@ function ChartCard({
 }
 
 export default function AdvocateAnalyticsPage() {
+  const router = useRouter();
   const queryClient = useQueryClient();
   const [windowWeeks, setWindowWeeks] = useState<AdvocateWindowWeeks>(24);
   const [histogramBucketSize, setHistogramBucketSize] =
     useState<HistogramBucketSize>(5000);
+  const [briefPrompt, setBriefPrompt] = useState('');
+  const [briefResponse, setBriefResponse] = useState('');
+  const [briefActions, setBriefActions] = useState<AiAction[]>([]);
+  const [isBriefLoading, setIsBriefLoading] = useState(false);
 
   const vulnerabilityWeeks = Math.max(windowWeeks, 24);
   const streamWeeks = Math.min(windowWeeks, 24);
@@ -800,6 +811,68 @@ export default function AdvocateAnalyticsPage() {
     },
   ];
 
+  const runWeeklyBrief = async (message: string) => {
+    const prompt = message.trim();
+    if (!prompt) {
+      return;
+    }
+
+    setIsBriefLoading(true);
+    setBriefResponse('');
+    setBriefActions([]);
+
+    try {
+      const result = await streamAiChat({
+        payload: {
+          mode: 'weekly_brief',
+          message: prompt,
+          threadSummary: `windowWeeks=${windowWeeks}; histogramBucketSize=${histogramBucketSize}`,
+        },
+        onToken: (_, fullText) => setBriefResponse(fullText),
+      });
+
+      setBriefResponse(result.cleanText || 'No response generated.');
+      setBriefActions(result.structured?.actions ?? []);
+    } catch (error) {
+      setBriefResponse(
+        error instanceof Error ? error.message : 'Unable to generate weekly brief right now.',
+      );
+    } finally {
+      setIsBriefLoading(false);
+    }
+  };
+
+  const exportBrief = () => {
+    const content = briefResponse.trim();
+    if (!content) {
+      return;
+    }
+
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    const url = window.URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `weekly-brief-${new Date().toISOString().slice(0, 10)}.txt`;
+    anchor.click();
+    window.URL.revokeObjectURL(url);
+  };
+
+  const handleBriefAction = (action: AiAction) => {
+    if (action.type === 'EXPORT_WEEKLY_BRIEF') {
+      exportBrief();
+      return;
+    }
+
+    if (action.route) {
+      router.push(action.route);
+      return;
+    }
+
+    if (action.type === 'OPEN_ESCALATION_CANDIDATES') {
+      router.push('/advocate/grievances?status=ESCALATED');
+    }
+  };
+
   return (
     <main className='min-h-full bg-[radial-gradient(circle_at_12%_8%,_rgba(245,158,11,0.12),_transparent_48%),radial-gradient(circle_at_88%_14%,_rgba(2,132,199,0.12),_transparent_40%)] px-4 py-8 md:px-8'>
       <div className='mx-auto flex w-full max-w-7xl flex-col gap-6'>
@@ -872,6 +945,110 @@ export default function AdvocateAnalyticsPage() {
                   Sparse history detected in this window; widen range for denser patterns.
                 </Badge>
               ) : null}
+            </CardContent>
+          </Card>
+
+          <Card className='md:col-span-3 border-border/60 bg-card/90'>
+            <CardHeader className='space-y-2'>
+              <Badge variant='outline' className='w-fit'>
+                Weekly Copilot
+              </Badge>
+              <CardTitle className='flex items-center gap-2 text-lg'>
+                <Bot className='size-4' />
+                Weekly Intelligence Brief
+              </CardTitle>
+              <CardDescription>
+                Generate a concise, decision-ready memo and jump directly to impacted slices.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className='space-y-3'>
+              <div className='flex flex-wrap gap-2'>
+                <Button
+                  type='button'
+                  size='sm'
+                  variant='secondary'
+                  disabled={isBriefLoading}
+                  onClick={() => {
+                    void runWeeklyBrief(
+                      'Generate this week\'s intelligence brief: top deduction spikes, vulnerable cohorts, grievance clusters, and recommended actions.',
+                    );
+                  }}
+                >
+                  <Sparkles className='mr-1 size-3.5' />
+                  Generate Brief
+                </Button>
+              </div>
+
+              <div className='flex gap-2'>
+                <Input
+                  value={briefPrompt}
+                  onChange={(event) => setBriefPrompt(event.target.value)}
+                  placeholder='Ask for a specific memo focus (city, platform, cluster)...'
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault();
+                      const prompt = briefPrompt.trim();
+                      if (!prompt || isBriefLoading) {
+                        return;
+                      }
+                      setBriefPrompt('');
+                      void runWeeklyBrief(prompt);
+                    }
+                  }}
+                />
+                <Button
+                  type='button'
+                  size='icon'
+                  disabled={isBriefLoading || !briefPrompt.trim()}
+                  onClick={() => {
+                    const prompt = briefPrompt.trim();
+                    if (!prompt) {
+                      return;
+                    }
+                    setBriefPrompt('');
+                    void runWeeklyBrief(prompt);
+                  }}
+                >
+                  {isBriefLoading ? (
+                    <Loader2 className='size-4 animate-spin' />
+                  ) : (
+                    <Send className='size-4' />
+                  )}
+                </Button>
+              </div>
+
+              {briefResponse ? (
+                <div className='space-y-3 rounded-2xl border border-border/60 bg-muted/20 p-3'>
+                  <p className='whitespace-pre-wrap text-sm leading-relaxed'>{briefResponse}</p>
+                  <div className='flex flex-wrap gap-2'>
+                    <Button
+                      type='button'
+                      size='sm'
+                      variant='outline'
+                      disabled={isBriefLoading}
+                      onClick={exportBrief}
+                    >
+                      Export Brief
+                    </Button>
+                    {briefActions.slice(0, 5).map((action) => (
+                      <Button
+                        key={action.id ?? action.label}
+                        type='button'
+                        size='sm'
+                        variant='outline'
+                        disabled={isBriefLoading}
+                        onClick={() => handleBriefAction(action)}
+                      >
+                        {action.label}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <p className='text-xs text-muted-foreground'>
+                  The generated brief includes action cards for navigation and export.
+                </p>
+              )}
             </CardContent>
           </Card>
 

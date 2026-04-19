@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { type MouseEvent, Suspense, useMemo, useState } from 'react';
+import { Suspense, type MouseEvent, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
   AlertTriangle,
@@ -58,7 +58,8 @@ const FILTERS: Record<
   },
   unverified: {
     label: 'Unverified',
-    description: 'Logs marked as unverifiable because the evidence was insufficient.',
+    description:
+      'Logs marked as unverifiable because the evidence was insufficient.',
     statuses: ['UNVERIFIABLE'],
   },
 };
@@ -109,7 +110,7 @@ function averageWaitHours(uploadedAtValues: Array<string | Date>): number {
   return totalMs / uploadedAtValues.length / (1000 * 60 * 60);
 }
 
-function VerifierQueueContent() {
+function VerifierQueuePageContent() {
   const searchParams = useSearchParams();
   const [page, setPage] = useState(1);
   const [activeFilter, setActiveFilter] = useState<QueueFilter>(
@@ -133,7 +134,9 @@ function VerifierQueueContent() {
     const approvedCount = statusStats.CONFIRMED;
     const unverifiedCount = statusStats.UNVERIFIABLE;
     const needsReviewCount = pendingCount + flaggedCount;
-    const avgHours = averageWaitHours(screenshots.map((item) => item.uploadedAt));
+    const avgHours = averageWaitHours(
+      screenshots.map((item) => item.uploadedAt),
+    );
 
     return {
       needsReviewCount,
@@ -166,7 +169,8 @@ function VerifierQueueContent() {
   );
 
   const rangeStart = meta.total === 0 ? 0 : (meta.page - 1) * meta.pageSize + 1;
-  const rangeEnd = meta.total === 0 ? 0 : Math.min(meta.page * meta.pageSize, meta.total);
+  const rangeEnd =
+    meta.total === 0 ? 0 : Math.min(meta.page * meta.pageSize, meta.total);
 
   const goToPreviousPage = (event: MouseEvent<HTMLAnchorElement>) => {
     event.preventDefault();
@@ -200,13 +204,18 @@ function VerifierQueueContent() {
     <main className='mx-auto w-full max-w-7xl space-y-6 p-6 lg:p-8'>
       <section className='flex flex-wrap items-start justify-between gap-3'>
         <div className='space-y-1'>
-          <h1 className='text-2xl font-bold tracking-tight'>Verification Queue</h1>
-          <p className='text-sm text-muted-foreground'>
-            Review screenshot evidence with AI remarks. The default view shows pending and
-            flagged logs, while approved and unverified logs are available through filters.
+          <h1 className='text-2xl font-bold tracking-tight'>
+            Verification Queue
+          </h1>
+          <p className='text-muted-foreground text-sm'>
+            Review screenshot evidence with AI remarks. The default view shows
+            pending and flagged logs, while approved and unverified logs are
+            available through filters.
           </p>
           {isFetching && !isLoading && (
-            <p className='text-xs text-muted-foreground'>Refreshing queue results...</p>
+            <p className='text-muted-foreground text-xs'>
+              Refreshing queue results...
+            </p>
           )}
         </div>
 
@@ -223,7 +232,10 @@ function VerifierQueueContent() {
         <Card>
           <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
             <CardTitle className='text-sm font-medium'>Needs review</CardTitle>
-            <Inbox className='size-4 text-muted-foreground' aria-hidden='true' />
+            <Inbox
+              className='text-muted-foreground size-4'
+              aria-hidden='true'
+            />
           </CardHeader>
           <CardContent>
             {isLoading ? (
@@ -239,7 +251,10 @@ function VerifierQueueContent() {
         <Card>
           <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
             <CardTitle className='text-sm font-medium'>Pending</CardTitle>
-            <Timer className='size-4 text-muted-foreground' aria-hidden='true' />
+            <Timer
+              className='text-muted-foreground size-4'
+              aria-hidden='true'
+            />
           </CardHeader>
           <CardContent>
             {isLoading ? (
@@ -255,7 +270,10 @@ function VerifierQueueContent() {
         <Card>
           <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
             <CardTitle className='text-sm font-medium'>Flagged</CardTitle>
-            <AlertTriangle className='size-4 text-muted-foreground' aria-hidden='true' />
+            <AlertTriangle
+              className='text-muted-foreground size-4'
+              aria-hidden='true'
+            />
           </CardHeader>
           <CardContent>
             {isLoading ? (
@@ -271,7 +289,10 @@ function VerifierQueueContent() {
         <Card>
           <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
             <CardTitle className='text-sm font-medium'>Approved</CardTitle>
-            <CheckCircle2 className='size-4 text-muted-foreground' aria-hidden='true' />
+            <CheckCircle2
+              className='text-muted-foreground size-4'
+              aria-hidden='true'
+            />
           </CardHeader>
           <CardContent>
             {isLoading ? (
@@ -287,7 +308,10 @@ function VerifierQueueContent() {
         <Card>
           <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
             <CardTitle className='text-sm font-medium'>Unverified</CardTitle>
-            <ShieldAlert className='size-4 text-muted-foreground' aria-hidden='true' />
+            <ShieldAlert
+              className='text-muted-foreground size-4'
+              aria-hidden='true'
+            />
           </CardHeader>
           <CardContent>
             {isLoading ? (
@@ -302,8 +326,13 @@ function VerifierQueueContent() {
 
         <Card>
           <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
-            <CardTitle className='text-sm font-medium'>Avg wait (shown)</CardTitle>
-            <Clock3 className='size-4 text-muted-foreground' aria-hidden='true' />
+            <CardTitle className='text-sm font-medium'>
+              Avg wait (shown)
+            </CardTitle>
+            <Clock3
+              className='text-muted-foreground size-4'
+              aria-hidden='true'
+            />
           </CardHeader>
           <CardContent>
             {isLoading ? (
@@ -317,36 +346,45 @@ function VerifierQueueContent() {
         </Card>
       </section>
 
-      <section className='space-y-3 rounded-2xl border bg-card/40 p-4'>
-        <div className='flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground'>
+      <section className='bg-card/40 space-y-3 rounded-2xl border p-4'>
+        <div className='text-muted-foreground flex items-center gap-2 text-xs font-semibold tracking-wide uppercase'>
           <Filter className='size-3.5' aria-hidden='true' />
           Queue filters
         </div>
 
-        <Tabs value={activeFilter} onValueChange={handleFilterChange} className='gap-2'>
-          <TabsList variant='line' className='h-auto w-full justify-start rounded-none p-0'>
+        <Tabs
+          value={activeFilter}
+          onValueChange={handleFilterChange}
+          className='gap-2'
+        >
+          <TabsList
+            variant='line'
+            className='h-auto w-full justify-start rounded-none p-0'
+          >
             <TabsTrigger
               value='needs-review'
-              className='rounded-none border-b-2 border-transparent px-3 py-2 data-active:border-primary'
+              className='data-active:border-primary rounded-none border-b-2 border-transparent px-3 py-2'
             >
               {FILTERS['needs-review'].label} ({filterCounts['needs-review']})
             </TabsTrigger>
             <TabsTrigger
               value='approved'
-              className='rounded-none border-b-2 border-transparent px-3 py-2 data-active:border-primary'
+              className='data-active:border-primary rounded-none border-b-2 border-transparent px-3 py-2'
             >
               {FILTERS.approved.label} ({filterCounts.approved})
             </TabsTrigger>
             <TabsTrigger
               value='unverified'
-              className='rounded-none border-b-2 border-transparent px-3 py-2 data-active:border-primary'
+              className='data-active:border-primary rounded-none border-b-2 border-transparent px-3 py-2'
             >
               {FILTERS.unverified.label} ({filterCounts.unverified})
             </TabsTrigger>
           </TabsList>
         </Tabs>
 
-        <p className='text-xs text-muted-foreground'>{activeFilterConfig.description}</p>
+        <p className='text-muted-foreground text-xs'>
+          {activeFilterConfig.description}
+        </p>
       </section>
 
       <Separator />
@@ -362,10 +400,13 @@ function VerifierQueueContent() {
           ))}
 
         {!isLoading && screenshots.length === 0 && (
-          <div className='rounded-2xl border border-dashed bg-muted/20 p-10 text-center'>
-            <Clock3 className='mx-auto mb-3 size-8 text-muted-foreground/70' aria-hidden='true' />
+          <div className='bg-muted/20 rounded-2xl border border-dashed p-10 text-center'>
+            <Clock3
+              className='text-muted-foreground/70 mx-auto mb-3 size-8'
+              aria-hidden='true'
+            />
             <p className='text-sm font-medium'>No logs found in this queue</p>
-            <p className='mt-1 text-xs text-muted-foreground'>
+            <p className='text-muted-foreground mt-1 text-xs'>
               Try another filter to inspect a different verification status.
             </p>
           </div>
@@ -378,7 +419,7 @@ function VerifierQueueContent() {
 
         {!isLoading && meta.total > 0 && (
           <div className='flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between'>
-            <p className='text-xs text-muted-foreground'>
+            <p className='text-muted-foreground text-xs'>
               Showing {rangeStart}-{rangeEnd} of {meta.total} logs
             </p>
 
@@ -390,12 +431,14 @@ function VerifierQueueContent() {
                       href='#'
                       onClick={goToPreviousPage}
                       className={
-                        !meta.hasPrevPage ? 'pointer-events-none opacity-50' : undefined
+                        !meta.hasPrevPage
+                          ? 'pointer-events-none opacity-50'
+                          : undefined
                       }
                     />
                   </PaginationItem>
                   <PaginationItem>
-                    <span className='px-2 text-xs text-muted-foreground'>
+                    <span className='text-muted-foreground px-2 text-xs'>
                       Page {meta.page} of {meta.totalPages}
                     </span>
                   </PaginationItem>
@@ -404,7 +447,9 @@ function VerifierQueueContent() {
                       href='#'
                       onClick={goToNextPage}
                       className={
-                        !meta.hasNextPage ? 'pointer-events-none opacity-50' : undefined
+                        !meta.hasNextPage
+                          ? 'pointer-events-none opacity-50'
+                          : undefined
                       }
                     />
                   </PaginationItem>
@@ -418,37 +463,33 @@ function VerifierQueueContent() {
   );
 }
 
+function VerifierQueueFallback() {
+  return (
+    <main className='mx-auto w-full max-w-7xl space-y-6 p-6 lg:p-8'>
+      <section className='space-y-2'>
+        <Skeleton className='h-8 w-56' />
+        <Skeleton className='h-4 w-full max-w-xl' />
+      </section>
+      <section className='grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6'>
+        {Array.from({ length: 6 }).map((_, index) => (
+          <Card key={index}>
+            <CardHeader>
+              <Skeleton className='h-4 w-24' />
+            </CardHeader>
+            <CardContent>
+              <Skeleton className='h-8 w-16' />
+            </CardContent>
+          </Card>
+        ))}
+      </section>
+    </main>
+  );
+}
+
 export default function VerifierQueuePage() {
   return (
-    <Suspense
-      fallback={
-        <main className='mx-auto w-full max-w-7xl space-y-6 p-6 lg:p-8'>
-          <div className='space-y-2'>
-            <Skeleton className='h-8 w-64' />
-            <Skeleton className='h-4 w-full' />
-          </div>
-          <div className='grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6'>
-            {Array.from({ length: 6 }).map((_, i) => (
-              <Card key={i}>
-                <CardHeader className='pb-2'>
-                  <Skeleton className='h-4 w-20' />
-                </CardHeader>
-                <CardContent>
-                  <Skeleton className='h-8 w-16' />
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-          <Skeleton className='h-12 w-full' />
-          <div className='space-y-4'>
-            {Array.from({ length: 3 }).map((_, i) => (
-              <Skeleton key={i} className='h-40 w-full' />
-            ))}
-          </div>
-        </main>
-      }
-    >
-      <VerifierQueueContent />
+    <Suspense fallback={<VerifierQueueFallback />}>
+      <VerifierQueuePageContent />
     </Suspense>
   );
 }

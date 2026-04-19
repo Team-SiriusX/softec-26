@@ -2,13 +2,18 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
+import { useRouter } from 'next/navigation';
 import { z } from 'zod';
 import {
   AlertTriangle,
   ArrowRight,
   BadgeAlert,
+  Bot,
   CheckCircle2,
   Clock3,
+  Loader2,
+  Send,
+  Sparkles,
   TriangleAlert,
 } from 'lucide-react';
 
@@ -21,11 +26,15 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import { MarkdownRenderer } from '@/components/ui/markdown';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Textarea } from '@/components/ui/textarea';
 import { QUERY_KEYS } from '@/constants/query-keys';
-import { useCurrentUser } from '@/hooks/use-current-user';
+import { useCreateGrievance } from '@/hooks/use-grievances';
+import { type AiAction, streamAiChat } from '@/lib/ai-assistant';
 import { client } from '@/lib/hono';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 const severityOrder = {
   critical: 4,
@@ -324,11 +333,17 @@ function BilingualText({ text, urdu, className }: { text: string; urdu?: string 
 }
 
 export default function AnomalyDetectionPanel({ workerId }: { workerId: string }) {
-  const { user } = useCurrentUser();
+  const router = useRouter();
+  const grievanceMutation = useCreateGrievance();
   const [submittedAt, setSubmittedAt] = useState<string | null>(null);
   const [lastSuccessfulResult, setLastSuccessfulResult] =
     useState<AnomalyDetectResponse | null>(null);
   const [isStorageHydrated, setIsStorageHydrated] = useState(false);
+  const [recoveryPrompt, setRecoveryPrompt] = useState('');
+  const [recoveryResponse, setRecoveryResponse] = useState('');
+  const [recoveryActions, setRecoveryActions] = useState<AiAction[]>([]);
+  const [isRecoveryLoading, setIsRecoveryLoading] = useState(false);
+  const [showRecoveryPromptPreview, setShowRecoveryPromptPreview] = useState(false);
 
   useEffect(() => {
     try {
@@ -438,6 +453,101 @@ export default function AnomalyDetectionPanel({ workerId }: { workerId: string }
     effectiveResult?.analyzedShifts ??
     effectiveResult?.analyzed_shifts ??
     shifts.length;
+
+  const runRecoveryCopilot = async (message: string) => {
+    if (!message.trim()) {
+      return;
+    }
+
+    setIsRecoveryLoading(true);
+    setRecoveryResponse('');
+    setRecoveryActions([]);
+
+    try {
+      const result = await streamAiChat({
+        payload: {
+          mode: 'worker_recovery',
+          message,
+          entityId: sortedAnomalies[0]?.type,
+        },
+        onToken: (_, fullText) => setRecoveryResponse(fullText),
+      });
+
+      setRecoveryResponse(result.cleanText || 'No response generated.');
+      setRecoveryActions(result.structured?.actions ?? []);
+    } catch (error) {
+      setRecoveryResponse(
+        error instanceof Error ? error.message : 'Unable to generate recovery guidance.',
+      );
+    } finally {
+      setIsRecoveryLoading(false);
+    }
+  };
+
+  const submitDraftGrievance = async (action: AiAction) => {
+    const payload = action.payload ?? {};
+
+    const platformId =
+      typeof payload.platformId === 'string' && payload.platformId.trim()
+        ? payload.platformId.trim()
+        : '';
+
+    if (!platformId) {
+      toast.error('AI draft missing platform. Open Grievance Board to submit manually.');
+      router.push('/worker/grievances');
+      return;
+    }
+
+    const shouldSubmit = window.confirm('Submit this AI recovery grievance now?');
+    if (!shouldSubmit) {
+      return;
+    }
+
+    await grievanceMutation.mutateAsync({
+      platformId,
+      category:
+        typeof payload.category === 'string' && payload.category.trim()
+          ? (payload.category as
+              | 'COMMISSION_CHANGE'
+              | 'ACCOUNT_DEACTIVATION'
+              | 'PAYMENT_DISPUTE'
+              | 'UNFAIR_RATING'
+              | 'SAFETY_CONCERN'
+              | 'OTHER')
+          : 'PAYMENT_DISPUTE',
+      description:
+        typeof payload.description === 'string' && payload.description.trim()
+          ? payload.description
+          : 'AI-assisted recovery grievance draft.',
+      isAnonymous:
+        typeof payload.isAnonymous === 'boolean' ? payload.isAnonymous : false,
+    });
+  };
+
+  const handleRecoveryAction = async (action: AiAction) => {
+    if (action.type === 'NAVIGATE' && action.route) {
+      router.push(action.route);
+      return;
+    }
+
+    if (action.type === 'OPEN_SHIFT_LOG_WITH_GUIDANCE') {
+      router.push(action.route || '/worker/log-shift?guided=1&source=recovery_copilot');
+      return;
+    }
+
+    if (action.type === 'DRAFT_GRIEVANCE') {
+      try {
+        await submitDraftGrievance(action);
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : 'Failed to submit grievance');
+      }
+      return;
+    }
+
+    if (action.route) {
+      router.push(action.route);
+    }
+  };
 
   return (
     <div className='mx-auto w-full max-w-5xl space-y-5'>
@@ -662,6 +772,144 @@ export default function AnomalyDetectionPanel({ workerId }: { workerId: string }
                 })}
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      <Card className='border-border/70 shadow-sm shadow-slate-950/5'>
+        <CardHeader>
+          <CardTitle className='flex items-center gap-2 text-base'>
+            <Bot className='size-4' />
+            Recovery Copilot
+          </CardTitle>
+          <CardDescription>
+            Ask for an evidence strategy, recovery plan, or grievance draft from detected anomalies.
+          </CardDescription>
+        </CardHeader>
+
+        <CardContent className='space-y-4'>
+          <div className='flex flex-wrap gap-2'>
+            <Button
+              type='button'
+              variant='secondary'
+              size='sm'
+              disabled={isRecoveryLoading}
+              onClick={() => {
+                void runRecoveryCopilot(
+                  'Summarize my top anomaly risks and tell me what evidence I should collect first.',
+                );
+              }}
+            >
+              <Sparkles className='mr-1 size-3.5' />
+              Evidence Plan
+            </Button>
+            <Button
+              type='button'
+              variant='secondary'
+              size='sm'
+              disabled={isRecoveryLoading}
+              onClick={() => {
+                void runRecoveryCopilot('Draft a strong grievance based on my recent anomalies.');
+              }}
+            >
+              <Sparkles className='mr-1 size-3.5' />
+              Draft Grievance
+            </Button>
+          </div>
+
+          <div className='space-y-2'>
+            <Textarea
+              value={recoveryPrompt}
+              onChange={(event) => setRecoveryPrompt(event.target.value)}
+              placeholder='Ask how to recover losses or challenge deductions... Markdown supported.'
+              className='min-h-24 resize-y'
+              onKeyDown={(event) => {
+                if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+                  event.preventDefault();
+                  const prompt = recoveryPrompt.trim();
+                  if (!prompt || isRecoveryLoading) {
+                    return;
+                  }
+                  setRecoveryPrompt('');
+                  setShowRecoveryPromptPreview(false);
+                  void runRecoveryCopilot(prompt);
+                }
+              }}
+            />
+
+            <div className='flex items-center justify-between gap-2'>
+              <p className='text-xs text-muted-foreground'>
+                Markdown enabled. Use Cmd/Ctrl + Enter to send.
+              </p>
+              <div className='flex items-center gap-2'>
+                <Button
+                  type='button'
+                  size='sm'
+                  variant='ghost'
+                  onClick={() => setShowRecoveryPromptPreview((prev) => !prev)}
+                >
+                  {showRecoveryPromptPreview ? 'Hide Preview' : 'Preview Markdown'}
+                </Button>
+                <Button
+                  type='button'
+                  size='icon'
+                  disabled={isRecoveryLoading || !recoveryPrompt.trim()}
+                  onClick={() => {
+                    const prompt = recoveryPrompt.trim();
+                    if (!prompt) {
+                      return;
+                    }
+                    setRecoveryPrompt('');
+                    setShowRecoveryPromptPreview(false);
+                    void runRecoveryCopilot(prompt);
+                  }}
+                >
+                  {isRecoveryLoading ? (
+                    <Loader2 className='size-4 animate-spin' />
+                  ) : (
+                    <Send className='size-4' />
+                  )}
+                </Button>
+              </div>
+            </div>
+
+            {showRecoveryPromptPreview && recoveryPrompt.trim() ? (
+              <div className='rounded-xl border border-border/60 bg-muted/20 px-3 py-2'>
+                <p className='mb-2 text-[11px] uppercase tracking-[0.14em] text-muted-foreground'>
+                  Draft Preview
+                </p>
+                <MarkdownRenderer content={recoveryPrompt} className='text-sm' />
+              </div>
+            ) : null}
+          </div>
+
+          {recoveryResponse ? (
+            <div className='rounded-2xl border border-border/60 bg-muted/20 px-4 py-3'>
+              <MarkdownRenderer content={recoveryResponse} className='text-sm' />
+              {isRecoveryLoading ? (
+                <span className='inline-block animate-pulse text-xs text-muted-foreground'>
+                  Streaming...
+                </span>
+              ) : null}
+              {recoveryActions.length ? (
+                <div className='mt-3 flex flex-wrap gap-2'>
+                  {recoveryActions.slice(0, 5).map((action) => (
+                    <Button
+                      key={action.id ?? action.label}
+                      type='button'
+                      size='sm'
+                      variant='outline'
+                      disabled={isRecoveryLoading || grievanceMutation.isPending}
+                      onClick={() => {
+                        void handleRecoveryAction(action);
+                      }}
+                    >
+                      {action.label}
+                    </Button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
         </CardContent>
       </Card>
     </div>

@@ -1,12 +1,13 @@
 import { currentUser } from '@/lib/current-user';
 import Link from 'next/link';
-import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button';
 import { ArrowRight, LayoutDashboard } from 'lucide-react';
 import { HeroSection } from '@/components/ui/glass-video-hero';
 import DemoOne from '@/components/ui/demo';
 import BarChartDemo from '@/components/ui/bar-chart-demo';
 import FeaturedSectionStatsDemo from '@/components/ui/featured-section-stats-demo';
 import { Footer2 } from '@/components/ui/footer-2';
+import { cn } from '@/lib/utils';
 
 export default async function Home() {
   const user = await currentUser();
@@ -18,57 +19,67 @@ export default async function Home() {
       <BarChartDemo />
       <FeaturedSectionStatsDemo />
 
-      <section className='mx-auto w-full max-w-2xl space-y-8 p-6 pb-14 text-center'>
-        <div className='space-y-4'>
-          <h2 className='text-primary text-3xl font-black tracking-tight lg:text-4xl'>
-            FairGig Portal Access
-          </h2>
-          <p className='text-muted-foreground text-lg'>
-            Empowering gig workers with verified earnings and collective
-            transparency.
-          </p>
-        </div>
+      <section className='mx-auto w-full max-w-2xl px-6 pb-14'>
+        <div className='space-y-8 rounded-3xl border border-border/60 bg-background/70 p-6 text-center shadow-sm backdrop-blur sm:p-8'>
+          <div className='space-y-4'>
+            <h2 className='text-primary text-3xl font-black tracking-tight lg:text-4xl'>
+              FairGig Portal Access
+            </h2>
+            <p className='mx-auto max-w-xl text-lg text-muted-foreground'>
+              Empowering gig workers with verified earnings and collective
+              transparency.
+            </p>
+          </div>
 
-        <div className='flex flex-col items-center justify-center gap-4 sm:flex-row'>
-          {user ? (
-            <Button
-              size='lg'
-              className='group h-12 rounded-full px-8 font-semibold'
-            >
-              <Link href={`/${user.role?.toLowerCase()}/dashboard`}>
-                <LayoutDashboard className='mr-2 size-5' />
+          <div className='flex flex-col items-center justify-center gap-3 sm:flex-row'>
+            {user ? (
+              <Link
+                href={`/${user.role?.toLowerCase()}/dashboard`}
+                className={cn(
+                  buttonVariants({ size: 'lg' }),
+                  'h-12 rounded-full px-8 text-base font-semibold',
+                )}
+              >
+                <LayoutDashboard className='size-5' />
                 Go to Dashboard
-                <ArrowRight className='ml-2 size-4 transition-transform group-hover:translate-x-1' />
+                <ArrowRight className='size-4 transition-transform group-hover/button:translate-x-1' />
               </Link>
-            </Button>
-          ) : (
-            <>
-              <Button
-                size='lg'
-                className='h-12 rounded-full px-8 font-semibold'
-              >
-                <Link href='/auth/sign-up'>Get Started</Link>
-              </Button>
-              <Button
-                variant='outline'
-                size='lg'
-                className='h-12 rounded-full px-8 font-semibold'
-              >
-                <Link href='/auth/sign-in'>Sign In</Link>
-              </Button>
-            </>
+            ) : (
+              <>
+                <Link
+                  href='/auth/sign-up'
+                  className={cn(
+                    buttonVariants({ size: 'lg' }),
+                    'h-12 rounded-full px-8 text-base font-semibold',
+                  )}
+                >
+                  Get Started
+                </Link>
+                <Link
+                  href='/auth/sign-in'
+                  className={cn(
+                    buttonVariants({ variant: 'outline', size: 'lg' }),
+                    'h-12 rounded-full px-8 text-base font-semibold',
+                  )}
+                >
+                  Sign In
+                </Link>
+              </>
+            )}
+          </div>
+
+          {user && (
+            <p className='text-sm text-muted-foreground'>
+              Logged in as{' '}
+              <span className='font-medium text-foreground'>
+                {user.fullName || user.email}
+              </span>{' '}
+              <span className='rounded-full bg-muted px-2 py-0.5 text-xs font-semibold tracking-wide text-muted-foreground'>
+                {user.role}
+              </span>
+            </p>
           )}
         </div>
-
-        {user && (
-          <p className='text-muted-foreground text-sm'>
-            Logged in as{' '}
-            <span className='text-foreground font-medium'>
-              {user.fullName || user.email}
-            </span>{' '}
-            ({user.role})
-          </p>
-        )}
       </section>
 
       <Footer2 />

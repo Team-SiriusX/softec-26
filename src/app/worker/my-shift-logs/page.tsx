@@ -221,6 +221,20 @@ export default function MyShiftLogsPage() {
                       </Button>
                     </Link>
 
+                    {shift.verificationStatus === 'FLAGGED' ||
+                    shift.verificationStatus === 'UNVERIFIABLE' ? (
+                      <Link
+                        href={`/worker/log-shift?guided=1&source=my_shift_logs&shiftId=${encodeURIComponent(
+                          shift.id,
+                        )}`}
+                      >
+                        <Button type='button' variant='outline' className='min-h-10'>
+                          <AlertTriangle className='size-4' />
+                          Fix With AI Guidance
+                        </Button>
+                      </Link>
+                    ) : null}
+
                     <Button
                       type='button'
                       variant='destructive'
