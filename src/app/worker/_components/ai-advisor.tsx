@@ -189,6 +189,8 @@ const LOCALE_CONFIG: Record<
   },
 };
 
+const URDU_SCRIPT_REGEX = /[\u0600-\u06FF]/;
+
 function getSpeechRecognitionCtor(): SpeechRecognitionCtorLike | null {
   if (typeof window === 'undefined') {
     return null;
@@ -204,6 +206,57 @@ function getSpeechRecognitionCtor(): SpeechRecognitionCtorLike | null {
 
 function createId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
+}
+
+function detectSpeechLocaleFromText(text: string, fallback: AiLocale): AiLocale {
+  if (URDU_SCRIPT_REGEX.test(text)) {
+    return 'ur';
+  }
+
+  return fallback;
+}
+
+function pickVoiceForLanguage(
+  voices: SpeechSynthesisVoice[],
+  languageTag: string,
+): SpeechSynthesisVoice | null {
+  const normalizedTag = languageTag.toLowerCase();
+  const langPrefix = normalizedTag.split('-')[0] ?? normalizedTag;
+
+  return (
+    voices.find((voice) => voice.lang.toLowerCase() === normalizedTag) ??
+    voices.find((voice) => voice.lang.toLowerCase().startsWith(`${langPrefix}-`)) ??
+    voices.find((voice) => voice.lang.toLowerCase().startsWith(langPrefix)) ??
+    null
+  );
+}
+
+function getSpeechVoices(): Promise<SpeechSynthesisVoice[]> {
+  if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+    return Promise.resolve([]);
+  }
+
+  const synth = window.speechSynthesis;
+  const immediate = synth.getVoices();
+
+  if (immediate.length > 0) {
+    return Promise.resolve(immediate);
+  }
+
+  return new Promise((resolve) => {
+    const timeoutId = window.setTimeout(() => {
+      synth.removeEventListener('voiceschanged', handleVoicesChanged);
+      resolve(synth.getVoices());
+    }, 350);
+
+    const handleVoicesChanged = () => {
+      window.clearTimeout(timeoutId);
+      synth.removeEventListener('voiceschanged', handleVoicesChanged);
+      resolve(synth.getVoices());
+    };
+
+    synth.addEventListener('voiceschanged', handleVoicesChanged);
+  });
 }
 
 function toHistory(messages: AdvisorMessage[]) {
@@ -388,10 +441,44 @@ export default function AiAdvisor() {
   const abortRef = useRef<AbortController | null>(null);
   const speechAbortRef = useRef<AbortController | null>(null);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const messagesContainerRef = useRef<HTMLDivElement | null>(null);
+  const isPinnedToBottomRef = useRef(true);
+  const previousMessageCountRef = useRef(messages.length);
 
   const visibleMessages = useMemo(() => messages.slice(-20), [messages]);
   const lastMessageId = messages[messages.length - 1]?.id ?? null;
   const localeConfig = LOCALE_CONFIG[locale];
+
+  useEffect(() => {
+    if (!isOpen || isCollapsed) {
+      return;
+    }
+
+    const container = messagesContainerRef.current;
+
+    if (!container) {
+      return;
+    }
+
+    const nextCount = messages.length;
+    const wasNewMessageAdded = nextCount > previousMessageCountRef.current;
+    previousMessageCountRef.current = nextCount;
+
+    if (!isPinnedToBottomRef.current && !wasNewMessageAdded) {
+      return;
+    }
+
+    container.scrollTo({
+      top: container.scrollHeight,
+      behavior: wasNewMessageAdded ? 'smooth' : 'auto',
+    });
+  }, [messages, isOpen, isCollapsed]);
+
+  useEffect(() => {
+    if (isOpen && !isCollapsed) {
+      isPinnedToBottomRef.current = true;
+    }
+  }, [isOpen, isCollapsed]);
 
   useEffect(() => {
     return () => {
@@ -526,22 +613,26 @@ export default function AiAdvisor() {
     speechAbortRef.current?.abort();
     const controller = new AbortController();
     speechAbortRef.current = controller;
+    const speechLocale = detectSpeechLocaleFromText(trimmed, locale);
+    const speechLocaleConfig = LOCALE_CONFIG[speechLocale];
 
     setIsSpeaking(true);
 
     try {
       const speech = await prepareAiVoiceSpeech({
         text: trimmed,
-        locale,
+        locale: speechLocale,
         signal: controller.signal,
       });
 
       const utterance = new SpeechSynthesisUtterance(speech.speechText);
-      utterance.lang = speech.languageTag || localeConfig.speechLang;
+      utterance.lang = speech.languageTag || speechLocaleConfig.speechLang;
 
-      const voices = window.speechSynthesis.getVoices();
-      const langPrefix = utterance.lang.toLowerCase().split('-')[0] ?? utterance.lang.toLowerCase();
-      const voice = voices.find((item) => item.lang.toLowerCase().startsWith(langPrefix));
+      const voices = await getSpeechVoices();
+      const voice =
+        pickVoiceForLanguage(voices, utterance.lang) ??
+        pickVoiceForLanguage(voices, speechLocaleConfig.speechLang);
+
       if (voice) {
         utterance.voice = voice;
       }
@@ -556,7 +647,7 @@ export default function AiAdvisor() {
       window.speechSynthesis.speak(utterance);
     } catch (error) {
       setIsSpeaking(false);
-      toast.error(error instanceof Error ? error.message : localeConfig.unsupportedSpeech);
+      toast.error(error instanceof Error ? error.message : speechLocaleConfig.unsupportedSpeech);
     }
   };
 
@@ -979,7 +1070,16 @@ export default function AiAdvisor() {
               ))}
             </div>
 
-            <div className='max-h-[320px] space-y-2 overflow-y-auto rounded-xl border border-border/60 bg-muted/20 p-2'>
+            <div
+              ref={messagesContainerRef}
+              onScroll={(event) => {
+                const element = event.currentTarget;
+                const distanceFromBottom =
+                  element.scrollHeight - element.scrollTop - element.clientHeight;
+                isPinnedToBottomRef.current = distanceFromBottom < 48;
+              }}
+              className='max-h-[320px] space-y-2 overflow-y-auto rounded-xl border border-border/60 bg-muted/20 p-2 pr-1 [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border/70 [&::-webkit-scrollbar-track]:bg-transparent'
+            >
               {messages.map((message) => (
                 <div
                   key={message.id}
