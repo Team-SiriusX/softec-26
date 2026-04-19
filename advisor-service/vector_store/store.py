@@ -49,3 +49,10 @@ def similarity_search(query: str, top_k: int = 5) -> list[dict[str, Any]]:
         {"content": doc.page_content, "metadata": doc.metadata}
         for doc in results
     ]
+
+
+def initialize_store() -> None:
+    """Initialize and seed pgvector-backed policy docs."""
+    from rag.retriever import initialize_store as _initialize_retriever_store
+
+    _initialize_retriever_store()
