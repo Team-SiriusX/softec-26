@@ -4,7 +4,11 @@ from typing import Any
 from langchain_core.documents import Document
 from sqlalchemy import create_engine, text
 
+from shared_env import load_shared_env
+
 from vector_store.store import get_vector_store
+
+load_shared_env()
 
 POLICY_DOCUMENTS = [
     Document(

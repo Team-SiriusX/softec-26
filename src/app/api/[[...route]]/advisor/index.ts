@@ -13,6 +13,40 @@ const advisorQuerySchema = z.object({
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+const degradedAdvisorPayload = (locale: 'en' | 'ur') => {
+  if (locale === 'ur') {
+    return {
+      answer: 'فی الحال سروس عارضی طور پر مصروف ہے، براہ کرم دوبارہ کوشش کریں۔',
+      evidence: [],
+      confidence: 'low' as const,
+      next_actions: [
+        {
+          label: 'دوبارہ کوشش کریں',
+          action_type: 'review_shifts',
+          route: '/worker/saathi',
+        },
+      ],
+      caution: 'ایڈوائزر سروس عارضی طور پر دستیاب نہیں ہے۔',
+      locale,
+    };
+  }
+
+  return {
+    answer: 'Advisor is temporarily unavailable. Please try again in a moment.',
+    evidence: [],
+    confidence: 'low' as const,
+    next_actions: [
+      {
+        label: 'Try again',
+        action_type: 'review_shifts',
+        route: '/worker/saathi',
+      },
+    ],
+    caution: 'Advisor service is temporarily unavailable.',
+    locale,
+  };
+};
+
 const app = new Hono()
   .use('/*', authMiddleware)
   .post('/query', zValidator('json', advisorQuerySchema), async (c) => {
@@ -41,16 +75,22 @@ const app = new Hono()
       const contentType = response.headers.get('content-type') ?? '';
       if (contentType.includes('application/json')) {
         const payload = await response.json();
+        if (response.status >= 500) {
+          return c.json(degradedAdvisorPayload(body.locale), 200);
+        }
         return c.json(payload, response.status as 200);
       }
 
       const text = await response.text();
+      if (response.status >= 500) {
+        return c.json(degradedAdvisorPayload(body.locale), 200);
+      }
       return c.body(text, response.status as 200, {
         'Content-Type': contentType || 'text/plain',
       });
     } catch {
       clearTimeout(timeout);
-      return c.json({ message: 'Advisor service unavailable' }, 503);
+      return c.json(degradedAdvisorPayload(body.locale), 200);
     }
   })
   .post('/voice/query', async (c) => {
@@ -93,7 +133,7 @@ const app = new Hono()
       upstreamForm.append('file', fileBlob, fileName);
 
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 20_000);
+      const timeout = setTimeout(() => controller.abort(), 45_000);
 
       try {
         let response: Response;
@@ -117,21 +157,27 @@ const app = new Hono()
         const contentType = response.headers.get('content-type') ?? '';
         if (contentType.includes('application/json')) {
           const payload = await response.json();
+          if (response.status >= 500) {
+            return c.json(degradedAdvisorPayload(locale), 200);
+          }
           return c.json(payload, response.status as 200);
         }
 
         const text = await response.text();
+        if (response.status >= 500) {
+          return c.json(degradedAdvisorPayload(locale), 200);
+        }
         return c.body(text, response.status as 200, {
           'Content-Type': contentType || 'text/plain',
         });
       } catch (error) {
         clearTimeout(timeout);
         console.error('Advisor voice proxy failed:', error);
-        return c.json({ message: 'Advisor voice service unavailable' }, 503);
+        return c.json(degradedAdvisorPayload(locale), 200);
       }
     } catch (error) {
       console.error('Advisor voice route unexpected failure:', error);
-      return c.json({ message: 'Advisor voice route failed unexpectedly' }, 500);
+      return c.json(degradedAdvisorPayload('en'), 200);
     }
   });
 

@@ -191,10 +191,8 @@ async def advisor_voice_query(
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Advisor voice chain failed: {exc}",
-        ) from exc
+        print(f"[advisor-service] unexpected voice preprocessing failure: {exc}")
+        return _voice_unavailable_response(locale)
 
     try:
 
