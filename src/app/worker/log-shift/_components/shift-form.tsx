@@ -2,6 +2,7 @@
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
@@ -55,11 +56,16 @@ const MAX_SCREENSHOTS = 6;
 
 export function ShiftForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user } = useCurrentUser();
   const createShift = useCreateShift();
   const detectAnomaly = useAnomalyDetect();
   const [uploadedScreenshots, setUploadedScreenshots] = useState<UploadedScreenshot[]>([]);
   const [isUploadingScreenshots, setIsUploadingScreenshots] = useState(false);
+
+  const isGuided = searchParams.get('guided') === '1';
+  const guidedSource = searchParams.get('source');
+  const guidedShiftId = searchParams.get('shiftId');
 
   const form = useForm<ShiftFormValues>({
     resolver: zodResolver(shiftSchema),
@@ -104,6 +110,34 @@ export function ShiftForm() {
     !isNaN(manualNet) &&
     Math.abs(manualNet - autoNet) / (autoNet || 1) > 0.05;
 
+  useEffect(() => {
+    if (!isGuided) {
+      return;
+    }
+
+    const currentNotes = form.getValues('notes') ?? '';
+    if (currentNotes.trim().length > 0) {
+      return;
+    }
+
+    const guidance = [
+      'AI guidance checklist before re-submitting shift evidence:',
+      '- Ensure the screenshot clearly shows gross, deductions, and net values.',
+      '- Ensure money-field currency is visible (PKR/USD marker).',
+      '- Avoid cropped images; include full receipt area and date/time.',
+      '- Upload readable screenshots (no blur, glare, or compression artifacts).',
+      guidedShiftId ? `- Reference previous flagged shift ID: ${guidedShiftId}.` : null,
+      guidedSource ? `- Guidance source: ${guidedSource}.` : null,
+    ]
+      .filter((item): item is string => Boolean(item))
+      .join('\n');
+
+    form.setValue('notes', guidance, {
+      shouldDirty: false,
+      shouldValidate: false,
+    });
+  }, [form, guidedShiftId, guidedSource, isGuided]);
+
   const onSubmit = async (values: ShiftFormValues) => {
     const screenshotsPayload = uploadedScreenshots.map((screenshot) => ({
       fileUrl: screenshot.fileUrl,
@@ -131,6 +165,16 @@ export function ShiftForm() {
 
   return (
     <form onSubmit={form.handleSubmit(onSubmit)} noValidate className='space-y-5'>
+      {isGuided ? (
+        <div className='rounded-2xl border border-amber-300/70 bg-amber-50/70 px-4 py-3 text-sm text-amber-900'>
+          <p className='font-semibold'>AI guided re-submission mode</p>
+          <p className='mt-1 text-xs leading-relaxed'>
+            Focus on evidence clarity and currency visibility to reduce false flags.
+            {guidedShiftId ? ` Previous shift: ${guidedShiftId}.` : ''}
+          </p>
+        </div>
+      ) : null}
+
       {/* Platform */}
       <div className='space-y-1.5'>
         <Label htmlFor='platform'>

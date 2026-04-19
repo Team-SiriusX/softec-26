@@ -1,15 +1,20 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   AlertTriangle,
+  Bot,
   CheckCircle2,
   Clock4,
   Image as ImageIcon,
+  Loader2,
   MessageSquareText,
   PencilLine,
   Plus,
+  Send,
   ShieldCheck,
+  Sparkles,
   ThumbsUp,
   Trash2,
   UserRoundPen,
@@ -22,6 +27,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { MarkdownRenderer } from '@/components/ui/markdown';
 import {
   Select,
   SelectContent,
@@ -45,6 +51,13 @@ import {
   useToggleCommunityUpvote,
   useUpdateCommunityPost,
 } from '@/hooks/use-community';
+import {
+  type AiAction,
+  AI_COMMUNITY_REWRITE_STORAGE_KEY,
+  type AiRewrite,
+  type AiScores,
+  streamAiChat,
+} from '@/lib/ai-assistant';
 import {
   type CommunityMedia,
   communitySortOptions,
@@ -196,20 +209,13 @@ function uploadFeedbackClassName(tone: UploadFeedbackTone): string {
 }
 
 export default function CommunityBoardPage() {
+  const router = useRouter();
   const { user } = useCurrentUser();
   const isSignedIn = Boolean(user?.id);
   const isWorker = user?.role === 'WORKER';
   const canParticipate = Boolean(isSignedIn && isWorker);
 
-  const [activeView, setActiveView] = useState<BoardView>(() => {
-    if (typeof window !== 'undefined') {
-      return new URLSearchParams(window.location.search).get('view') === 'mine'
-        ? 'mine'
-        : 'feed';
-    }
-
-    return 'feed';
-  });
+  const [activeView, setActiveView] = useState<BoardView>('feed');
   const [isCreatePanelOpen, setIsCreatePanelOpen] = useState(false);
 
   const [sort, setSort] = useState<CommunityFeedSort>('hot');
@@ -224,6 +230,12 @@ export default function CommunityBoardPage() {
   const [manualMediaUrl, setManualMediaUrl] = useState('');
   const [postPlatformId, setPostPlatformId] = useState('none');
   const [postAnonymously, setPostAnonymously] = useState(false);
+  const [qualityPrompt, setQualityPrompt] = useState('');
+  const [qualityResponse, setQualityResponse] = useState('');
+  const [qualityActions, setQualityActions] = useState<AiAction[]>([]);
+  const [qualityScores, setQualityScores] = useState<AiScores | null>(null);
+  const [qualityRewrite, setQualityRewrite] = useState<AiRewrite | null>(null);
+  const [isQualityLoading, setIsQualityLoading] = useState(false);
 
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
   const [editingPostId, setEditingPostId] = useState<string | null>(null);
@@ -240,6 +252,93 @@ export default function CommunityBoardPage() {
   const [editUploadFeedbackByPost, setEditUploadFeedbackByPost] = useState<
     Record<string, UploadFeedback>
   >({});
+
+  const applyIncomingWorkerRewrite = useCallback(() => {
+    if (!canParticipate) {
+      return false;
+    }
+
+    const raw = window.localStorage.getItem(AI_COMMUNITY_REWRITE_STORAGE_KEY);
+    if (!raw) {
+      return false;
+    }
+
+    try {
+      const parsed = JSON.parse(raw) as {
+        title?: string;
+        body?: string;
+        source?: string;
+      };
+
+      const incomingTitle =
+        typeof parsed.title === 'string' ? parsed.title.trim() : '';
+      const incomingBody =
+        typeof parsed.body === 'string' ? parsed.body.trim() : '';
+
+      if (!incomingTitle && !incomingBody) {
+        window.localStorage.removeItem(AI_COMMUNITY_REWRITE_STORAGE_KEY);
+        return false;
+      }
+
+      if (incomingTitle) {
+        setTitle(incomingTitle);
+      }
+
+      if (incomingBody) {
+        setBody(incomingBody);
+      }
+
+      setIsCreatePanelOpen(true);
+      setActiveView('mine');
+      setQualityRewrite({
+        title: incomingTitle || undefined,
+        body: incomingBody || undefined,
+      });
+
+      window.localStorage.removeItem(AI_COMMUNITY_REWRITE_STORAGE_KEY);
+
+      if (parsed.source === 'worker_ai_advisor') {
+        toast.success('Applied rewrite from Worker AI Advisor.');
+      }
+
+      return true;
+    } catch {
+      window.localStorage.removeItem(AI_COMMUNITY_REWRITE_STORAGE_KEY);
+      return false;
+    }
+  }, [canParticipate]);
+
+  const syncUiFromUrl = useCallback(() => {
+    const params = new URLSearchParams(window.location.search);
+    const viewParam = params.get('view');
+    setActiveView(viewParam === 'mine' ? 'mine' : 'feed');
+
+    if (params.get('compose') === '1') {
+      setIsCreatePanelOpen(true);
+      applyIncomingWorkerRewrite();
+    }
+  }, [applyIncomingWorkerRewrite]);
+
+  useEffect(() => {
+    syncUiFromUrl();
+  }, [syncUiFromUrl]);
+
+  useEffect(() => {
+    const onRewriteReady = () => {
+      applyIncomingWorkerRewrite();
+    };
+
+    const onPopState = () => {
+      syncUiFromUrl();
+    };
+
+    window.addEventListener('ai-rewrite-ready', onRewriteReady);
+    window.addEventListener('popstate', onPopState);
+    return () => {
+      window.removeEventListener('ai-rewrite-ready', onRewriteReady);
+      window.removeEventListener('popstate', onPopState);
+    };
+  }, [applyIncomingWorkerRewrite, syncUiFromUrl]);
 
   const platformsQuery = useCommunityPlatforms();
   const feedQuery = useCommunityFeed({
@@ -671,6 +770,108 @@ export default function CommunityBoardPage() {
     setEditingPostId((current) => (current === postId ? null : current));
   };
 
+  const runPostQualityAssistant = async (message: string) => {
+    const prompt = message.trim();
+
+    if (!prompt) {
+      return;
+    }
+
+    setIsQualityLoading(true);
+    setQualityResponse('');
+    setQualityActions([]);
+    setQualityScores(null);
+    setQualityRewrite(null);
+
+    try {
+      const result = await streamAiChat({
+        payload: {
+          mode: 'post_quality',
+          message: prompt,
+          draft: {
+            title,
+            body,
+            platformId: postPlatformId === 'none' ? undefined : postPlatformId,
+            media: uploadedMedia.map((item) => ({
+              url: item.url,
+              mediaType: item.mediaType ?? 'IMAGE',
+            })),
+          },
+        },
+        onToken: (_, fullText) => setQualityResponse(fullText),
+      });
+
+      setQualityResponse(result.cleanText || 'No response generated.');
+      setQualityActions(result.structured?.actions ?? []);
+      setQualityScores((result.structured?.scores as AiScores | undefined) ?? null);
+      setQualityRewrite((result.structured?.rewrite as AiRewrite | undefined) ?? null);
+    } catch (error) {
+      setQualityResponse(
+        error instanceof Error
+          ? error.message
+          : 'Unable to score post quality right now.',
+      );
+    } finally {
+      setIsQualityLoading(false);
+    }
+  };
+
+  const applyQualityRewrite = () => {
+    if (!qualityRewrite || (!qualityRewrite.title && !qualityRewrite.body)) {
+      toast.error('No rewrite found in latest AI response');
+      return;
+    }
+
+    if (qualityRewrite.title) {
+      setTitle(qualityRewrite.title);
+    }
+
+    if (qualityRewrite.body) {
+      setBody(qualityRewrite.body);
+    }
+
+    toast.success('Applied AI rewrite to your draft');
+  };
+
+  const handleQualityAction = (action: AiAction) => {
+    if (
+      action.type === 'APPLY_REWRITE' ||
+      action.type === 'APPLY_REWRITE_TO_COMMUNITY_DRAFT'
+    ) {
+      applyQualityRewrite();
+      return;
+    }
+
+    if (action.type === 'ADD_MISSING_EVIDENCE_PROMPT') {
+      const checklist = [
+        '',
+        'Evidence checklist:',
+        '- Date and shift time range',
+        '- Gross, deductions, and net amount',
+        '- Platform action or message screenshot',
+        '- Why this violates expected payout rules',
+      ].join('\n');
+
+      setBody((current) => {
+        if (current.includes('Evidence checklist:')) {
+          return current;
+        }
+        return `${current.trim()}${checklist}`.trim();
+      });
+      toast.success('Added evidence checklist to draft body');
+      return;
+    }
+
+    if (action.route) {
+      router.push(action.route);
+      return;
+    }
+
+    if (action.type === 'REQUEST_VERIFICATION_READINESS') {
+      router.push('/worker/community-feed?view=mine');
+    }
+  };
+
   const handleCreatePost = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
@@ -709,6 +910,11 @@ export default function CommunityBoardPage() {
           setManualMediaUrl('');
           setPostPlatformId('none');
           setPostAnonymously(false);
+          setQualityPrompt('');
+          setQualityResponse('');
+          setQualityActions([]);
+          setQualityScores(null);
+          setQualityRewrite(null);
           setIsCreatePanelOpen(false);
         },
       },
@@ -865,6 +1071,136 @@ export default function CommunityBoardPage() {
                     maxLength={4000}
                     required
                   />
+
+                  <div className='space-y-3 rounded-2xl border border-border/60 bg-muted/20 p-3'>
+                    <div className='flex items-center justify-between gap-2'>
+                      <p className='inline-flex items-center gap-2 text-sm font-semibold'>
+                        <Bot className='size-4' />
+                        Post Quality Assistant
+                      </p>
+                      <div className='flex gap-2'>
+                        <Button
+                          type='button'
+                          size='sm'
+                          variant='secondary'
+                          disabled={isQualityLoading || (!title.trim() && !body.trim())}
+                          onClick={() => {
+                            void runPostQualityAssistant(
+                              'Score this draft for clarity, evidence completeness, tone risk, and trust outcome. Then suggest a rewrite.',
+                            );
+                          }}
+                        >
+                          <Sparkles className='mr-1 size-3.5' />
+                          Analyze Draft
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className='flex gap-2'>
+                      <Input
+                        value={qualityPrompt}
+                        onChange={(event) => setQualityPrompt(event.target.value)}
+                        placeholder='Ask for specific rewrite: more evidence-focused, less emotional, etc.'
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') {
+                            event.preventDefault();
+                            const prompt = qualityPrompt.trim();
+                            if (!prompt || isQualityLoading) {
+                              return;
+                            }
+                            setQualityPrompt('');
+                            void runPostQualityAssistant(prompt);
+                          }
+                        }}
+                      />
+                      <Button
+                        type='button'
+                        size='icon'
+                        disabled={isQualityLoading || !qualityPrompt.trim()}
+                        onClick={() => {
+                          const prompt = qualityPrompt.trim();
+                          if (!prompt) {
+                            return;
+                          }
+                          setQualityPrompt('');
+                          void runPostQualityAssistant(prompt);
+                        }}
+                      >
+                        {isQualityLoading ? (
+                          <Loader2 className='size-4 animate-spin' />
+                        ) : (
+                          <Send className='size-4' />
+                        )}
+                      </Button>
+                    </div>
+
+                    {qualityScores ? (
+                      <div className='grid grid-cols-2 gap-2 text-xs sm:grid-cols-4'>
+                        <div className='rounded-xl border border-border/60 bg-background/70 px-2 py-1.5'>
+                          <p className='text-muted-foreground'>Clarity</p>
+                          <p className='font-semibold'>
+                            {Math.round(qualityScores.clarity ?? 0)} / 100
+                          </p>
+                        </div>
+                        <div className='rounded-xl border border-border/60 bg-background/70 px-2 py-1.5'>
+                          <p className='text-muted-foreground'>Evidence</p>
+                          <p className='font-semibold'>
+                            {Math.round(qualityScores.evidenceCompleteness ?? 0)} / 100
+                          </p>
+                        </div>
+                        <div className='rounded-xl border border-border/60 bg-background/70 px-2 py-1.5'>
+                          <p className='text-muted-foreground'>Tone Risk</p>
+                          <p className='font-semibold'>
+                            {Math.round(qualityScores.toneRisk ?? 0)} / 100
+                          </p>
+                        </div>
+                        <div className='rounded-xl border border-border/60 bg-background/70 px-2 py-1.5'>
+                          <p className='text-muted-foreground'>Trust Outcome</p>
+                          <p className='font-semibold'>
+                            {Math.round(qualityScores.trustOutcome ?? 0)} / 100
+                          </p>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {qualityResponse ? (
+                      <div className='rounded-xl border border-border/60 bg-background/60 px-3 py-2'>
+                        <MarkdownRenderer content={qualityResponse} className='text-sm' />
+                        {isQualityLoading ? (
+                          <span className='inline-block animate-pulse text-xs text-muted-foreground'>
+                            Streaming...
+                          </span>
+                        ) : null}
+
+                        <div className='mt-3 flex flex-wrap gap-2'>
+                          {qualityRewrite?.title || qualityRewrite?.body ? (
+                            <Button
+                              type='button'
+                              size='sm'
+                              variant='outline'
+                              disabled={isQualityLoading}
+                              onClick={applyQualityRewrite}
+                            >
+                              Apply Rewrite
+                            </Button>
+                          ) : null}
+
+                          {qualityActions.slice(0, 4).map((action) => (
+                            <Button
+                              key={action.id ?? action.label}
+                              type='button'
+                              size='sm'
+                              variant='outline'
+                              disabled={isQualityLoading}
+                              onClick={() => handleQualityAction(action)}
+                            >
+                              {action.label}
+                            </Button>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
 
                   <Select value={postPlatformId} onValueChange={(value) => setPostPlatformId(value ?? 'none')}>
                     <SelectTrigger className='w-full'>
