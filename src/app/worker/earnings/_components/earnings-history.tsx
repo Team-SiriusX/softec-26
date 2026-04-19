@@ -1,7 +1,9 @@
 'use client';
 
+import Link from 'next/link';
+
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Table,
@@ -20,6 +22,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { format } from 'date-fns';
+import { cn } from '@/lib/utils';
 
 const STATUS_CONFIG = {
   PENDING: {
@@ -71,9 +74,9 @@ export function EarningsHistory({
 }: EarningsHistoryProps) {
   if (isLoading) {
     return (
-      <div className='space-y-2'>
+      <div className='space-y-2 rounded-xl border border-border/70 p-3 sm:p-4'>
         {Array.from({ length: 5 }).map((_, i) => (
-          <Skeleton key={i} className='h-14 w-full' />
+          <Skeleton key={i} className='h-12 w-full rounded-lg' />
         ))}
       </div>
     );
@@ -81,23 +84,30 @@ export function EarningsHistory({
 
   if (shifts.length === 0) {
     return (
-      <div className='flex flex-col items-center justify-center py-16 text-center text-muted-foreground'>
+      <div className='flex flex-col items-center justify-center rounded-xl border border-dashed border-border/70 bg-muted/10 px-4 py-14 text-center text-muted-foreground'>
         <FileText className='size-10 mb-3 opacity-30' aria-hidden='true' />
-        <p className='text-sm font-medium'>No shifts logged yet</p>
-        <p className='text-xs mt-1'>Your shift history will appear here.</p>
-        <Button size='sm' className='mt-4'>
-          <a href='/worker/log-shift'>Log your first shift →</a>
-        </Button>
+        <p className='text-sm font-medium text-foreground'>No shifts logged yet</p>
+        <p className='mt-1 max-w-sm text-xs leading-relaxed'>
+          Start by logging your first shift to unlock verification tracking,
+          trend analytics, and benchmark insights.
+        </p>
+        <Link
+          href='/worker/log-shift'
+          className={cn(buttonVariants({ size: 'sm' }), 'mt-4')}
+        >
+          Log your first shift
+        </Link>
       </div>
     );
   }
 
   return (
-    <div className='rounded-lg border overflow-hidden'>
+    <div className='overflow-hidden rounded-xl border border-border/70'>
+      <div className='overflow-x-auto'>
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Date</TableHead>
+            <TableHead className='min-w-32'>Date</TableHead>
             <TableHead>Platform</TableHead>
             <TableHead className='text-right tabular-nums'>Received (PKR)</TableHead>
             <TableHead className='text-right tabular-nums hidden sm:table-cell'>Rate/hr</TableHead>
@@ -141,12 +151,16 @@ export function EarningsHistory({
                   {Math.round(rate).toLocaleString()}
                 </TableCell>
                 <TableCell>
-                  <span
-                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${config.className}`}
+                  <Badge
+                    variant='outline'
+                    className={cn(
+                      'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium',
+                      config.className,
+                    )}
                   >
                     <StatusIcon className='size-3' aria-hidden='true' />
                     {config.label}
-                  </span>
+                  </Badge>
                 </TableCell>
                 <TableCell>
                   <ChevronRight className='size-4 text-muted-foreground' aria-hidden='true' />
@@ -156,6 +170,7 @@ export function EarningsHistory({
           })}
         </TableBody>
       </Table>
+      </div>
     </div>
   );
 }
