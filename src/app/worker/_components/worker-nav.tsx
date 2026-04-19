@@ -3,6 +3,7 @@
 import { cn } from '@/lib/utils';
 import {
   BarChart2,
+  Bot,
   CircleAlert,
   MessageSquare,
   ShieldAlert,
@@ -20,6 +21,7 @@ import { useRouter } from 'next/navigation';
 
 const navItems = [
   { href: '/worker/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/worker/saathi', label: 'Saathi', icon: Bot },
   { href: '/worker/community-feed', label: 'Community Feed', icon: MessageSquare },
   { href: '/worker/grievances', label: 'Grievances', icon: CircleAlert },
   { href: '/worker/log-shift', label: 'Log a Shift', icon: PenSquare },

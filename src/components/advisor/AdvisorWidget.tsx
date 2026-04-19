@@ -52,6 +52,10 @@ type ChatMessage = {
   metadata?: QueryResponse;
 };
 
+type AdvisorWidgetProps = {
+  mode?: 'floating' | 'page';
+};
+
 const CONFIDENCE_DOT_CLASS: Record<Confidence, string> = {
   high: 'bg-emerald-500',
   medium: 'bg-amber-500',
@@ -152,11 +156,12 @@ function AssistantMessage({
   );
 }
 
-export default function AdvisorWidget() {
+export default function AdvisorWidget({ mode = 'floating' }: AdvisorWidgetProps) {
   const router = useRouter();
   const bottomRef = useRef<HTMLDivElement | null>(null);
+  const isFloating = mode === 'floating';
 
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(!isFloating);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [locale, setLocale] = useState<Locale>('en');
   const [input, setInput] = useState('');
@@ -223,9 +228,22 @@ export default function AdvisorWidget() {
   };
 
   return (
-    <div className='fixed right-6 bottom-6 z-50 flex flex-col items-end gap-3'>
+    <div
+      className={cn(
+        isFloating
+          ? 'fixed right-6 bottom-6 z-50 flex flex-col items-end gap-3'
+          : 'w-full',
+      )}
+    >
       {isOpen ? (
-        <Card className='h-[500px] w-[400px] max-w-[calc(100vw-2rem)] shadow-xl'>
+        <Card
+          className={cn(
+            'flex flex-col',
+            isFloating
+              ? 'h-[500px] w-[400px] max-w-[calc(100vw-2rem)] shadow-xl'
+              : 'h-[min(72vh,680px)] w-full shadow-sm',
+          )}
+        >
           <CardHeader className='pb-3'>
             <div className='flex items-center justify-between gap-2'>
               <div>
@@ -256,7 +274,7 @@ export default function AdvisorWidget() {
             </div>
           </CardHeader>
 
-          <CardContent className='flex h-[calc(100%-92px)] flex-col gap-3'>
+          <CardContent className='flex min-h-0 flex-1 flex-col gap-3'>
             <ScrollArea className='bg-muted/20 flex-1 rounded-2xl border p-3'>
               <div className='flex flex-col gap-3'>
                 {messages.length === 0 ? (
@@ -319,15 +337,17 @@ export default function AdvisorWidget() {
         </Card>
       ) : null}
 
-      <Button
-        type='button'
-        size='lg'
-        className='rounded-full shadow-lg'
-        onClick={() => setIsOpen((prev) => !prev)}
-      >
-        <Sparkles data-icon='inline-start' />
-        Saathi
-      </Button>
+      {isFloating ? (
+        <Button
+          type='button'
+          size='lg'
+          className='rounded-full shadow-lg'
+          onClick={() => setIsOpen((prev) => !prev)}
+        >
+          <Sparkles data-icon='inline-start' />
+          Saathi
+        </Button>
+      ) : null}
     </div>
   );
 }
