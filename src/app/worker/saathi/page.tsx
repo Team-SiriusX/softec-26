@@ -1,5 +1,12 @@
 import { Badge } from '@/components/ui/badge';
-import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import { SiriOrb } from '@/components/ui/siri-orb';
 import AdvisorWidget from '@/components/advisor/AdvisorWidget';
 
 export default function WorkerSaathiPage() {
@@ -17,6 +24,12 @@ export default function WorkerSaathiPage() {
             Ask about earnings, anomaly flags, policy context, and recommended next actions.
           </CardDescription>
         </CardHeader>
+        <CardContent className='flex flex-col items-center gap-3 pt-0'>
+          <SiriOrb size='152px' animationDuration={16} className='drop-shadow-2xl' />
+          <p className='text-muted-foreground text-center text-sm'>
+            Voice-agent orb for Saathi interactions.
+          </p>
+        </CardContent>
       </Card>
 
       <AdvisorWidget mode='page' />
