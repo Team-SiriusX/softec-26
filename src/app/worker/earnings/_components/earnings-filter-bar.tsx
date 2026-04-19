@@ -35,6 +35,13 @@ export function EarningsFilterBar({ filters, onChange }: EarningsFilterBarProps)
   const hasFilters =
     filters.platform || filters.status !== 'ALL' || filters.from || filters.to;
 
+  const activeFiltersCount = [
+    filters.platform,
+    filters.status !== 'ALL' ? filters.status : '',
+    filters.from,
+    filters.to,
+  ].filter(Boolean).length;
+
   const update = (patch: Partial<EarningsFilters>) =>
     onChange({ ...filters, ...patch });
 
@@ -42,68 +49,105 @@ export function EarningsFilterBar({ filters, onChange }: EarningsFilterBarProps)
     onChange({ platform: '', status: 'ALL', from: '', to: '' });
 
   return (
-    <div className='space-y-3'>
-      <div className='flex flex-wrap gap-2 items-center'>
-        {/* Platform search */}
-        <div className='relative'>
-          <Search className='absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground' aria-hidden='true' />
-          <Input
-            id='filter-platform'
-            placeholder='Filter by platform'
-            value={filters.platform}
-            onChange={(e) => update({ platform: e.target.value })}
-            className='pl-8 h-9 w-44'
-            aria-label='Filter by platform name'
-          />
+    <div className='rounded-xl border border-border/70 bg-background/80 p-3 sm:p-4'>
+      <div className='grid gap-3 md:grid-cols-2 xl:grid-cols-6'>
+        <div className='space-y-1.5 xl:col-span-2'>
+          <label
+            htmlFor='filter-platform'
+            className='text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground'
+          >
+            Platform
+          </label>
+          <div className='relative'>
+            <Search className='absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground' aria-hidden='true' />
+            <Input
+              id='filter-platform'
+              placeholder='Search by platform name'
+              value={filters.platform}
+              onChange={(e) => update({ platform: e.target.value })}
+              className='h-10 w-full pl-9'
+              aria-label='Filter by platform name'
+            />
+          </div>
         </div>
 
-        {/* Status filter */}
-        <Select
-          value={filters.status}
-          onValueChange={(v) => update({ status: v ?? 'ALL' })}
-        >
-          <SelectTrigger className='w-48 h-9' aria-label='Filter by verification status'>
-            <SelectValue placeholder='All statuses' />
-          </SelectTrigger>
-          <SelectContent>
-            {STATUS_OPTIONS.map((opt) => (
-              <SelectItem key={opt.value} value={opt.value}>
-                {opt.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className='space-y-1.5 xl:col-span-2'>
+          <p className='text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground'>
+            Verification Status
+          </p>
+          <Select
+            value={filters.status}
+            onValueChange={(v) => update({ status: v ?? 'ALL' })}
+          >
+            <SelectTrigger
+              className='h-10 w-full'
+              aria-label='Filter by verification status'
+            >
+              <SelectValue placeholder='All statuses' />
+            </SelectTrigger>
+            <SelectContent>
+              {STATUS_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
-        {/* Date range */}
-        <div className='flex items-center gap-1'>
+        <div className='space-y-1.5'>
+          <label
+            htmlFor='from-date'
+            className='text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground'
+          >
+            From
+          </label>
           <Input
+            id='from-date'
             type='date'
             value={filters.from}
             onChange={(e) => update({ from: e.target.value })}
-            className='h-9 w-36'
+            className='h-10 w-full'
             aria-label='From date'
           />
-          <span className='text-muted-foreground text-sm'>–</span>
+        </div>
+
+        <div className='space-y-1.5'>
+          <label
+            htmlFor='to-date'
+            className='text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground'
+          >
+            To
+          </label>
           <Input
+            id='to-date'
             type='date'
             value={filters.to}
             onChange={(e) => update({ to: e.target.value })}
-            className='h-9 w-36'
+            className='h-10 w-full'
             aria-label='To date'
           />
         </div>
 
-        {hasFilters && (
-          <Button
-            variant='ghost'
-            size='sm'
-            onClick={reset}
-            className='h-9 gap-1 text-muted-foreground'
-          >
-            <X className='size-3.5' aria-hidden='true' />
-            Clear
-          </Button>
-        )}
+        <div className='flex items-end justify-between gap-2 md:col-span-2 xl:col-span-6'>
+          <p className='text-xs text-muted-foreground'>
+            {hasFilters
+              ? `${activeFiltersCount} active filter${activeFiltersCount > 1 ? 's' : ''}`
+              : 'No active filters'}
+          </p>
+
+          {hasFilters && (
+            <Button
+              variant='ghost'
+              size='sm'
+              onClick={reset}
+              className='h-9 gap-1 text-muted-foreground'
+            >
+              <X className='size-3.5' aria-hidden='true' />
+              Clear filters
+            </Button>
+          )}
+        </div>
       </div>
     </div>
   );
