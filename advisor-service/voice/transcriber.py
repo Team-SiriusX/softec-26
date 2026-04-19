@@ -12,6 +12,22 @@ class TranscriptionError(RuntimeError):
     pass
 
 
+def _normalize_transcription_error(exc: Exception) -> str:
+    raw = str(exc)
+    lowered = raw.lower()
+
+    if "<!doctype html>" in lowered or "internal server error" in lowered:
+        return (
+            "OpenRouter transcription endpoint returned an upstream server error. "
+            "Please verify your configured transcription model/provider."
+        )
+
+    if "connection error" in lowered:
+        return "Transcription provider connection failed. Please try again."
+
+    return raw
+
+
 async def transcribe_audio(audio_bytes: bytes, filename: str) -> str:
     api_key = os.getenv("OPENROUTER_API_KEY")
     if not api_key:
@@ -36,7 +52,7 @@ async def transcribe_audio(audio_bytes: bytes, filename: str) -> str:
                     file=audio_file,
                 )
             except Exception as exc:
-                raise TranscriptionError(str(exc)) from exc
+                raise TranscriptionError(_normalize_transcription_error(exc)) from exc
         return transcript.text
     finally:
         if _os.path.exists(temp_path):

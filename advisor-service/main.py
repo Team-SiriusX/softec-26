@@ -76,6 +76,39 @@ def _voice_unavailable_response(locale: Literal["en", "ur"]) -> QueryResponse:
     )
 
 
+def _advisor_unavailable_response(locale: Literal["en", "ur"]) -> QueryResponse:
+    if locale == "ur":
+        return QueryResponse(
+            answer="اس وقت سوال کا مکمل تجزیہ دستیاب نہیں۔ براہ کرم کچھ دیر بعد دوبارہ کوشش کریں۔",
+            evidence=[],
+            confidence="low",
+            next_actions=[
+                {
+                    "label": "Try asking again",
+                    "action_type": "review_shifts",
+                    "route": "/worker/saathi",
+                }
+            ],
+            caution="ایڈوائزر سروس عارضی طور پر محدود دستیاب ہے۔",
+            locale=locale,
+        )
+
+    return QueryResponse(
+        answer="Advisor is temporarily unavailable for full analysis. Please try again in a moment.",
+        evidence=[],
+        confidence="low",
+        next_actions=[
+            {
+                "label": "Try asking again",
+                "action_type": "review_shifts",
+                "route": "/worker/saathi",
+            }
+        ],
+        caution="Advisor service is temporarily degraded.",
+        locale=locale,
+    )
+
+
 @app.post("/advisor/query", response_model=QueryResponse)
 async def advisor_query(
     payload: QueryRequest,
@@ -105,10 +138,8 @@ async def advisor_query(
 
         return QueryResponse(**chain_output)
     except Exception as exc:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Advisor chain failed: {exc}",
-        ) from exc
+        print(f"[advisor-service] advisor query failed: {exc}")
+        return _advisor_unavailable_response(payload.locale)
 
 
 @app.post("/advisor/voice/transcribe")
@@ -188,7 +219,5 @@ async def advisor_voice_query(
 
         return QueryResponse(**chain_output)
     except Exception as exc:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Advisor voice chain failed: {exc}",
-        ) from exc
+        print(f"[advisor-service] advisor voice query failed: {exc}")
+        return _advisor_unavailable_response(locale)

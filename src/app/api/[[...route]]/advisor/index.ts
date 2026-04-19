@@ -11,6 +11,8 @@ const advisorQuerySchema = z.object({
   locale: z.enum(['en', 'ur']).optional().default('en'),
 });
 
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 const app = new Hono()
   .use('/*', authMiddleware)
   .post('/query', zValidator('json', advisorQuerySchema), async (c) => {
@@ -94,11 +96,21 @@ const app = new Hono()
       const timeout = setTimeout(() => controller.abort(), 20_000);
 
       try {
-        const response = await fetch(`${ADVISOR_SERVICE_URL}/advisor/voice/query`, {
-          method: 'POST',
-          body: upstreamForm,
-          signal: controller.signal,
-        });
+        let response: Response;
+        try {
+          response = await fetch(`${ADVISOR_SERVICE_URL}/advisor/voice/query`, {
+            method: 'POST',
+            body: upstreamForm,
+            signal: controller.signal,
+          });
+        } catch {
+          await sleep(250);
+          response = await fetch(`${ADVISOR_SERVICE_URL}/advisor/voice/query`, {
+            method: 'POST',
+            body: upstreamForm,
+            signal: controller.signal,
+          });
+        }
 
         clearTimeout(timeout);
 
