@@ -2,6 +2,8 @@ import dotenv from 'dotenv'
 import { existsSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { PrismaPg } from '@prisma/adapter-pg'
+import { Pool } from 'pg'
 import { PrismaClient } from './generated/prisma/index.js'
 
 // Ensure this service resolves DB credentials from the shared repository env.
@@ -17,8 +19,13 @@ for (const envName of ['main.env', '.env']) {
 }
 
 const globalForPrisma = globalThis
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL
+})
+const adapter = new PrismaPg(pool)
 
 export const db = globalForPrisma.prisma ?? new PrismaClient({
+  adapter,
   log: process.env.NODE_ENV === 'development'
     ? ['error', 'warn']
     : ['error']

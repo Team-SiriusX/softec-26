@@ -1,25 +1,55 @@
 import path from 'path';
 import { fileURLToPath } from 'url';
-import fs from 'fs';
 import dotenv from 'dotenv';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const rootDir = path.resolve(__dirname, '../../');
-const envLocalPath = path.join(rootDir, '.env.local');
-const envPath = path.join(rootDir, '.env');
+const serviceRoot = path.resolve(__dirname, '..');
 
-if (fs.existsSync(envPath)) {
-  dotenv.config({ path: envPath });
-}
-if (fs.existsSync(envLocalPath)) {
-  dotenv.config({ path: envLocalPath, override: true });
-}
+dotenv.config({ path: path.join(serviceRoot, '.env') });
 import { serve } from '@hono/node-server'
 import app from './app.js'
 import { db } from './db.js'
 
-const PORT = parseInt(process.env.PORT || '8003')
+function parsePort(rawPort) {
+  const parsedPort = Number.parseInt(String(rawPort ?? ''), 10)
+  if (!Number.isFinite(parsedPort) || parsedPort <= 0 || parsedPort > 65535) {
+    return null
+  }
+
+  return parsedPort
+}
+
+function resolvePort() {
+  const args = process.argv.slice(2)
+
+  for (const arg of args) {
+    if (arg.startsWith('--port=')) {
+      const inlinePort = parsePort(arg.slice('--port='.length))
+      if (inlinePort !== null) {
+        return inlinePort
+      }
+    }
+    if (arg.startsWith('-p=')) {
+      const inlinePort = parsePort(arg.slice('-p='.length))
+      if (inlinePort !== null) {
+        return inlinePort
+      }
+    }
+  }
+
+  const portFlagIndex = args.findIndex((arg) => arg === '--port' || arg === '-p')
+  if (portFlagIndex !== -1) {
+    const flagPort = parsePort(args[portFlagIndex + 1])
+    if (flagPort !== null) {
+      return flagPort
+    }
+  }
+
+  return parsePort(process.env.PORT) ?? 8003
+}
+
+const PORT = resolvePort()
 
 // Graceful shutdown
 process.on('SIGTERM', async () => {
