@@ -16,6 +16,8 @@ type AiChatMode =
   | 'advocate_triage'
   | 'weekly_brief';
 
+type AiLocale = 'en' | 'ur';
+
 type AiHistoryItem = {
   role: 'user' | 'assistant';
   content: string;
@@ -42,6 +44,7 @@ type AiConfirmAction = {
 type AiChatRequest = {
   mode: AiChatMode;
   message: string;
+  locale?: AiLocale;
   entityId?: string;
   history?: AiHistoryItem[];
   threadSummary?: string;
@@ -144,6 +147,35 @@ const MODE_PROMPTS: Record<Exclude<AiChatMode, 'auto'>, string> = {
     'Include actions for export brief and navigation to impacted views.',
   ].join('\n'),
 };
+
+function buildLocaleInstruction(locale: AiLocale, channel: 'text' | 'voice'): string {
+  if (locale === 'ur') {
+    return [
+      'Locale: Urdu (ur-PK).',
+      'Respond in clear Urdu script for user-facing text.',
+      'Keep machine-readable JSON keys/actions/route fields in English and valid ASCII.',
+      channel === 'voice'
+        ? 'Keep sentences shorter for spoken playback and avoid dense formatting.'
+        : 'Use concise bullets and practical wording.',
+    ].join('\n');
+  }
+
+  return [
+    'Locale: English (en-US).',
+    'Respond in clear English for user-facing text.',
+    channel === 'voice'
+      ? 'Keep sentences shorter for spoken playback and avoid dense formatting.'
+      : 'Use concise bullets and practical wording.',
+  ].join('\n');
+}
+
+function buildSystemPrompt(
+  mode: Exclude<AiChatMode, 'auto'>,
+  locale: AiLocale,
+  channel: 'text' | 'voice',
+): string {
+  return `${BASE_SYSTEM_PROMPT}\n\n${MODE_PROMPTS[mode]}\n\n${buildLocaleInstruction(locale, channel)}`;
+}
 
 type RouteIntentTarget = {
   id: string;
@@ -251,6 +283,10 @@ function getOpenRouterApiKey(): string | null {
   const raw = process.env.OPENROUTER_API_KEY ?? process.env.OPEN_ROUTER_API_KEY;
   const value = raw?.trim();
   return value ? value : null;
+}
+
+function resolveLocale(locale: unknown): AiLocale {
+  return locale === 'ur' ? 'ur' : 'en';
 }
 
 function normalizeMode(
@@ -1530,20 +1566,31 @@ function buildRouteGuardrails(role: SessionUser['role']): readonly string[] {
 
 function buildFallbackAssistantText(params: {
   mode: Exclude<AiChatMode, 'auto'>;
+  locale: AiLocale;
   actions: SuggestedAction[];
   context: unknown;
   modelError?: string | null;
 }): string {
   const baseMessage =
-    params.mode === 'worker_evidence'
-      ? 'I could not reach the AI model right now, but your latest shift review suggests you should recheck screenshot clarity, currency visibility, and mismatch fields before re-uploading.'
-      : params.mode === 'worker_recovery'
-        ? 'I could not reach the AI model right now, but income recovery usually starts with collecting your strongest anomaly evidence and drafting a focused grievance.'
-        : params.mode === 'post_quality'
-          ? 'I could not reach the AI model right now, but you can still improve your post by being specific about dates, amounts, and evidence attachments.'
-          : params.mode === 'advocate_triage'
-            ? 'I could not reach the AI model right now, but you can still prioritize high-report and low-trust queue items first.'
-            : 'I could not reach the AI model right now, but you can still review top spikes, cohorts, and cluster patterns from analytics.';
+    params.locale === 'ur'
+      ? params.mode === 'worker_evidence'
+        ? 'میں ابھی AI ماڈل تک نہیں پہنچ سکا، لیکن آپ کے تازہ ترین شفٹ ریویو کے مطابق اسکرین شاٹس کی وضاحت، کرنسی کی نمائش، اور نمبر میچنگ دوبارہ چیک کریں۔'
+        : params.mode === 'worker_recovery'
+          ? 'میں ابھی AI ماڈل تک نہیں پہنچ سکا، لیکن آمدن کی بحالی کے لئے پہلے مضبوط شواہد جمع کریں اور پھر مختصر گریوینس ڈرافٹ بنائیں۔'
+          : params.mode === 'post_quality'
+            ? 'میں ابھی AI ماڈل تک نہیں پہنچ سکا، لیکن آپ اپنی پوسٹ کو تاریخ، رقم اور ثبوت واضح لکھ کر بہتر بنا سکتے ہیں۔'
+            : params.mode === 'advocate_triage'
+              ? 'میں ابھی AI ماڈل تک نہیں پہنچ سکا، لیکن آپ پھر بھی زیادہ رپورٹ اور کم ٹرسٹ آئٹمز کو پہلے ترجیح دے سکتے ہیں۔'
+              : 'میں ابھی AI ماڈل تک نہیں پہنچ سکا، لیکن آپ اینالیٹکس میں ٹاپ اسپائکس، کوہورٹس اور کلسٹر پیٹرنز دیکھ سکتے ہیں۔'
+      : params.mode === 'worker_evidence'
+        ? 'I could not reach the AI model right now, but your latest shift review suggests you should recheck screenshot clarity, currency visibility, and mismatch fields before re-uploading.'
+        : params.mode === 'worker_recovery'
+          ? 'I could not reach the AI model right now, but income recovery usually starts with collecting your strongest anomaly evidence and drafting a focused grievance.'
+          : params.mode === 'post_quality'
+            ? 'I could not reach the AI model right now, but you can still improve your post by being specific about dates, amounts, and evidence attachments.'
+            : params.mode === 'advocate_triage'
+              ? 'I could not reach the AI model right now, but you can still prioritize high-report and low-trust queue items first.'
+              : 'I could not reach the AI model right now, but you can still review top spikes, cohorts, and cluster patterns from analytics.';
 
   const structured: {
     actions: SuggestedAction[];
@@ -1579,6 +1626,60 @@ function buildFallbackAssistantText(params: {
     JSON.stringify(structured),
     '[[/AI_ACTIONS_JSON]]',
   ].join('\n');
+}
+
+function ensureActionBlock(text: string, actions: SuggestedAction[]): string {
+  if (text.includes('[[AI_ACTIONS_JSON]]')) {
+    return text;
+  }
+
+  return [
+    text.trim(),
+    '',
+    '[[AI_ACTIONS_JSON]]',
+    JSON.stringify({ actions }),
+    '[[/AI_ACTIONS_JSON]]',
+  ].join('\n');
+}
+
+function extractCompletionText(payload: Record<string, unknown>): string {
+  const choices = Array.isArray(payload.choices) ? payload.choices : [];
+  const first = choices[0];
+
+  if (!first || typeof first !== 'object') {
+    return '';
+  }
+
+  const firstRecord = first as Record<string, unknown>;
+  const message = firstRecord.message;
+
+  if (message && typeof message === 'object') {
+    const content = (message as Record<string, unknown>).content;
+
+    if (typeof content === 'string') {
+      return content.trim();
+    }
+
+    if (Array.isArray(content)) {
+      return content
+        .map((part) => {
+          if (typeof part === 'string') {
+            return part;
+          }
+
+          if (part && typeof part === 'object') {
+            const text = (part as Record<string, unknown>).text;
+            return typeof text === 'string' ? text : '';
+          }
+
+          return '';
+        })
+        .join('')
+        .trim();
+    }
+  }
+
+  return '';
 }
 
 function createSseChunk(data: unknown): string {
@@ -1705,6 +1806,7 @@ function normalizeHistory(history: AiHistoryItem[] | undefined): AiHistoryItem[]
 function buildPromptPayload(params: {
   user: SessionUser;
   mode: Exclude<AiChatMode, 'auto'>;
+  locale: AiLocale;
   message: string;
   context: unknown;
   actions: SuggestedAction[];
@@ -1717,6 +1819,7 @@ function buildPromptPayload(params: {
       role: params.user.role,
       userId: params.user.id,
       mode: params.mode,
+      locale: params.locale,
       query: params.message,
       threadSummary: params.threadSummary ?? null,
       allowedRoutes: buildRouteGuardrails(params.user.role),
@@ -1787,6 +1890,7 @@ export const chatHandler = async (c: Context) => {
   const payload = (c.req as unknown as { valid: (target: 'json') => AiChatRequest }).valid(
     'json',
   );
+  const locale = resolveLocale(payload.locale);
 
   const resolvedMode = normalizeMode(payload.mode, user.role, payload.message);
 
@@ -1828,6 +1932,7 @@ export const chatHandler = async (c: Context) => {
     return createFallbackSseResponse(
       buildFallbackAssistantText({
         mode: resolvedMode,
+        locale,
         actions: finalSuggestedActions,
         context,
       }),
@@ -1837,7 +1942,7 @@ export const chatHandler = async (c: Context) => {
   const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
     {
       role: 'system',
-      content: `${BASE_SYSTEM_PROMPT}\n\n${MODE_PROMPTS[resolvedMode]}`,
+      content: buildSystemPrompt(resolvedMode, locale, 'text'),
     },
     ...normalizeHistory(payload.history).map((item) => ({
       role: item.role,
@@ -1848,6 +1953,7 @@ export const chatHandler = async (c: Context) => {
       content: buildPromptPayload({
         user,
         mode: resolvedMode,
+        locale,
         message: payload.message,
         context,
         actions: finalSuggestedActions,
@@ -1908,6 +2014,7 @@ export const chatHandler = async (c: Context) => {
     return createFallbackSseResponse(
       buildFallbackAssistantText({
         mode: resolvedMode,
+        locale,
         actions: finalSuggestedActions,
         context,
         modelError: lastModelError,
@@ -1924,6 +2031,7 @@ export const chatHandler = async (c: Context) => {
     return createFallbackSseResponse(
       buildFallbackAssistantText({
         mode: resolvedMode,
+        locale,
         actions: finalSuggestedActions,
         context,
       }),
@@ -1940,5 +2048,194 @@ export const chatHandler = async (c: Context) => {
       'X-AI-Provider': 'openrouter',
       'X-AI-Model': selectedModel,
     },
+  });
+};
+
+type AiVoiceSpeakRequest = {
+  text: string;
+  locale?: AiLocale;
+};
+
+export const voiceQueryHandler = async (c: Context) => {
+  const user = c.var.user as SessionUser | undefined;
+
+  if (!user) {
+    return c.json({ error: 'Unauthorized' }, 401);
+  }
+
+  const payload = (c.req as unknown as { valid: (target: 'json') => AiChatRequest }).valid(
+    'json',
+  );
+  const locale = resolveLocale(payload.locale);
+
+  const resolvedMode = normalizeMode(payload.mode, user.role, payload.message);
+
+  if (!modeAllowedForRole(resolvedMode, user.role)) {
+    return c.json(
+      {
+        error: 'Mode is not allowed for your role',
+      },
+      403,
+    );
+  }
+
+  const context = await buildModeContext({
+    user,
+    mode: resolvedMode,
+    entityId: payload.entityId,
+    draft: payload.draft,
+  });
+
+  const suggestedActions = buildSuggestedActions({
+    mode: resolvedMode,
+    role: user.role,
+    context,
+  });
+
+  const navIntentAction = detectNavigationIntent(payload.message, user.role);
+  const identityAction = buildIdentityAction({
+    message: payload.message,
+    role: user.role,
+    user,
+    context,
+  });
+
+  const withNavigation = prependSuggestedAction(suggestedActions, navIntentAction);
+  const finalSuggestedActions = prependSuggestedAction(withNavigation, identityAction);
+
+  const apiKey = getOpenRouterApiKey();
+
+  if (!apiKey) {
+    const fallback = buildFallbackAssistantText({
+      mode: resolvedMode,
+      locale,
+      actions: finalSuggestedActions,
+      context,
+    });
+
+    return c.json({
+      rawText: ensureActionBlock(fallback, finalSuggestedActions),
+      locale,
+      languageTag: locale === 'ur' ? 'ur-PK' : 'en-US',
+      mode: resolvedMode,
+      provider: 'fallback',
+      model: 'fallback-local',
+    });
+  }
+
+  const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
+    {
+      role: 'system',
+      content: buildSystemPrompt(resolvedMode, locale, 'voice'),
+    },
+    ...normalizeHistory(payload.history).map((item) => ({
+      role: item.role,
+      content: item.content,
+    })),
+    {
+      role: 'user',
+      content: buildPromptPayload({
+        user,
+        mode: resolvedMode,
+        locale,
+        message: payload.message,
+        context,
+        actions: finalSuggestedActions,
+        threadSummary: payload.threadSummary,
+        confirmAction: payload.confirmAction,
+      }),
+    },
+  ];
+
+  const modelCandidates = preferredAiModels();
+
+  let responseText = '';
+  let selectedModel = modelCandidates[0] ?? AI_DEFAULT_MODEL;
+  let lastModelError: string | null = null;
+
+  for (const modelCandidate of modelCandidates) {
+    selectedModel = modelCandidate;
+
+    const candidateResponse = await fetch(OPENROUTER_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: modelCandidate,
+        stream: false,
+        temperature: 0.2,
+        messages,
+      }),
+    });
+
+    if (candidateResponse.ok) {
+      const parsed = (await candidateResponse.json()) as Record<string, unknown>;
+      responseText = extractCompletionText(parsed);
+      break;
+    }
+
+    const errorText = await candidateResponse.text();
+    lastModelError = `model=${modelCandidate}; status=${candidateResponse.status}; ${shortText(
+      errorText,
+      220,
+    )}`;
+
+    const noEndpointFound =
+      candidateResponse.status === 404 && /no endpoints found/i.test(errorText);
+
+    const shouldRetry =
+      noEndpointFound ||
+      candidateResponse.status === 429 ||
+      (candidateResponse.status >= 500 && candidateResponse.status <= 599);
+
+    if (!shouldRetry) {
+      break;
+    }
+  }
+
+  const rawText =
+    responseText.trim().length > 0
+      ? ensureActionBlock(responseText, finalSuggestedActions)
+      : buildFallbackAssistantText({
+          mode: resolvedMode,
+          locale,
+          actions: finalSuggestedActions,
+          context,
+          modelError: lastModelError,
+        });
+
+  return c.json({
+    rawText,
+    locale,
+    languageTag: locale === 'ur' ? 'ur-PK' : 'en-US',
+    mode: resolvedMode,
+    provider: responseText.trim().length > 0 ? 'openrouter' : 'fallback',
+    model: responseText.trim().length > 0 ? selectedModel : 'fallback-local',
+  });
+};
+
+export const voiceSpeakHandler = async (c: Context) => {
+  const user = c.var.user as SessionUser | undefined;
+
+  if (!user) {
+    return c.json({ error: 'Unauthorized' }, 401);
+  }
+
+  const payload = (c.req as unknown as { valid: (target: 'json') => AiVoiceSpeakRequest }).valid(
+    'json',
+  );
+
+  const locale = resolveLocale(payload.locale);
+  const languageTag = locale === 'ur' ? 'ur-PK' : 'en-US';
+  const speechText = shortText(payload.text, 1800);
+
+  return c.json({
+    locale,
+    languageTag,
+    text: speechText,
+    speechText,
+    voiceHint: locale === 'ur' ? 'urdu' : 'english',
   });
 };

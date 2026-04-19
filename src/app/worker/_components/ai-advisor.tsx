@@ -1,9 +1,20 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Bot, ChevronDown, Loader2, MessageCircle, Send, Sparkles, X } from 'lucide-react';
+import {
+  Bot,
+  ChevronDown,
+  Loader2,
+  MessageCircle,
+  Mic,
+  Send,
+  Sparkles,
+  Square,
+  Volume2,
+  X,
+} from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
@@ -14,7 +25,10 @@ import { useCreateGrievance } from '@/hooks/use-grievances';
 import {
   type AiAction,
   type AiChatMode,
+  type AiLocale,
   AI_COMMUNITY_REWRITE_STORAGE_KEY,
+  prepareAiVoiceSpeech,
+  queryAiVoice,
   type AiRewrite,
   type AiStructuredPayload,
   streamAiChat,
@@ -39,6 +53,27 @@ type WorkerRouteIntent = {
   label: string;
   patterns: RegExp[];
 };
+
+type SpeechRecognitionResultEventLike = Event & {
+  results: ArrayLike<ArrayLike<{ transcript: string }>>;
+};
+
+type SpeechRecognitionErrorEventLike = Event & {
+  error?: string;
+};
+
+type SpeechRecognitionLike = {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  start: () => void;
+  stop: () => void;
+  onresult: ((event: SpeechRecognitionResultEventLike) => void) | null;
+  onerror: ((event: SpeechRecognitionErrorEventLike) => void) | null;
+  onend: (() => void) | null;
+};
+
+type SpeechRecognitionCtorLike = new () => SpeechRecognitionLike;
 
 const QUICK_PROMPTS: QuickPrompt[] = [
   {
@@ -124,6 +159,48 @@ const WORKER_ROUTE_INTENTS: WorkerRouteIntent[] = [
 
 const DEFAULT_GREETING =
   'Ask me to navigate, explain flagged shifts, or run recovery actions with confirmation.';
+
+const LOCALE_CONFIG: Record<
+  AiLocale,
+  {
+    label: string;
+    recognitionLang: string;
+    speechLang: string;
+    placeholder: string;
+    unsupportedSpeech: string;
+    unsupportedMic: string;
+  }
+> = {
+  en: {
+    label: 'EN',
+    recognitionLang: 'en-US',
+    speechLang: 'en-US',
+    placeholder: 'Ask about flagged shift, recovery, grievance...',
+    unsupportedSpeech: 'Speech output is not supported in this browser.',
+    unsupportedMic: 'Voice input is not supported in this browser.',
+  },
+  ur: {
+    label: 'اردو',
+    recognitionLang: 'ur-PK',
+    speechLang: 'ur-PK',
+    placeholder: 'اپنا سوال لکھیں یا مائیک سے بولیں...',
+    unsupportedSpeech: 'اس براؤزر میں وائس آؤٹ پٹ دستیاب نہیں ہے۔',
+    unsupportedMic: 'اس براؤزر میں وائس اِن پٹ دستیاب نہیں ہے۔',
+  },
+};
+
+function getSpeechRecognitionCtor(): SpeechRecognitionCtorLike | null {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  const speechWindow = window as Window & {
+    SpeechRecognition?: SpeechRecognitionCtorLike;
+    webkitSpeechRecognition?: SpeechRecognitionCtorLike;
+  };
+
+  return speechWindow.SpeechRecognition ?? speechWindow.webkitSpeechRecognition ?? null;
+}
 
 function createId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
@@ -279,7 +356,10 @@ export default function AiAdvisor() {
   const [isOpen, setIsOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [mode, setMode] = useState<AiChatMode>('auto');
+  const [locale, setLocale] = useState<AiLocale>('en');
   const [input, setInput] = useState('');
+  const [isListening, setIsListening] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
   const [messages, setMessages] = useState<AdvisorMessage[]>([
     {
       id: createId('assistant'),
@@ -306,9 +386,28 @@ export default function AiAdvisor() {
   const [isStreaming, setIsStreaming] = useState(false);
 
   const abortRef = useRef<AbortController | null>(null);
+  const speechAbortRef = useRef<AbortController | null>(null);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
 
   const visibleMessages = useMemo(() => messages.slice(-20), [messages]);
   const lastMessageId = messages[messages.length - 1]?.id ?? null;
+  const localeConfig = LOCALE_CONFIG[locale];
+
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+      speechAbortRef.current?.abort();
+
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+        recognitionRef.current = null;
+      }
+
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
 
   const runPrompt = async (params: {
     mode: AiChatMode;
@@ -350,6 +449,7 @@ export default function AiAdvisor() {
         payload: {
           mode: params.mode,
           message: params.message,
+          locale,
           history: toHistory(visibleMessages),
           confirmAction: params.confirmAction,
         },
@@ -409,6 +509,210 @@ export default function AiAdvisor() {
     } finally {
       setIsStreaming(false);
     }
+  };
+
+  const speakText = async (text: string) => {
+    const trimmed = text.trim();
+
+    if (!trimmed) {
+      return;
+    }
+
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+      toast.error(localeConfig.unsupportedSpeech);
+      return;
+    }
+
+    speechAbortRef.current?.abort();
+    const controller = new AbortController();
+    speechAbortRef.current = controller;
+
+    setIsSpeaking(true);
+
+    try {
+      const speech = await prepareAiVoiceSpeech({
+        text: trimmed,
+        locale,
+        signal: controller.signal,
+      });
+
+      const utterance = new SpeechSynthesisUtterance(speech.speechText);
+      utterance.lang = speech.languageTag || localeConfig.speechLang;
+
+      const voices = window.speechSynthesis.getVoices();
+      const langPrefix = utterance.lang.toLowerCase().split('-')[0] ?? utterance.lang.toLowerCase();
+      const voice = voices.find((item) => item.lang.toLowerCase().startsWith(langPrefix));
+      if (voice) {
+        utterance.voice = voice;
+      }
+
+      utterance.onend = () => setIsSpeaking(false);
+      utterance.onerror = () => {
+        setIsSpeaking(false);
+        toast.error(localeConfig.unsupportedSpeech);
+      };
+
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(utterance);
+    } catch (error) {
+      setIsSpeaking(false);
+      toast.error(error instanceof Error ? error.message : localeConfig.unsupportedSpeech);
+    }
+  };
+
+  const runVoicePrompt = async (message: string) => {
+    const prompt = message.trim();
+
+    if (!prompt || isStreaming) {
+      return;
+    }
+
+    const userMessage: AdvisorMessage = {
+      id: createId('user'),
+      role: 'user',
+      text: prompt,
+    };
+
+    setMessages((prev) => [...prev, userMessage]);
+    setIsStreaming(true);
+
+    const assistantId = createId('assistant');
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: assistantId,
+        role: 'assistant',
+        text: locale === 'ur' ? 'جواب تیار کیا جا رہا ہے...' : 'Preparing response...',
+      },
+    ]);
+
+    try {
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+
+      const result = await queryAiVoice({
+        payload: {
+          mode,
+          message: prompt,
+          locale,
+          history: toHistory(visibleMessages),
+        },
+        signal: controller.signal,
+      });
+
+      let finalText = '';
+
+      setMessages((prev) =>
+        prev.map((item) =>
+          item.id === assistantId
+            ? (() => {
+                const fallbackActions =
+                  result.structured?.actions && result.structured.actions.length > 0
+                    ? result.structured.actions
+                    : deriveActionsFromAssistantText(result.cleanText || '');
+
+                finalText = result.cleanText || 'No response generated.';
+
+                return {
+                  ...item,
+                  text: finalText,
+                  structured:
+                    result.structured || fallbackActions.length
+                      ? {
+                          ...(result.structured ?? {}),
+                          actions: fallbackActions,
+                        }
+                      : null,
+                };
+              })()
+            : item,
+        ),
+      );
+
+      if (finalText.trim()) {
+        await speakText(finalText);
+      }
+    } catch (error) {
+      setMessages((prev) =>
+        prev.map((item) =>
+          item.id === assistantId
+            ? {
+                ...item,
+                text:
+                  error instanceof Error && error.message
+                    ? `I hit an error: ${error.message}`
+                    : 'I hit an error while generating a response.',
+              }
+            : item,
+        ),
+      );
+    } finally {
+      setIsStreaming(false);
+      setIsListening(false);
+    }
+  };
+
+  const startVoiceInput = () => {
+    if (isStreaming || isListening) {
+      return;
+    }
+
+    const SpeechRecognitionCtor = getSpeechRecognitionCtor();
+
+    if (!SpeechRecognitionCtor) {
+      toast.error(localeConfig.unsupportedMic);
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognitionCtor();
+      recognitionRef.current = recognition;
+      recognition.lang = localeConfig.recognitionLang;
+      recognition.continuous = false;
+      recognition.interimResults = false;
+
+      recognition.onresult = (event) => {
+        const transcript = Array.from(event.results)
+          .map((result) => {
+            const firstAlternative = result[0];
+            return typeof firstAlternative?.transcript === 'string'
+              ? firstAlternative.transcript
+              : '';
+          })
+          .join(' ')
+          .trim();
+
+        if (!transcript) {
+          toast.error(locale === 'ur' ? 'آواز واضح نہیں ملی۔' : 'No clear voice input captured.');
+          return;
+        }
+
+        setInput(transcript);
+        void runVoicePrompt(transcript);
+      };
+
+      recognition.onerror = () => {
+        setIsListening(false);
+        toast.error(locale === 'ur' ? 'وائس اِن پٹ ناکام ہوئی۔' : 'Voice input failed.');
+      };
+
+      recognition.onend = () => {
+        setIsListening(false);
+        recognitionRef.current = null;
+      };
+
+      recognition.start();
+      setIsListening(true);
+    } catch {
+      setIsListening(false);
+      toast.error(localeConfig.unsupportedMic);
+    }
+  };
+
+  const stopVoiceInput = () => {
+    recognitionRef.current?.stop();
+    setIsListening(false);
   };
 
   const handleSend = async () => {
@@ -688,6 +992,20 @@ export default function AiAdvisor() {
                 >
                   {message.role === 'assistant' ? (
                     <div>
+                      <div className='mb-1 flex items-center justify-end'>
+                        <Button
+                          type='button'
+                          size='icon'
+                          variant='ghost'
+                          className='size-6'
+                          disabled={isSpeaking || !message.text.trim()}
+                          onClick={() => {
+                            void speakText(message.text);
+                          }}
+                        >
+                          <Volume2 className='size-3.5' />
+                        </Button>
+                      </div>
                       <MarkdownRenderer content={message.text} className='text-sm' />
                       {isStreaming && lastMessageId === message.id ? (
                         <span className='inline-block animate-pulse text-xs text-muted-foreground'>
@@ -722,6 +1040,42 @@ export default function AiAdvisor() {
               ))}
             </div>
 
+            <div className='flex items-center justify-between gap-2'>
+              <div className='flex items-center gap-1'>
+                {(Object.keys(LOCALE_CONFIG) as AiLocale[]).map((itemLocale) => (
+                  <Button
+                    key={itemLocale}
+                    type='button'
+                    size='sm'
+                    variant={locale === itemLocale ? 'secondary' : 'ghost'}
+                    className='h-7 px-2 text-[11px]'
+                    onClick={() => setLocale(itemLocale)}
+                    disabled={isStreaming || isListening}
+                  >
+                    {LOCALE_CONFIG[itemLocale].label}
+                  </Button>
+                ))}
+              </div>
+
+              <Button
+                type='button'
+                size='sm'
+                variant={isListening ? 'destructive' : 'outline'}
+                className='h-7 gap-1.5 px-2 text-[11px]'
+                disabled={isStreaming}
+                onClick={() => {
+                  if (isListening) {
+                    stopVoiceInput();
+                    return;
+                  }
+                  startVoiceInput();
+                }}
+              >
+                {isListening ? <Square className='size-3.5' /> : <Mic className='size-3.5' />}
+                {isListening ? (locale === 'ur' ? 'روکیں' : 'Stop') : locale === 'ur' ? 'وائس' : 'Voice'}
+              </Button>
+            </div>
+
             <div className='flex items-center gap-2'>
               <select
                 value={mode}
@@ -736,7 +1090,7 @@ export default function AiAdvisor() {
               <Input
                 value={input}
                 onChange={(event) => setInput(event.target.value)}
-                placeholder='Ask about flagged shift, recovery, grievance...'
+                placeholder={localeConfig.placeholder}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter') {
                     event.preventDefault();

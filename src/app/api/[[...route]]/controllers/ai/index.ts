@@ -3,7 +3,9 @@ import { zValidator } from '@hono/zod-validator';
 import { Hono } from 'hono';
 import * as z from 'zod';
 
-import { chatHandler } from './handlers';
+import { chatHandler, voiceQueryHandler, voiceSpeakHandler } from './handlers';
+
+const localeSchema = z.enum(['en', 'ur']).default('en');
 
 const modeSchema = z.enum([
   'auto',
@@ -45,6 +47,7 @@ const draftSchema = z.object({
 const chatRequestSchema = z.object({
   mode: modeSchema.default('auto'),
   message: z.string().trim().min(1).max(4000),
+  locale: localeSchema.optional(),
   entityId: z.string().optional(),
   history: z.array(historySchema).max(6).optional(),
   threadSummary: z.string().max(1500).optional(),
@@ -53,8 +56,26 @@ const chatRequestSchema = z.object({
   stream: z.boolean().optional().default(true),
 });
 
+const voiceQuerySchema = z.object({
+  mode: modeSchema.default('auto'),
+  message: z.string().trim().min(1).max(4000),
+  locale: localeSchema.optional(),
+  entityId: z.string().optional(),
+  history: z.array(historySchema).max(6).optional(),
+  threadSummary: z.string().max(1500).optional(),
+  draft: draftSchema.optional(),
+  confirmAction: confirmActionSchema.optional(),
+});
+
+const voiceSpeakSchema = z.object({
+  text: z.string().trim().min(1).max(2000),
+  locale: localeSchema.optional(),
+});
+
 const app = new Hono()
   .use('/*', authMiddleware)
-  .post('/chat', zValidator('json', chatRequestSchema), chatHandler);
+  .post('/chat', zValidator('json', chatRequestSchema), chatHandler)
+  .post('/voice/query', zValidator('json', voiceQuerySchema), voiceQueryHandler)
+  .post('/voice/speak', zValidator('json', voiceSpeakSchema), voiceSpeakHandler);
 
 export default app;

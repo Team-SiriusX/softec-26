@@ -6,6 +6,8 @@ export type AiChatMode =
   | 'advocate_triage'
   | 'weekly_brief';
 
+export type AiLocale = 'en' | 'ur';
+
 export type AiAction = {
   id?: string;
   type: string;
@@ -37,6 +39,7 @@ export type AiStructuredPayload = {
 export type AiChatRequestPayload = {
   mode: AiChatMode;
   message: string;
+  locale?: AiLocale;
   entityId?: string;
   history?: Array<{
     role: 'user' | 'assistant';
@@ -351,5 +354,104 @@ export async function streamAiChat(params: {
     rawText,
     cleanText,
     structured,
+  };
+}
+
+export async function queryAiVoice(params: {
+  payload: AiChatRequestPayload;
+  signal?: AbortSignal;
+}): Promise<{
+  rawText: string;
+  cleanText: string;
+  structured: AiStructuredPayload | null;
+  locale: AiLocale;
+  languageTag: string;
+}> {
+  const response = await fetch('/api/ai/voice/query', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(params.payload),
+    signal: params.signal,
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(errorText || 'Failed to run voice AI query');
+  }
+
+  const payload = (await response.json()) as {
+    rawText?: string;
+    locale?: AiLocale;
+    languageTag?: string;
+  };
+
+  const rawText = typeof payload.rawText === 'string' ? payload.rawText : '';
+  const { cleanText, structured } = extractAiStructuredPayload(rawText);
+
+  return {
+    rawText,
+    cleanText,
+    structured,
+    locale: payload.locale === 'ur' ? 'ur' : 'en',
+    languageTag:
+      typeof payload.languageTag === 'string' && payload.languageTag.trim()
+        ? payload.languageTag
+        : payload.locale === 'ur'
+          ? 'ur-PK'
+          : 'en-US',
+  };
+}
+
+export async function prepareAiVoiceSpeech(params: {
+  text: string;
+  locale: AiLocale;
+  signal?: AbortSignal;
+}): Promise<{
+  speechText: string;
+  locale: AiLocale;
+  languageTag: string;
+}> {
+  const response = await fetch('/api/ai/voice/speak', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      text: params.text,
+      locale: params.locale,
+    }),
+    signal: params.signal,
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(errorText || 'Failed to prepare AI voice speech');
+  }
+
+  const payload = (await response.json()) as {
+    speechText?: string;
+    text?: string;
+    locale?: AiLocale;
+    languageTag?: string;
+  };
+
+  const speechText =
+    typeof payload.speechText === 'string' && payload.speechText.trim().length > 0
+      ? payload.speechText
+      : typeof payload.text === 'string'
+        ? payload.text
+        : params.text;
+
+  return {
+    speechText,
+    locale: payload.locale === 'ur' ? 'ur' : 'en',
+    languageTag:
+      typeof payload.languageTag === 'string' && payload.languageTag.trim()
+        ? payload.languageTag
+        : params.locale === 'ur'
+          ? 'ur-PK'
+          : 'en-US',
   };
 }
