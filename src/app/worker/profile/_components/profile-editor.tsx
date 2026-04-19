@@ -10,8 +10,10 @@ import {
   BadgeCheck,
   Building2,
   CalendarDays,
+  CheckCircle2,
   CircleAlert,
   Clock3,
+  Info,
   Mail,
   MapPin,
   Phone,
@@ -185,6 +187,7 @@ export default function ProfileEditor({
 }: ProfileEditorProps) {
   const queryClient = useQueryClient();
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [lastSavedAt, setLastSavedAt] = useState<string>(initialUser.updatedAt);
 
   const form = useForm<ProfileFormValues>({
     resolver: zodResolver(profileSchema),
@@ -223,6 +226,7 @@ export default function ProfileEditor({
   const cityZoneLabel = findLabel(watchedValues.cityZone || null, cityZoneOptions);
   const categoryLabel = findLabel(watchedValues.category || null, workerCategoryOptions);
   const hasPhone = (watchedValues.phone?.trim() ?? '').length > 0;
+  const hasUnsavedChanges = form.formState.isDirty;
   const profileStatusTone = initialUser.isActive
     ? 'bg-emerald-500/15 text-emerald-100 ring-1 ring-emerald-400/30'
     : 'bg-amber-500/15 text-amber-100 ring-1 ring-amber-400/30';
@@ -282,6 +286,7 @@ export default function ProfileEditor({
         cityZone: updatedUser.cityZone ?? '',
         category: updatedUser.category ?? 'RIDE_HAILING',
       });
+      setLastSavedAt(new Date().toISOString());
 
       toast.success('Profile updated successfully');
     } catch (error) {
@@ -405,6 +410,24 @@ export default function ProfileEditor({
           </CardHeader>
           <CardContent>
             <form className='space-y-6' onSubmit={form.handleSubmit(onSubmit)} noValidate>
+              {hasUnsavedChanges ? (
+                <div className='flex items-start gap-3 rounded-2xl border border-amber-300/60 bg-amber-50/80 px-4 py-3 text-amber-950 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-200'>
+                  <Info className='mt-0.5 size-4 shrink-0' aria-hidden='true' />
+                  <div className='space-y-0.5'>
+                    <p className='text-sm font-semibold'>Unsaved changes</p>
+                    <p className='text-xs'>Review your edits and save them to sync across dashboard tools.</p>
+                  </div>
+                </div>
+              ) : (
+                <div className='flex items-start gap-3 rounded-2xl border border-emerald-300/50 bg-emerald-50/70 px-4 py-3 text-emerald-950 dark:border-emerald-900/40 dark:bg-emerald-950/20 dark:text-emerald-200'>
+                  <CheckCircle2 className='mt-0.5 size-4 shrink-0' aria-hidden='true' />
+                  <div className='space-y-0.5'>
+                    <p className='text-sm font-semibold'>Profile synced</p>
+                    <p className='text-xs'>Last saved {formatDateTime(lastSavedAt)}.</p>
+                  </div>
+                </div>
+              )}
+
               {submitError && (
                 <div className='flex gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-rose-950 dark:border-rose-900/40 dark:bg-rose-950/20 dark:text-rose-200'>
                   <CircleAlert className='mt-0.5 size-4 shrink-0' aria-hidden='true' />
@@ -414,7 +437,7 @@ export default function ProfileEditor({
 
               <FieldGroup className='gap-5'>
                 <div className='space-y-2'>
-                  <FieldLabel htmlFor='fullName'>Full name</FieldLabel>
+                  <FieldLabel htmlFor='fullName'>Full name *</FieldLabel>
                   <Controller
                     control={form.control}
                     name='fullName'
@@ -456,7 +479,7 @@ export default function ProfileEditor({
                 </div>
 
                 <div className='space-y-2'>
-                  <FieldLabel htmlFor='cityZone'>City zone</FieldLabel>
+                  <FieldLabel htmlFor='cityZone'>City zone *</FieldLabel>
                   <Controller
                     control={form.control}
                     name='cityZone'
@@ -489,7 +512,7 @@ export default function ProfileEditor({
                 </div>
 
                 <div className='space-y-2'>
-                  <FieldLabel htmlFor='category'>Primary work category</FieldLabel>
+                  <FieldLabel htmlFor='category'>Primary work category *</FieldLabel>
                   <Controller
                     control={form.control}
                     name='category'
@@ -551,7 +574,7 @@ export default function ProfileEditor({
                     Reset changes
                   </Button>
 
-                  <Button type='submit' disabled={isPending} className='gap-2'>
+                  <Button type='submit' disabled={isPending || !hasUnsavedChanges} className='gap-2'>
                     <Save className='size-4' aria-hidden='true' />
                     {isPending ? 'Saving...' : 'Save profile'}
                   </Button>
@@ -636,26 +659,49 @@ export default function ProfileEditor({
               <InfoRow
                 icon={Clock3}
                 label='Profile updated'
-                value={formatDateTime(initialUser.updatedAt)}
+                value={formatDateTime(lastSavedAt)}
               />
             </CardContent>
           </Card>
 
           <Card className='border-border/70 shadow-sm shadow-slate-950/5'>
             <CardHeader>
-              <CardTitle className='text-base'>Why this matters</CardTitle>
+              <CardTitle className='text-base'>Profile health</CardTitle>
               <CardDescription>
-                Profile data helps the app make the rest of the worker experience
-                smarter.
+                Keep your identity and verification signals strong for better analytics and trust outcomes.
               </CardDescription>
             </CardHeader>
             <CardContent className='space-y-4'>
-              <div className='flex gap-3 rounded-2xl bg-primary/5 px-4 py-3'>
-                <BadgeCheck className='mt-0.5 size-4 shrink-0 text-primary' aria-hidden='true' />
-                <p className='text-sm text-muted-foreground'>
-                  Your zone and category improve fair earnings benchmarks and
-                  local comparisons.
-                </p>
+              <div className='grid gap-2'>
+                <div className='flex items-center justify-between rounded-xl border border-border/60 bg-primary/5 px-3 py-2'>
+                  <div className='flex items-center gap-2'>
+                    <BadgeCheck className='size-4 text-primary' aria-hidden='true' />
+                    <p className='text-sm font-medium'>Identity completeness</p>
+                  </div>
+                  <Badge variant={profileCompletion >= 100 ? 'secondary' : 'outline'}>
+                    {profileCompletion}%
+                  </Badge>
+                </div>
+
+                <div className='flex items-center justify-between rounded-xl border border-border/60 bg-primary/5 px-3 py-2'>
+                  <div className='flex items-center gap-2'>
+                    <ShieldCheck className='size-4 text-primary' aria-hidden='true' />
+                    <p className='text-sm font-medium'>Verification confidence</p>
+                  </div>
+                  <Badge variant={verifiedRate >= 70 ? 'secondary' : 'outline'}>
+                    {verifiedRate}%
+                  </Badge>
+                </div>
+
+                <div className='flex items-center justify-between rounded-xl border border-border/60 bg-primary/5 px-3 py-2'>
+                  <div className='flex items-center gap-2'>
+                    <Phone className='size-4 text-primary' aria-hidden='true' />
+                    <p className='text-sm font-medium'>Contact readiness</p>
+                  </div>
+                  <Badge variant={hasPhone ? 'secondary' : 'outline'}>
+                    {hasPhone ? 'Ready' : 'Optional'}
+                  </Badge>
+                </div>
               </div>
 
               <div className='flex gap-3 rounded-2xl bg-primary/5 px-4 py-3'>
@@ -678,19 +724,55 @@ export default function ProfileEditor({
 
               <div className='flex items-center justify-between rounded-2xl border border-border/60 px-4 py-3'>
                 <div>
-                  <p className='text-sm font-medium text-foreground'>Contact status</p>
+                  <p className='text-sm font-medium text-foreground'>Save status</p>
                   <p className='text-xs text-muted-foreground'>
-                    {hasPhone ? 'Reachable' : 'Phone number not set'}
+                    {hasUnsavedChanges
+                      ? 'You have pending edits to save'
+                      : `Synced ${formatDateTime(lastSavedAt)}`}
                   </p>
                 </div>
-                <Badge variant={hasPhone ? 'secondary' : 'outline'}>
-                  {hasPhone ? 'Ready' : 'Optional'}
+                <Badge variant={hasUnsavedChanges ? 'outline' : 'secondary'}>
+                  {hasUnsavedChanges ? 'Pending' : 'Saved'}
                 </Badge>
               </div>
             </CardContent>
           </Card>
         </div>
       </div>
+
+      {hasUnsavedChanges ? (
+        <div className='fixed bottom-4 right-4 z-40 w-[calc(100%-2rem)] rounded-2xl border border-border/70 bg-background/95 p-3 shadow-xl backdrop-blur md:max-w-xl'>
+          <div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
+            <div className='min-w-0'>
+              <p className='text-sm font-semibold'>You have unsaved profile changes</p>
+              <p className='truncate text-xs text-muted-foreground'>
+                Save now to update your worker dashboard and verification context.
+              </p>
+            </div>
+            <div className='flex shrink-0 gap-2'>
+              <Button
+                type='button'
+                variant='outline'
+                disabled={isPending}
+                onClick={() => {
+                  form.reset({
+                    fullName: initialUser.fullName,
+                    phone: initialUser.phone ?? '',
+                    cityZone: initialUser.cityZone ?? '',
+                    category: initialUser.category ?? 'RIDE_HAILING',
+                  });
+                  setSubmitError(null);
+                }}
+              >
+                Discard
+              </Button>
+              <Button type='button' disabled={isPending} onClick={form.handleSubmit(onSubmit)}>
+                {isPending ? 'Saving...' : 'Save now'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
