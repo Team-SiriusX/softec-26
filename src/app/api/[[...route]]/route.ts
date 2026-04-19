@@ -4,6 +4,7 @@ import { handle } from 'hono/vercel';
 import { sample, me } from './controllers/(base)';
 import admin from './controllers/admin';
 import advisor from './advisor';
+import ai from './controllers/ai';
 import analytics from './controllers/analytics';
 import type { AnalyticsEnv } from './controllers/analytics/types';
 import anomaly from './controllers/anomaly';
@@ -28,6 +29,7 @@ app.onError((err, c) => {
 export const routes = app
   .route('/me', me)
   .route('/sample', sample)
+  .route('/ai', ai)
   .route('/admin', admin)
   .route('/community', community)
   .route('/shifts', shifts)

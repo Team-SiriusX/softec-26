@@ -1,6 +1,9 @@
 import { currentUser } from '@/lib/current-user';
 import { redirect } from 'next/navigation';
 import WorkerNav from './_components/worker-nav';
+import AiAdvisor from './_components/ai-advisor';
+
+export const dynamic = 'force-dynamic';
 
 export default async function WorkerLayout({
   children,
@@ -24,6 +27,7 @@ export default async function WorkerLayout({
         <div className='flex-1 p-6 lg:p-8 max-w-7xl mx-auto w-full'>
           {children}
         </div>
+        <AiAdvisor />
       </main>
     </div>
   );

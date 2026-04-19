@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { type MouseEvent, useMemo, useState } from 'react';
+import { Suspense, type MouseEvent, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
   AlertTriangle,
@@ -109,7 +109,7 @@ function averageWaitHours(uploadedAtValues: Array<string | Date>): number {
   return totalMs / uploadedAtValues.length / (1000 * 60 * 60);
 }
 
-export default function VerifierQueuePage() {
+function VerifierQueuePageContent() {
   const searchParams = useSearchParams();
   const [page, setPage] = useState(1);
   const [activeFilter, setActiveFilter] = useState<QueueFilter>(
@@ -415,5 +415,36 @@ export default function VerifierQueuePage() {
         )}
       </section>
     </main>
+  );
+}
+
+function VerifierQueueFallback() {
+  return (
+    <main className='mx-auto w-full max-w-7xl space-y-6 p-6 lg:p-8'>
+      <section className='space-y-2'>
+        <Skeleton className='h-8 w-56' />
+        <Skeleton className='h-4 w-full max-w-xl' />
+      </section>
+      <section className='grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6'>
+        {Array.from({ length: 6 }).map((_, index) => (
+          <Card key={index}>
+            <CardHeader>
+              <Skeleton className='h-4 w-24' />
+            </CardHeader>
+            <CardContent>
+              <Skeleton className='h-8 w-16' />
+            </CardContent>
+          </Card>
+        ))}
+      </section>
+    </main>
+  );
+}
+
+export default function VerifierQueuePage() {
+  return (
+    <Suspense fallback={<VerifierQueueFallback />}>
+      <VerifierQueuePageContent />
+    </Suspense>
   );
 }
