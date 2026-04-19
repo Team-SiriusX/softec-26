@@ -1,20 +1,43 @@
 import os
 from typing import Any
+from threading import Lock
 
 from langchain_postgres.vectorstores import PGVector
 
+from shared_env import load_shared_env
+
 from vector_store.embedder import get_embedder
+
+load_shared_env()
 
 COLLECTION_NAME = "fairgig_policy_docs"
 
+_VECTOR_STORE: PGVector | None = None
+_VECTOR_STORE_LOCK = Lock()
+
 
 def get_vector_store() -> PGVector:
-    return PGVector(
-        embeddings=get_embedder(),
-        collection_name=COLLECTION_NAME,
-        connection=os.getenv("DATABASE_URL"),
-        use_jsonb=True,
-    )
+    global _VECTOR_STORE
+
+    if _VECTOR_STORE is not None:
+        return _VECTOR_STORE
+
+    database_url = os.getenv("DATABASE_URL")
+    if not database_url:
+        raise RuntimeError("DATABASE_URL is not configured for advisor-service")
+
+    with _VECTOR_STORE_LOCK:
+        if _VECTOR_STORE is not None:
+            return _VECTOR_STORE
+
+        _VECTOR_STORE = PGVector(
+            embeddings=get_embedder(),
+            collection_name=COLLECTION_NAME,
+            connection=database_url,
+            use_jsonb=True,
+        )
+
+        return _VECTOR_STORE
 
 
 def get_vector_store_client() -> PGVector:

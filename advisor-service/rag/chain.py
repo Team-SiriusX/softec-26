@@ -7,7 +7,7 @@ from langchain_openai import ChatOpenAI
 from models import WorkerContext
 
 from .prompt import get_advisor_prompt_template
-from .retriever import get_retriever
+from .retriever import POLICY_DOCUMENTS, get_retriever
 
 DEFAULT_OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
@@ -85,7 +85,8 @@ async def run_advisor_chain(
         retriever = get_retriever()
         policy_docs = await retriever.ainvoke(query)
     except Exception:
-        policy_docs = []
+        # Fallback to bundled policy snippets when pgvector or DB is unavailable.
+        policy_docs = POLICY_DOCUMENTS
 
     policy_context = "\n\n".join(
         doc.page_content.strip()
@@ -120,17 +121,16 @@ async def run_advisor_chain(
         "query": query,
     }
 
-    llm = ChatOpenAI(
-        base_url=os.getenv(
-            "OPENROUTER_BASE_URL",
-            DEFAULT_OPENROUTER_BASE_URL,
-        ),
-        api_key=os.getenv("OPENROUTER_API_KEY"),
-        model="google/gemini-flash-1.5",
-        temperature=0.2,
-    )
-
     try:
+        llm = ChatOpenAI(
+            base_url=os.getenv(
+                "OPENROUTER_BASE_URL",
+                DEFAULT_OPENROUTER_BASE_URL,
+            ),
+            api_key=os.getenv("OPENROUTER_API_KEY"),
+            model=os.getenv("ADVISOR_CHAT_MODEL", "google/gemini-flash-1.5"),
+            temperature=0.2,
+        )
         messages = prompt_template.format_messages(**prompt_inputs)
         llm_response = await llm.ainvoke(messages)
         parsed = _parse_json_response(str(llm_response.content))

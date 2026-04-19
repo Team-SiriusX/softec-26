@@ -13,3 +13,4 @@ python-multipart
 openai
 huggingface-hub
 langchain-huggingface
+sentence-transformers
