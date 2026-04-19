@@ -1,18 +1,18 @@
 import os
 
-from langchain_community.embeddings import HuggingFaceInferenceAPIEmbeddings
+from langchain_huggingface import HuggingFaceEndpointEmbeddings
 
 DEFAULT_HF_EMBEDDING_MODEL = "sentence-transformers/paraphrase-multilingual-mpnet-base-v2"
 
 
-def get_embedder() -> HuggingFaceInferenceAPIEmbeddings:
+def get_embedder() -> HuggingFaceEndpointEmbeddings:
     token = os.getenv("HUGGINGFACEHUB_API_TOKEN")
     if not token:
         raise RuntimeError("HUGGINGFACEHUB_API_TOKEN is not set")
 
-    return HuggingFaceInferenceAPIEmbeddings(
-        api_key=token,
-        model_name=os.getenv("HF_EMBEDDING_MODEL", DEFAULT_HF_EMBEDDING_MODEL),
+    return HuggingFaceEndpointEmbeddings(
+        huggingfacehub_api_token=token,
+        model=os.getenv("HF_EMBEDDING_MODEL", DEFAULT_HF_EMBEDDING_MODEL),
     )
 
 
