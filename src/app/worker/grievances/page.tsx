@@ -220,7 +220,10 @@ export default function WorkerGrievancesPage() {
           <form className='grid gap-4 md:grid-cols-2' onSubmit={handleSubmit}>
             <div className='space-y-2'>
               <Label htmlFor='grievance-platform'>Platform</Label>
-              <Select value={resolvedPlatformId} onValueChange={(value) => setPlatformId(value)}>
+              <Select
+                value={resolvedPlatformId}
+                onValueChange={(value) => setPlatformId(value ?? '')}
+              >
                 <SelectTrigger id='grievance-platform' disabled={platformSelectDisabled}>
                   <SelectValue
                     placeholder={
