@@ -31,7 +31,11 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def startup_event() -> None:
-    initialize_store()
+    try:
+        initialize_store()
+    except Exception as exc:
+        # Keep the API available even if RAG store warmup fails (e.g. token scope issues).
+        print(f"[advisor-service] vector store initialization skipped: {exc}")
 
 
 @app.get("/health")
