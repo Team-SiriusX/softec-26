@@ -14,7 +14,7 @@ from models import QueryRequest, QueryResponse
 from rag.chain import run_advisor_chain
 from shared_env import load_shared_env
 from vector_store.store import initialize_store
-from voice.transcriber import transcribe_audio
+from voice.transcriber import TranscriptionError, transcribe_audio
 
 load_shared_env()
 
@@ -41,6 +41,39 @@ async def startup_event() -> None:
 @app.get("/health")
 async def health_check() -> dict[str, str]:
     return {"status": "ok", "service": "advisor"}
+
+
+def _voice_unavailable_response(locale: Literal["en", "ur"]) -> QueryResponse:
+    if locale == "ur":
+        return QueryResponse(
+            answer="اس وقت آواز سے متن نہیں بن سکا۔ براہ کرم کچھ دیر بعد دوبارہ کوشش کریں۔",
+            evidence=[],
+            confidence="low",
+            next_actions=[
+                {
+                    "label": "Type your question instead",
+                    "action_type": "review_shifts",
+                    "route": "/worker/saathi",
+                }
+            ],
+            caution="آوازی سروس عارضی طور پر دستیاب نہیں ہے۔",
+            locale=locale,
+        )
+
+    return QueryResponse(
+        answer="Voice transcription is temporarily unavailable. Please try again in a moment.",
+        evidence=[],
+        confidence="low",
+        next_actions=[
+            {
+                "label": "Type your question instead",
+                "action_type": "review_shifts",
+                "route": "/worker/saathi",
+            }
+        ],
+        caution="Voice processing service is temporarily unavailable.",
+        locale=locale,
+    )
 
 
 @app.post("/advisor/query", response_model=QueryResponse)
@@ -92,6 +125,8 @@ async def advisor_voice_transcribe(
             filename=file.filename or "audio.webm",
         )
         return {"transcript": transcript}
+    except TranscriptionError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     except HTTPException:
         raise
     except Exception as exc:
@@ -119,6 +154,18 @@ async def advisor_voice_query(
             audio_bytes=audio_bytes,
             filename=file.filename or "audio.webm",
         )
+    except TranscriptionError as exc:
+        print(f"[advisor-service] voice transcription failed: {exc}")
+        return _voice_unavailable_response(locale)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Advisor voice chain failed: {exc}",
+        ) from exc
+
+    try:
 
         raw_shifts, raw_anomalies, raw_analytics = await asyncio.gather(
             fetch_shift_context(worker_id),
@@ -140,8 +187,6 @@ async def advisor_voice_query(
         )
 
         return QueryResponse(**chain_output)
-    except HTTPException:
-        raise
     except Exception as exc:
         raise HTTPException(
             status_code=500,
