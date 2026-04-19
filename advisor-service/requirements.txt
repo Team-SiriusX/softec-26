@@ -9,3 +9,7 @@ langchain-postgres
 httpx
 python-dotenv
 pydantic
+python-multipart
+openai
+huggingface-hub
+langchain-huggingface

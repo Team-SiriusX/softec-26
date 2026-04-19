@@ -2,9 +2,9 @@ import os
 from typing import Any
 
 import httpx
-from dotenv import load_dotenv
+from shared_env import load_shared_env
 
-load_dotenv()
+load_shared_env()
 
 DEFAULT_FAIRGIG_API_URL = "http://localhost:3000"
 
