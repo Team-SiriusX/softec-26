@@ -159,4 +159,3 @@ export default function VerifierDashboardPage() {
     </main>
   );
 }
-c

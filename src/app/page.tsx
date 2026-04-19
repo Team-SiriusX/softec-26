@@ -11,8 +11,6 @@ import { Footer2 } from '@/components/ui/footer-2';
 export default async function Home() {
   const user = await currentUser();
 
-  console.log({ user });
-
   return (
     <main className='from-background to-accent/20 min-h-screen overflow-x-hidden bg-linear-to-b'>
       <HeroSection />
