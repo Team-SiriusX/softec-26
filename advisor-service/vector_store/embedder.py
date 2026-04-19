@@ -1,15 +1,15 @@
-from typing import Any
+import os
 
 from langchain_openai import OpenAIEmbeddings
 
 
-def get_embedder() -> Any:
-    _ = OpenAIEmbeddings
-    # TODO: Configure and return embedding model instance.
-    pass
+def get_embedder() -> OpenAIEmbeddings:
+    return OpenAIEmbeddings(
+        model="text-embedding-3-small",
+        openai_api_key=os.getenv("OPENROUTER_API_KEY"),
+        openai_api_base=os.getenv("OPENROUTER_BASE_URL"),
+    )
 
 
 def embed_query(text: str) -> list[float]:
-    _ = text
-    # TODO: Generate embedding vector for a single query string.
-    pass
+    return get_embedder().embed_query(text)
