@@ -9,6 +9,8 @@ from models import WorkerContext
 from .prompt import get_advisor_prompt_template
 from .retriever import get_retriever
 
+DEFAULT_OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+
 
 def _format_anomaly_summary(flags: list[dict[str, Any]]) -> str:
     if not flags:
@@ -119,7 +121,10 @@ async def run_advisor_chain(
     }
 
     llm = ChatOpenAI(
-        base_url=os.getenv("OPENROUTER_BASE_URL"),
+        base_url=os.getenv(
+            "OPENROUTER_BASE_URL",
+            DEFAULT_OPENROUTER_BASE_URL,
+        ),
         api_key=os.getenv("OPENROUTER_API_KEY"),
         model="google/gemini-flash-1.5",
         temperature=0.2,

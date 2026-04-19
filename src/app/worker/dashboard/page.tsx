@@ -47,6 +47,7 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from '@/components/ui/chart';
+import AdvisorWidget from '@/components/advisor/AdvisorWidget';
 import { Skeleton } from '@/components/ui/skeleton';
 import { QUERY_KEYS } from '@/constants/query-keys';
 import { useCurrentUser } from '@/hooks/use-current-user';
@@ -1199,6 +1200,8 @@ export default function WorkerAnalyticsPage() {
           </ChartCard>
         </section>
       </div>
+
+      <AdvisorWidget />
     </main>
   );
 }

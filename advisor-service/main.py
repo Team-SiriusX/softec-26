@@ -1,6 +1,5 @@
 import asyncio
 
-from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -12,9 +11,10 @@ from context.fetcher import (
 )
 from models import QueryRequest, QueryResponse
 from rag.chain import run_advisor_chain
+from shared_env import load_shared_env
 from vector_store.store import initialize_store
 
-load_dotenv()
+load_shared_env()
 
 app = FastAPI(title="advisor-service", version="0.1.0")
 
